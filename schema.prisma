@@ -1,0 +1,164 @@
+// ignyous.ai — Database Schema
+// Run: npx prisma db push (uses DATABASE_URL from .env.local)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USERS ───────────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  passwordHash  String
+  phone         String?
+  plan          Plan     @default(STARTER)
+  stripeCustomerId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sites         Site[]
+  sessions      Session[]
+}
+
+enum Plan {
+  STARTER     // 1 site
+  PRO         // 5 sites
+  AGENCY      // unlimited
+}
+
+// ─── SITES ───────────────────────────────────────
+model Site {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  // Identity
+  name          String
+  domain        String      @unique
+  status        SiteStatus  @default(BUILDING)
+
+  // WordPress connection
+  wpUrl         String?                   // e.g. https://client.com
+  wpApiKey      String?                   // bridge plugin API key (encrypted)
+  wpSiteId      String?                   // bridge plugin site_id
+  wpVersion     String?
+  bridgeVersion String?
+  bridgeConnected Boolean  @default(false)
+  lastHeartbeat DateTime?
+
+  // Builder config
+  builder       Builder?    @default(ELEMENTOR)
+  template      String?     // template slug
+  paletteId     String?
+  industryId    String?
+
+  // Hosting
+  hostingType   HostingType @default(IGNYOUS_MANAGED)
+  wpeInstallId  String?     // WP Engine install ID for managed sites
+  hostProvider  String?     // for BYO: "kinsta", "siteground", etc.
+
+  // SMS alerts
+  smsNumber     String?
+
+  // Meta
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  scans         SiteScan[]
+  leads         Lead[]
+}
+
+enum SiteStatus {
+  BUILDING      // in setup wizard
+  DEPLOYING     // being deployed to WP Engine
+  LIVE          // fully live
+  PAUSED        // hosting paused
+  ERROR         // something went wrong
+}
+
+enum Builder {
+  ELEMENTOR
+  GUTENBERG
+  AVADA
+  DIVI
+}
+
+enum HostingType {
+  IGNYOUS_MANAGED   // on ignyous master WP Engine account
+  BYO               // client's own hosting
+}
+
+// ─── SITE SCANS ──────────────────────────────────
+model SiteScan {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+
+  url         String
+  scannedAt   DateTime @default(now())
+
+  // Scores
+  scoreOverall     Int?
+  scoreSeo         Int?
+  scorePerformance Int?
+  scoreSecurity    Int?
+  scoreMobile      Int?
+
+  // Raw report (full JSON from scanner service)
+  reportJson  Json?
+
+  // Detected tech
+  wpVersion   String?
+  builder     String?
+  plugins     String[]
+  pageCount   Int?
+
+  // Recommendations count by severity
+  recsHigh    Int?
+  recsMedium  Int?
+  recsLow     Int?
+}
+
+// ─── LEADS (form submissions) ─────────────────────
+model Lead {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+
+  // Form data
+  source      String   // "contact-form-7", "wpforms", "gravity-forms"
+  formId      String?
+  formTitle   String?
+
+  // Contact info
+  name        String?
+  email       String?
+  phone       String?
+  message     String?
+  fields      Json?    // all form fields as JSON
+
+  // SMS
+  smsSent     Boolean  @default(false)
+  smsTo       String?
+  smsSentAt   DateTime?
+
+  submittedAt DateTime @default(now())
+}
+
+// ─── SESSIONS (auth) ─────────────────────────────
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+  ipAddress String?
+}
