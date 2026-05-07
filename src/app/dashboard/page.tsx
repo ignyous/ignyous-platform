@@ -144,20 +144,33 @@ function detectIssues(siteInfo: SiteInfo | null, scanReport: any, pages: Page[])
 // ─── MAIN ─────────────────────────────────────────────────────────
 function DashboardInner() {
   const params   = useSearchParams()
-  const siteUrl  = params.get('site') || ''
+  const urlSite  = params.get('site') || ''
   const urlKey   = params.get('key')  || ''
-  const cleanUrl = siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`
-  const siteKey  = siteUrl.replace(/[^a-z0-9]/gi,'_')
 
-  // Use URL key or fall back to localStorage
-  const [apiKey, setApiKey] = useState(urlKey)
+  // Auto-load first connected site from localStorage if none in URL
+  const [siteUrl, setSiteUrl] = useState(urlSite)
+  const [apiKey,  setApiKey]  = useState(urlKey)
 
   useEffect(() => {
-    if (!urlKey && siteUrl) {
-      const stored = getStoredKey(siteUrl)
+    if (!urlSite) {
+      // Try to load first stored site
+      try {
+        const list = JSON.parse(localStorage.getItem('ignyous_sites') || '[]')
+        if (list.length > 0) {
+          const firstSite = list[0]
+          const key = getStoredKey(firstSite)
+          if (key) { setSiteUrl(firstSite); setApiKey(key); return }
+        }
+      } catch {}
+    } else if (!urlKey) {
+      const stored = getStoredKey(urlSite)
       if (stored) setApiKey(stored)
+      else setLoading(false)
     }
-  }, [siteUrl, urlKey])
+  }, [urlSite, urlKey])
+
+  const cleanUrl = siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`
+  const siteKey  = siteUrl.replace(/[^a-z0-9]/gi,'_')
 
   const [siteInfo, setSiteInfo]         = useState<SiteInfo | null>(null)
   const [pages, setPages]               = useState<Page[]>([])
@@ -336,7 +349,8 @@ function DashboardInner() {
   // ── Theme select ───────────────────────────────────────────────
   function onThemeSelect(theme: any) {
     setShowThemes(false)
-    send(`Install and activate the ${theme.name} theme (slug: ${theme.slug}) on my site. It works with ${theme.builders.join(' and ')}.`)
+    const builderName = theme.builder || (Array.isArray(theme.builders) ? theme.builders[0] : 'WordPress')
+    send(`Install and activate the ${theme.name} theme (slug: ${theme.slug}) on my site. It works with ${builderName}.`)
   }
 
   if (loading) return (

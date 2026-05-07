@@ -11,18 +11,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous"/>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
         <style suppressHydrationWarning>{`
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           html, body {
             background: #FFFFFF;
             color: #1A1410;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 16px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 15px;
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
           }
-          input, textarea, select, button { font-family: inherit; }
+          input, textarea, select, button { font-family: 'Inter', -apple-system, sans-serif; }
+          h1, h2, h3, h4, h5, h6 { font-family: 'Inter', -apple-system, sans-serif; }
           ::-webkit-scrollbar { width: 5px; height: 5px; }
           ::-webkit-scrollbar-thumb { background: #E2DDD8; border-radius: 3px; }
           input:focus, textarea:focus { outline: none; }
