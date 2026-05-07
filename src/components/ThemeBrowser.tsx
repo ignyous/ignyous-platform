@@ -61,11 +61,11 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
   ]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#F4F5F7', zIndex: 2000, display: 'flex', flexDirection: 'column' as const, fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#F4F5F7', zIndex: 2000, display: 'flex', flexDirection: 'column' as const, fontFamily: 'Poppins, sans-serif' }}>
 
       {/* TOP BAR */}
       <div style={{ background: 'white', borderBottom: '1px solid #E2E8F0', padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60, flexShrink: 0 }}>
-        <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', cursor: 'pointer', fontSize: 15, fontWeight: 500, color: '#4A5568', fontFamily: 'Inter, sans-serif' }}>
+        <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', cursor: 'pointer', fontSize: 16, fontWeight: 500, color: '#4A5568', fontFamily: 'Poppins, sans-serif' }}>
           ← Back
         </button>
 
@@ -73,8 +73,8 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
         <div style={{ display: 'flex', border: '1.5px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
           {BUILDER_TABS.map(tab => (
             <button key={tab.id} onClick={() => setBuilder(tab.id)} style={{
-              padding: '10px 26px', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-              fontSize: 15, fontWeight: builder === tab.id ? 600 : 400,
+              padding: '10px 26px', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif',
+              fontSize: 16, fontWeight: builder === tab.id ? 600 : 400,
               background: builder === tab.id ? '#1f2733' : 'white',
               color: builder === tab.id ? 'white' : '#718096',
               borderRight: tab.id !== 'avada' ? '1px solid #E2E8F0' : 'none',
@@ -86,22 +86,22 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 14, color: '#718096' }}>{unique.length} themes</span>
-          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid #E2E8F0', background: 'white', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#718096' }}>✕</button>
+          <span style={{ fontSize: 15, color: '#718096' }}>{unique.length} themes</span>
+          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid #E2E8F0', background: 'white', cursor: 'pointer', fontSize: 19, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#718096' }}>✕</button>
         </div>
       </div>
 
       {/* TITLE + SEARCH + FILTERS */}
       <div style={{ background: 'white', padding: '24px 40px 18px', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
-        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 26, fontWeight: 700, color: '#1A202C', textAlign: 'center' as const, marginBottom: 18 }}>Choose the Design</h1>
+        <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 27, fontWeight: 700, color: '#1A202C', textAlign: 'center' as const, marginBottom: 18 }}>Choose the Design</h1>
 
         <div style={{ position: 'relative', maxWidth: 540, margin: '0 auto 16px' }}>
           <svg style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} width="17" height="17" viewBox="0 0 20 20" fill="#A0AEC0">
             <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
           </svg>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search themes…"
-            style={{ width: '100%', padding: '11px 14px 11px 42px', border: '1.5px solid #E2E8F0', borderRadius: 11, fontSize: 15, fontFamily: 'Inter, sans-serif', color: '#1A202C' }}/>
-          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#A0AEC0', fontSize: 17 }}>✕</button>}
+            style={{ width: '100%', padding: '11px 14px 11px 42px', border: '1.5px solid #E2E8F0', borderRadius: 11, fontSize: 16, fontFamily: 'Poppins, sans-serif', color: '#1A202C' }}/>
+          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#A0AEC0', fontSize: 18 }}>✕</button>}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 7, flexWrap: 'wrap' as const }}>
@@ -109,11 +109,11 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
             <button key={ind} onClick={() => setIndustry(ind)} style={{
               padding: '6px 15px', border: `1.5px solid ${industry === ind ? '#E8651A' : '#E2E8F0'}`,
               borderRadius: 20, background: industry === ind ? '#FFF7ED' : 'white',
-              color: industry === ind ? '#E8651A' : '#4A5568', fontSize: 14, fontWeight: industry === ind ? 600 : 400,
-              cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+              color: industry === ind ? '#E8651A' : '#4A5568', fontSize: 15, fontWeight: industry === ind ? 600 : 400,
+              cursor: 'pointer', fontFamily: 'Poppins, sans-serif',
             }}>{ind}</button>
           ))}
-          <select value={style} onChange={e => setStyle(e.target.value)} style={{ padding: '6px 12px', border: '1.5px solid #E2E8F0', borderRadius: 20, fontSize: 14, fontFamily: 'Inter, sans-serif', color: '#4A5568', background: 'white', cursor: 'pointer' }}>
+          <select value={style} onChange={e => setStyle(e.target.value)} style={{ padding: '6px 12px', border: '1.5px solid #E2E8F0', borderRadius: 20, fontSize: 15, fontFamily: 'Poppins, sans-serif', color: '#4A5568', background: 'white', cursor: 'pointer' }}>
             {STYLES.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
@@ -122,12 +122,12 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
       {/* GRID */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '28px 40px 60px' }}>
         {unique.length === 0 ? (
-          <div style={{ textAlign: 'center' as const, padding: '80px', color: '#718096', fontSize: 16 }}>No themes match. Try changing the filters.</div>
+          <div style={{ textAlign: 'center' as const, padding: '80px', color: '#718096', fontSize: 17 }}>No themes match. Try changing the filters.</div>
         ) : (
           <>
             {recommended.length > 0 && (
               <div style={{ marginBottom: 36 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 18 }}>✦ Recommended</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 18 }}>✦ Recommended</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
                   {recommended.map(t => <Card key={t.slug+t.builder} theme={t} selected={selected} setSelected={setSelected} onSelect={onSelect} currentTheme={currentTheme}/>)}
                 </div>
@@ -135,7 +135,7 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
             )}
             {rest.length > 0 && (
               <div>
-                {recommended.length > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 18 }}>All Themes</div>}
+                {recommended.length > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 18 }}>All Themes</div>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
                   {rest.map(t => <Card key={t.slug+t.builder} theme={t} selected={selected} setSelected={setSelected} onSelect={onSelect} currentTheme={currentTheme}/>)}
                 </div>
@@ -167,10 +167,10 @@ function Card({ theme, selected, setSelected, onSelect, currentTheme }: any) {
       }}
     >
       {theme.recommended && (
-        <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, padding: '5px 13px', background: '#E8651A', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>Recommended</div>
+        <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, padding: '5px 13px', background: '#E8651A', color: 'white', borderRadius: 20, fontSize: 13, fontWeight: 700, boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>Recommended</div>
       )}
-      {isCurrent && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, padding: '5px 13px', background: '#1E7B4B', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>Current</div>}
-      {isSelected && !isCurrent && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: '50%', background: '#E8651A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16, boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>✓</div>}
+      {isCurrent && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, padding: '5px 13px', background: '#1E7B4B', color: 'white', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>Current</div>}
+      {isSelected && !isCurrent && <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: '50%', background: '#E8651A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 17, boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>✓</div>}
 
       {/* Screenshot */}
       <div style={{ height: 320, overflow: 'hidden', background: '#F0F4F8', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -185,15 +185,15 @@ function Card({ theme, selected, setSelected, onSelect, currentTheme }: any) {
           />
         ) : (
           <div style={{ textAlign: 'center' as const, padding: 24 }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>🎨</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#4A5568' }}>{theme.name}</div>
-            <a href={`https://wordpress.org/themes/${theme.slug}/`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#E8651A', textDecoration: 'none', marginTop: 8, display: 'block' }}>Preview on WP.org ↗</a>
+            <div style={{ fontSize: 41, marginBottom: 10 }}>🎨</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#4A5568' }}>{theme.name}</div>
+            <a href={`https://wordpress.org/themes/${theme.slug}/`} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#E8651A', textDecoration: 'none', marginTop: 8, display: 'block' }}>Preview on WP.org ↗</a>
           </div>
         )}
         {hovered && !imgErr && (
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <a href={`https://wordpress.org/themes/${theme.slug}/`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-              style={{ padding: '10px 22px', background: 'white', borderRadius: 10, color: '#1A202C', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+              style={{ padding: '10px 22px', background: 'white', borderRadius: 10, color: '#1A202C', textDecoration: 'none', fontSize: 15, fontWeight: 600 }}>
               Preview on WP.org ↗
             </a>
           </div>
@@ -202,31 +202,31 @@ function Card({ theme, selected, setSelected, onSelect, currentTheme }: any) {
 
       {/* Info */}
       <div style={{ padding: '16px 20px 20px' }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: '#1A202C', marginBottom: 5, fontFamily: 'Inter, sans-serif' }}>{theme.name}</div>
-        <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.55, marginBottom: 14 }}>{theme.desc}</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#1A202C', marginBottom: 5, fontFamily: 'Poppins, sans-serif' }}>{theme.name}</div>
+        <div style={{ fontSize: 14, color: '#718096', lineHeight: 1.55, marginBottom: 14 }}>{theme.desc}</div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' as const }}>
           {theme.style.map((s: string) => (
-            <span key={s} style={{ padding: '3px 9px', borderRadius: 20, fontSize: 12, background: '#F7FAFC', color: '#4A5568', border: '1px solid #E2E8F0', textTransform: 'capitalize' as const }}>{s}</span>
+            <span key={s} style={{ padding: '3px 9px', borderRadius: 20, fontSize: 13, background: '#F7FAFC', color: '#4A5568', border: '1px solid #E2E8F0', textTransform: 'capitalize' as const }}>{s}</span>
           ))}
         </div>
         {!confirming ? (
           <button onClick={() => setConfirming(true)} style={{
             width: '100%', padding: '11px', border: 'none', borderRadius: 10,
             background: isSelected ? '#1E7B4B' : '#E8651A', color: 'white',
-            fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+            fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif',
           }}>
             {isSelected ? '✓ Selected' : 'Use This Theme'}
           </button>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
-            <div style={{ fontSize: 13, color: '#4A5568', fontWeight: 500, textAlign: 'center' as const }}>
+            <div style={{ fontSize: 14, color: '#4A5568', fontWeight: 500, textAlign: 'center' as const }}>
               Install <strong>{theme.name}</strong> and activate it?
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setConfirming(false)} style={{ flex: 1, padding: '9px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', color: '#4A5568', fontSize: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={() => setConfirming(false)} style={{ flex: 1, padding: '9px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', color: '#4A5568', fontSize: 15, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                 Cancel
               </button>
-              <button onClick={() => { setSelected(theme.slug + theme.builder); setConfirming(false); onSelect(theme) }} style={{ flex: 2, padding: '9px', border: 'none', borderRadius: 9, background: '#E8651A', color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={() => { setSelected(theme.slug + theme.builder); setConfirming(false); onSelect(theme) }} style={{ flex: 2, padding: '9px', border: 'none', borderRadius: 9, background: '#E8651A', color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                 ✓ Yes, Install
               </button>
             </div>

@@ -31,7 +31,7 @@ export default function Nav() {
           </svg>
         </div>
         <span style={{
-          fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 700, color: '#1A1410',
+          fontFamily: 'Poppins, sans-serif', fontSize: 17, fontWeight: 700, color: '#1A1410',
         }}>
           ignyous<span style={{ color: '#E8651A' }}>.ai</span>
         </span>
@@ -41,7 +41,7 @@ export default function Nav() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         {links.map(link => (
           <Link key={link.href} href={link.href} style={{
-            padding: '6px 14px', borderRadius: 8, fontSize: 14, fontWeight: 500,
+            padding: '6px 14px', borderRadius: 8, fontSize: 15, fontWeight: 500,
             textDecoration: 'none',
             background: path === link.href ? '#FFF0E8' : 'transparent',
             color: path === link.href ? '#E8651A' : '#6B6056',
@@ -56,7 +56,7 @@ export default function Nav() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+          padding: '5px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500,
           background: '#F0FAF5', border: '1px solid #B8E5CF', color: '#1E7B4B',
         }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1E7B4B' }}/>

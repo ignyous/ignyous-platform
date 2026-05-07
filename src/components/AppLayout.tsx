@@ -79,7 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div style={{ width: 34, height: 34, background: C.accent, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 16 16" fill="white"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
             </div>
-            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 700, color: 'white' }}>
+            <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: 19, fontWeight: 700, color: 'white' }}>
               ignyous<span style={{ color: C.accent }}>.ai</span>
             </span>
           </div>
@@ -87,13 +87,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* My Sites label */}
         <div style={{ padding: '20px 20px 8px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>My Sites</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>My Sites</div>
         </div>
 
         {/* Sites list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {sites.length === 0 ? (
-            <div style={{ padding: '8px 20px', fontSize: 14, color: 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
+            <div style={{ padding: '8px 20px', fontSize: 15, color: 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
               No sites connected yet
             </div>
           ) : sites.map(site => {
@@ -112,13 +112,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <div style={{
                   width: 30, height: 30, borderRadius: 8, background: active ? C.accent : 'rgba(255,255,255,0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0,
                 }}>🌐</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'white' : 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: active ? 'white' : 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
                     {site.name || slug}
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
                     {slug}
                   </div>
                 </div>
@@ -130,13 +130,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Add site button */}
           <Link href="/bridge/connect" style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
-            textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 14,
+            textDecoration: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 15,
             transition: 'color 0.15s',
           }}
             onMouseEnter={e => (e.currentTarget.style.color = 'white')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}
           >
-            <div style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>+</div>
+            <div style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>+</div>
             <span>Connect a site</span>
           </Link>
         </div>
@@ -149,13 +149,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ].map(item => (
             <Link key={item.href} href={item.href} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
-              textDecoration: 'none', color: 'rgba(255,255,255,0.45)', fontSize: 14,
+              textDecoration: 'none', color: 'rgba(255,255,255,0.45)', fontSize: 15,
               transition: 'color 0.15s',
             }}
               onMouseEnter={e => (e.currentTarget.style.color = 'white')}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
             >
-              <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+              <span style={{ fontSize: 17 }}>{item.icon}</span>{item.label}
             </Link>
           ))}
         </div>
@@ -172,7 +172,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         }}>
           {/* Breadcrumb */}
-          <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 17, color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', gap: 8 }}>
             {currentSite ? (
               <>
                 <span style={{ color: 'rgba(255,255,255,0.45)' }}>Sites</span>
@@ -187,7 +187,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Right: notifications + profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {/* Bell */}
-            <button style={{ width: 38, height: 38, borderRadius: 9, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, position: 'relative' }}>
+            <button style={{ width: 38, height: 38, borderRadius: 9, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, position: 'relative' }}>
               🔔
               <div style={{ position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: '50%', background: C.accent, border: '1.5px solid #333333' }}/>
             </button>
@@ -202,11 +202,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div style={{
                   width: 30, height: 30, borderRadius: '50%', background: C.accent,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 700, color: 'white',
+                  fontSize: 15, fontWeight: 700, color: 'white',
                 }}>
                   {(session?.user?.name || session?.user?.email || 'U')[0].toUpperCase()}
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 500, color: 'white', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: 'white', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
                   {session?.user?.name || session?.user?.email?.split('@')[0]}
                 </span>
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="rgba(255,255,255,0.6)"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
@@ -219,8 +219,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   boxShadow: '0 8px 32px rgba(0,0,0,0.15)', minWidth: 200, zIndex: 100, overflow: 'hidden',
                 }}>
                   <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{session?.user?.name || 'Account'}</div>
-                    <div style={{ fontSize: 13, color: C.text3, marginTop: 2 }}>{session?.user?.email}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>{session?.user?.name || 'Account'}</div>
+                    <div style={{ fontSize: 14, color: C.text3, marginTop: 2 }}>{session?.user?.email}</div>
                   </div>
                   {[
                     { label: 'Account Settings', icon: '⚙', href: '/settings' },
@@ -229,21 +229,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   ].map(item => (
                     <Link key={item.href} href={item.href} onClick={() => setShowMenu(false)} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px',
-                      textDecoration: 'none', color: C.text, fontSize: 15, transition: 'background 0.1s',
+                      textDecoration: 'none', color: C.text, fontSize: 16, transition: 'background 0.1s',
                     }}
                       onMouseEnter={e => (e.currentTarget.style.background = C.surface)}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <span style={{ fontSize: 16 }}>{item.icon}</span>{item.label}
+                      <span style={{ fontSize: 17 }}>{item.icon}</span>{item.label}
                     </Link>
                   ))}
                   <div style={{ borderTop: `1px solid ${C.border}` }}>
                     <button onClick={() => signOut({ callbackUrl: '/login' })} style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px',
-                      background: 'none', border: 'none', cursor: 'pointer', color: '#B91C1C', fontSize: 15,
-                      textAlign: 'left' as const, fontFamily: 'Inter, sans-serif',
+                      background: 'none', border: 'none', cursor: 'pointer', color: '#B91C1C', fontSize: 16,
+                      textAlign: 'left' as const, fontFamily: 'Poppins, sans-serif',
                     }}>
-                      <span style={{ fontSize: 16 }}>🚪</span> Sign Out
+                      <span style={{ fontSize: 17 }}>🚪</span> Sign Out
                     </button>
                   </div>
                 </div>

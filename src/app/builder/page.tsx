@@ -211,17 +211,17 @@ function BuilderInner() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <a href={`/dashboard?site=${encodeURIComponent(siteUrl)}&key=${encodeURIComponent(apiKey)}`} style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', border: `1px solid ${C.border}`,
-            borderRadius: 8, color: C.text2, textDecoration: 'none', fontSize: 13,
+            borderRadius: 8, color: C.text2, textDecoration: 'none', fontSize: 14,
           }}>← Back</a>
 
           <select value={currentPage?.id || ''} onChange={e => { const p = pages.find(pg => pg.id === parseInt(e.target.value)); if (p) setCurrentPage(p) }}
-            style={{ padding: '7px 12px', border: `1.5px solid ${C.border}`, borderRadius: 9, fontSize: 14, fontFamily: 'Inter, sans-serif', color: C.text, background: 'white', cursor: 'pointer', maxWidth: 220 }}>
+            style={{ padding: '7px 12px', border: `1.5px solid ${C.border}`, borderRadius: 9, fontSize: 15, fontFamily: 'Poppins, sans-serif', color: C.text, background: 'white', cursor: 'pointer', maxWidth: 220 }}>
             <option value="">Select page…</option>
             {pages.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
           </select>
 
           {currentPage?.link && (
-            <a href={currentPage.link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.text3, textDecoration: 'none' }}>↗ {currentPage.link}</a>
+            <a href={currentPage.link} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.text3, textDecoration: 'none' }}>↗ {currentPage.link}</a>
           )}
         </div>
 
@@ -229,8 +229,8 @@ function BuilderInner() {
         <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 9, overflow: 'hidden' }}>
           {(['desktop','mobile'] as const).map(m => (
             <button key={m} onClick={() => setPreviewMode(m)} style={{
-              padding: '6px 14px', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-              fontSize: 12, fontWeight: previewMode===m?600:400,
+              padding: '6px 14px', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif',
+              fontSize: 13, fontWeight: previewMode===m?600:400,
               background: previewMode===m?C.sidebar:'white',
               color: previewMode===m?'white':C.text2,
             }}>
@@ -242,18 +242,18 @@ function BuilderInner() {
         {/* Right: actions */}
         <div style={{ display: 'flex', gap: 8 }}>
           {hasChanges && (
-            <div style={{ fontSize: 12, color: C.yellow, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ fontSize: 13, color: C.yellow, display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.yellow }}/>
               Unsaved changes
             </div>
           )}
-          <button onClick={() => refreshPreview()} style={{ padding: '7px 13px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+          <button onClick={() => refreshPreview()} style={{ padding: '7px 13px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
             ↺ Refresh
           </button>
-          <button onClick={savePage} disabled={saving} style={{ padding: '7px 16px', background: C.green, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+          <button onClick={savePage} disabled={saving} style={{ padding: '7px 16px', background: C.green, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
             {saving ? 'Saving…' : '✓ Save'}
           </button>
-          <button style={{ padding: '7px 16px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+          <button style={{ padding: '7px 16px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
             Publish →
           </button>
         </div>
@@ -273,10 +273,10 @@ function BuilderInner() {
               { id: 'settings', label: '⚙ Site' },
             ] as const).map(tab => (
               <button key={tab.id} onClick={() => setSidebarTab(tab.id)} style={{
-                flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: sidebarTab===tab.id?600:400,
+                flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: sidebarTab===tab.id?600:400,
                 background: 'transparent', color: sidebarTab===tab.id?C.accent:C.text3,
                 borderBottom: `2px solid ${sidebarTab===tab.id?C.accent:'transparent'}`, marginBottom: -1,
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: 'Poppins, sans-serif',
               }}>{tab.label}</button>
             ))}
           </div>
@@ -296,15 +296,15 @@ function BuilderInner() {
                   onMouseEnter={e => { if(currentPage?.id!==page.id) e.currentTarget.style.background=C.surface }}
                   onMouseLeave={e => { if(currentPage?.id!==page.id) e.currentTarget.style.background='transparent' }}
                 >
-                  <span style={{ fontSize: 14 }}>📄</span>
+                  <span style={{ fontSize: 15 }}>📄</span>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: currentPage?.id===page.id?600:400, color: C.text }}>{page.title}</div>
-                    <div style={{ fontSize: 11, color: C.text3 }}>/{page.slug}</div>
+                    <div style={{ fontSize: 14, fontWeight: currentPage?.id===page.id?600:400, color: C.text }}>{page.title}</div>
+                    <div style={{ fontSize: 12, color: C.text3 }}>/{page.slug}</div>
                   </div>
                 </div>
               ))}
               <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
-                <button onClick={() => sendMessage('Create a new page — ask me what it should be called and what content to put on it')} style={{ width: '100%', padding: '8px', border: `1.5px dashed ${C.border}`, borderRadius: 9, background: 'transparent', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                <button onClick={() => sendMessage('Create a new page — ask me what it should be called and what content to put on it')} style={{ width: '100%', padding: '8px', border: `1.5px dashed ${C.border}`, borderRadius: 9, background: 'transparent', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                   + New page with AI
                 </button>
               </div>
@@ -314,7 +314,7 @@ function BuilderInner() {
           {/* Color palettes */}
           {sidebarTab === 'palette' && (
             <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 12 }}>Color Palette</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12 }}>Color Palette</div>
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
                 {PALETTES.map(palette => (
                   <div key={palette.name}
@@ -334,16 +334,16 @@ function BuilderInner() {
                         <div key={color} style={{ width: 18, height: 18, borderRadius: '50%', background: color, border: '1.5px solid rgba(0,0,0,0.1)' }}/>
                       ))}
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: C.text }}>{palette.name}</span>
-                    {selectedPalette?.name===palette.name && <span style={{ marginLeft: 'auto', fontSize: 12, color: C.accent }}>✓</span>}
+                    <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{palette.name}</span>
+                    {selectedPalette?.name===palette.name && <span style={{ marginLeft: 'auto', fontSize: 13, color: C.accent }}>✓</span>}
                   </div>
                 ))}
               </div>
 
               <div style={{ marginTop: 16, padding: '12px', background: C.surface, borderRadius: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Let AI choose</div>
-                <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.5, marginBottom: 8 }}>Describe the vibe and AI will pick the perfect palette</div>
-                <button onClick={() => sendMessage('Analyze my site and recommend the best color palette for my industry and brand. Apply it if I approve.')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 6 }}>Let AI choose</div>
+                <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.5, marginBottom: 8 }}>Describe the vibe and AI will pick the perfect palette</div>
+                <button onClick={() => sendMessage('Analyze my site and recommend the best color palette for my industry and brand. Apply it if I approve.')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                   ✦ AI Pick Colors
                 </button>
               </div>
@@ -353,7 +353,7 @@ function BuilderInner() {
           {/* Site settings */}
           {sidebarTab === 'settings' && (
             <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.text2, marginBottom: 12 }}>Site Settings</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12 }}>Site Settings</div>
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
                 {[
                   { label: 'Site Name', value: siteInfo?.site?.name },
@@ -362,20 +362,20 @@ function BuilderInner() {
                   { label: 'Builder', value: siteInfo?.builder?.[0]?.name || 'Gutenberg' },
                 ].map(item => (
                   <div key={item.label}>
-                    <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
-                    <div style={{ fontSize: 13, color: C.text, fontWeight: 500, padding: '8px 10px', background: C.surface, borderRadius: 7 }}>{item.value || '—'}</div>
+                    <div style={{ fontSize: 12, color: C.text3, fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</div>
+                    <div style={{ fontSize: 14, color: C.text, fontWeight: 500, padding: '8px 10px', background: C.surface, borderRadius: 7 }}>{item.value || '—'}</div>
                   </div>
                 ))}
               </div>
 
               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
-                <button onClick={() => sendMessage('I want to change my WordPress theme. Show me options that fit my type of business.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('I want to change my WordPress theme. Show me options that fit my type of business.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   🎨 Change Theme
                 </button>
-                <button onClick={() => sendMessage('Update my site name and tagline — ask me what they should be.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('Update my site name and tagline — ask me what they should be.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   ✏ Update Site Name & Tagline
                 </button>
-                <button onClick={() => sendMessage('Upload a logo for my site — tell me what format to use and how to update it.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('Upload a logo for my site — tell me what format to use and how to update it.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   🖼 Update Logo
                 </button>
               </div>
@@ -386,10 +386,10 @@ function BuilderInner() {
         {/* ── CENTER: AI CHAT ── */}
         <div style={{ width: 340, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.white, display: 'flex', flexDirection: 'column' as const }}>
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 14 }}>✦</div>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 15 }}>✦</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>AI Page Editor</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Describe changes in plain English</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>AI Page Editor</div>
+              <div style={{ fontSize: 12, color: C.text3 }}>Describe changes in plain English</div>
             </div>
           </div>
 
@@ -400,12 +400,12 @@ function BuilderInner() {
                 <div style={{
                   display: 'flex', flexDirection: msg.role==='user'?'row-reverse':'row', gap: 8,
                 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.sidebar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'white', fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.sidebar, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'white', fontWeight: 600, marginTop: 2 }}>
                     {msg.role==='user'?'U':'✦'}
                   </div>
                   <div style={{ maxWidth: '85%' }}>
                     <div style={{
-                      padding: '10px 13px', borderRadius: 13, fontSize: 13, lineHeight: 1.6,
+                      padding: '10px 13px', borderRadius: 13, fontSize: 14, lineHeight: 1.6,
                       background: msg.role==='user'?C.accent:C.surface,
                       color: msg.role==='user'?'white':C.text,
                       border: msg.role==='user'?'none':`1px solid ${C.border}`,
@@ -415,13 +415,13 @@ function BuilderInner() {
                     </div>
                     {/* Action status */}
                     {msg.status === 'pending' && !msg.result && (
-                      <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 7, background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, fontSize: 12, color: C.yellow, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 7, background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, fontSize: 13, color: C.yellow, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 10, height: 10, border: `2px solid ${C.yellowBorder}`, borderTopColor: C.yellow, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}/>
                         Applying changes…
                       </div>
                     )}
                     {msg.result && (
-                      <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 7, fontSize: 12, fontWeight: 500, background: msg.result.startsWith('✓')?C.greenBg:C.redBg, border: `1px solid ${msg.result.startsWith('✓')?C.greenBorder:C.redBorder}`, color: msg.result.startsWith('✓')?C.green:C.red }}>
+                      <div style={{ marginTop: 6, padding: '6px 10px', borderRadius: 7, fontSize: 13, fontWeight: 500, background: msg.result.startsWith('✓')?C.greenBg:C.redBg, border: `1px solid ${msg.result.startsWith('✓')?C.greenBorder:C.redBorder}`, color: msg.result.startsWith('✓')?C.green:C.red }}>
                         {msg.result}
                       </div>
                     )}
@@ -434,8 +434,8 @@ function BuilderInner() {
                     {msg.suggestions.map((s, si) => (
                       <button key={si} onClick={() => sendMessage(s)} style={{
                         padding: '7px 11px', border: `1px solid ${C.border}`, borderRadius: 8,
-                        background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer',
-                        textAlign: 'left' as const, fontFamily: 'Inter, sans-serif',
+                        background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer',
+                        textAlign: 'left' as const, fontFamily: 'Poppins, sans-serif',
                         transition: 'all 0.1s',
                       }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent }}
@@ -451,7 +451,7 @@ function BuilderInner() {
 
             {sending && (
               <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: C.sidebar, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11 }}>✦</div>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: C.sidebar, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 12 }}>✦</div>
                 <div style={{ padding: '11px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 13, borderTopLeftRadius: 3 }}>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: C.text3, animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>)}
@@ -472,7 +472,7 @@ function BuilderInner() {
                 onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,100)+'px' }}
                 onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()} }}
                 placeholder="e.g. Make the heading darker, add a promo banner…"
-                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontFamily: 'Inter, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '4px 0' }}
+                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 14, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '4px 0' }}
               />
               <button onClick={() => sendMessage()} disabled={sending||!input.trim()} style={{
                 alignSelf: 'flex-end', width: 34, height: 34, borderRadius: 9, border: 'none', flexShrink: 0,
@@ -494,10 +494,10 @@ function BuilderInner() {
                 <div key={color} style={{ width: 10, height: 10, borderRadius: '50%', background: color }}/>
               ))}
             </div>
-            <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 12px', fontSize: 12, color: C.text3, fontFamily: 'monospace' }}>
+            <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 12px', fontSize: 13, color: C.text3, fontFamily: 'monospace' }}>
               {previewUrl}
             </div>
-            <div style={{ fontSize: 11, color: C.text3 }}>Live preview</div>
+            <div style={{ fontSize: 12, color: C.text3 }}>Live preview</div>
           </div>
 
           {/* iframe */}
@@ -515,7 +515,7 @@ function BuilderInner() {
                 sandbox="allow-same-origin allow-scripts"
               />
               {/* Overlay label */}
-              <div style={{ position: 'absolute', bottom: 12, right: 12, padding: '4px 10px', background: 'rgba(0,0,0,0.5)', borderRadius: 20, fontSize: 11, color: 'white', backdropFilter: 'blur(4px)' }}>
+              <div style={{ position: 'absolute', bottom: 12, right: 12, padding: '4px 10px', background: 'rgba(0,0,0,0.5)', borderRadius: 20, fontSize: 12, color: 'white', backdropFilter: 'blur(4px)' }}>
                 {previewMode === 'desktop' ? '🖥 Desktop' : '📱 Mobile'} Preview
               </div>
             </div>

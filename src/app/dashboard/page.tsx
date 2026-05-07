@@ -51,7 +51,7 @@ const Tag = ({ children, color = 'gray' }: { children: React.ReactNode; color?: 
     orange: { bg: C.accentDim, tc: C.accent, b: C.accentBorder }, gray: { bg: C.surface, tc: C.text2, b: C.border },
   }
   const s = m[color] || m.gray
-  return <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 500, background: s.bg, color: s.tc, border: `1px solid ${s.b}`, display: 'inline-block', whiteSpace: 'nowrap' as const }}>{children}</span>
+  return <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 12, fontWeight: 500, background: s.bg, color: s.tc, border: `1px solid ${s.b}`, display: 'inline-block', whiteSpace: 'nowrap' as const }}>{children}</span>
 }
 
 const ScoreRing = ({ score, label, size = 52 }: { score: number; label: string; size?: number }) => {
@@ -61,9 +61,9 @@ const ScoreRing = ({ score, label, size = 52 }: { score: number; label: string; 
   return (
     <div style={{ textAlign: 'center' as const }}>
       <div style={{ width: size, height: size, borderRadius: '50%', background: bg, border: `2px solid ${bor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 5px' }}>
-        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: size > 60 ? 20 : 13, fontWeight: 700, color: col }}>{score}</span>
+        <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: size > 60 ? 20 : 13, fontWeight: 700, color: col }}>{score}</span>
       </div>
-      <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 12, color: C.text3, fontWeight: 500 }}>{label}</div>
     </div>
   )
 }
@@ -102,13 +102,13 @@ const SUGGESTIONS = [
 // ─── ACTION FEEDBACK COMPONENT ───────────────────────────────────
 const ActionFeedback = ({ result }: { result: ActionResult }) => (
   <div style={{ marginTop: 8, padding: '11px 14px', borderRadius: 10, background: result.success ? C.greenBg : C.redBg, border: `1px solid ${result.success ? C.greenBorder : C.redBorder}` }}>
-    <div style={{ fontSize: 13, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url ? 7 : 0 }}>
+    <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url ? 7 : 0 }}>
       {result.success ? '✓' : '✗'} {result.message}
     </div>
     {result.url && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-        <code style={{ fontSize: 12, color: C.text2, background: 'rgba(0,0,0,0.06)', padding: '2px 7px', borderRadius: 4, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{result.url}</code>
-        <a href={result.url} target="_blank" rel="noreferrer" style={{ padding: '5px 12px', background: C.green, borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>View Page ↗</a>
+        <code style={{ fontSize: 13, color: C.text2, background: 'rgba(0,0,0,0.06)', padding: '2px 7px', borderRadius: 4, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{result.url}</code>
+        <a href={result.url} target="_blank" rel="noreferrer" style={{ padding: '5px 12px', background: C.green, borderRadius: 7, color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>View Page ↗</a>
       </div>
     )}
   </div>
@@ -182,6 +182,8 @@ function DashboardInner() {
   const [sending, setSending]           = useState(false)
   const [showThemes, setShowThemes]     = useState(false)
   const [dismissedIssues, setDismissedIssues] = useState<string[]>([])
+  const [snapshots, setSnapshots]       = useState<Array<{id: string; label: string; created_at: string}>>([])
+  const [showSnapshots, setShowSnapshots] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -220,9 +222,13 @@ function DashboardInner() {
         setPages(raw)
       }
 
-      // Background scan
+      // Background scan + snapshots
       fetch('/api/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: cleanUrl }) })
         .then(r => r.json()).then(d => { if (d.success) setScanReport(d.report) })
+
+      bridge('snapshots').then(r => {
+        if (r.success) setSnapshots(r.data?.snapshots || [])
+      })
 
       const mem      = getSiteMem(siteKey)
       const siteName = info?.site?.name || siteUrl
@@ -367,11 +373,35 @@ function DashboardInner() {
           result = { type: 'scan_site', success: d.success, message: d.success ? `Scan done — Overall score: ${d.report?.scores?.overall}/100` : 'Scan failed' }
           break
         }
+        case 'take_snapshot': {
+          const r = await bridge('snapshot', 'POST', { label: action.label || 'Manual snapshot', page_id: action.pageId || 0 })
+          result = { type: 'take_snapshot', success: r.success, message: r.success ? `📸 Snapshot saved: "${action.label || 'Snapshot'}"` : `Snapshot failed: ${r.error}` }
+          if (r.success) setSnapshots(prev => [{ id: r.data?.snapshot_id, label: action.label, created_at: new Date().toISOString() }, ...prev].slice(0, 20))
+          break
+        }
         default:
           result = { type: action.type, success: true, message: 'Done!' }
       }
     } catch (e: any) { result = { type: action.type, success: false, message: `Error: ${e.message}` } }
     setMessages(prev => prev.map(m => m === msg ? { ...m, actionResult: result } : m))
+  }
+
+  // Auto-snapshot before destructive actions
+  async function autoSnapshot(label: string) {
+    try {
+      const r = await bridge('snapshot', 'POST', { label })
+      if (r.success) setSnapshots(prev => [{ id: r.data?.snapshot_id, label, created_at: new Date().toISOString() }, ...prev].slice(0, 20))
+    } catch {}
+  }
+
+  async function restoreSnapshot(snapshotId: string, label: string) {
+    if (!confirm(`Restore to: "${label}"? This will overwrite current page content.`)) return
+    const r = await bridge('restore', 'POST', { snapshot_id: snapshotId })
+    if (r.success) {
+      alert(`✓ Restored to: "${label}"`)
+    } else {
+      alert(`Failed to restore: ${r.error}`)
+    }
   }
 
   // ── Theme select ───────────────────────────────────────────────
@@ -384,7 +414,7 @@ function DashboardInner() {
   if (loading) return (
     <div style={{ padding: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, gap: 16 }}>
       <div style={{ width: 44, height: 44, border: `3px solid ${C.border}`, borderTopColor: C.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
-      <div style={{ fontSize: 15, color: C.text2 }}>Connecting to {siteUrl}…</div>
+      <div style={{ fontSize: 16, color: C.text2 }}>Connecting to {siteUrl}…</div>
     </div>
   )
 
@@ -392,12 +422,12 @@ function DashboardInner() {
   if (!apiKey) return (
     <div style={{ padding: '80px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: '48px 40px', textAlign: 'center' as const, maxWidth: 440, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>🔗</div>
-        <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 10 }}>Connection key missing</h2>
-        <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.65, marginBottom: 28 }}>
+        <div style={{ fontSize: 41, marginBottom: 16 }}>🔗</div>
+        <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 23, fontWeight: 700, color: C.text, marginBottom: 10 }}>Connection key missing</h2>
+        <p style={{ fontSize: 16, color: C.text2, lineHeight: 1.65, marginBottom: 28 }}>
           The API key for <strong>{siteUrl}</strong> wasn't found. This usually means the plugin was reinstalled. Run the connect flow again — it only takes 30 seconds.
         </p>
-        <a href={`/bridge/connect`} style={{ display: 'inline-block', padding: '14px 36px', background: C.accent, borderRadius: 12, color: 'white', textDecoration: 'none', fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', boxShadow: '0 4px 14px rgba(232,101,26,0.3)' }}>
+        <a href={`/bridge/connect`} style={{ display: 'inline-block', padding: '14px 36px', background: C.accent, borderRadius: 12, color: 'white', textDecoration: 'none', fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', boxShadow: '0 4px 14px rgba(232,101,26,0.3)' }}>
           Reconnect Site →
         </a>
       </div>
@@ -424,19 +454,19 @@ function DashboardInner() {
       {/* Site header strip */}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '10px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentDim, border: `1px solid ${C.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🌐</div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentDim, border: `1px solid ${C.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19 }}>🌐</div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>{siteInfo?.site?.name || siteUrl}</div>
-            <div style={{ fontSize: 12, color: C.text3, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>{siteInfo?.site?.name || siteUrl}</div>
+            <div style={{ fontSize: 13, color: C.text3, display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block'}}/>
               {cleanUrl} · WP {siteInfo?.wordpress?.version} · {siteInfo?.theme?.name || '?'} · {activePlugins.length} plugins
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {updates > 0 && <button onClick={() => send('Update all my plugins to the latest versions')} style={{ padding: '7px 12px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, fontSize: 12, color: C.yellow, fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>⚠ {updates} update{updates>1?'s':''}</button>}
-          <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>WP Admin ↗</a>
-          <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>View Site ↗</a>
+          {updates > 0 && <button onClick={() => send('Update all my plugins to the latest versions')} style={{ padding: '7px 12px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, fontSize: 13, color: C.yellow, fontWeight: 500, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>⚠ {updates} update{updates>1?'s':''}</button>}
+          <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>WP Admin ↗</a>
+          <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>View Site ↗</a>
         </div>
       </div>
 
@@ -446,10 +476,10 @@ function DashboardInner() {
         <div style={{ background: C.white, border: `2px solid ${C.border}`, borderRadius: 20, overflow: 'hidden', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }}>
           <div style={{ padding: '16px 24px 0', background: `linear-gradient(120deg, ${C.accentDim} 0%, white 55%)` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 17 }}>✦</div>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18 }}>✦</div>
               <div>
-                <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>Ask ignyous anything</div>
-                <div style={{ fontSize: 13, color: C.text2 }}>Plain English — I'll handle all the technical work</div>
+                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>Ask ignyous anything</div>
+                <div style={{ fontSize: 14, color: C.text2 }}>Plain English — I'll handle all the technical work</div>
               </div>
             </div>
           </div>
@@ -458,15 +488,15 @@ function DashboardInner() {
           <div ref={chatContainerRef} style={{ padding: '14px 24px', height: 300, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: msg.role==='user'?'row-reverse':'row', gap: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'white', fontWeight: 600, marginTop: 2 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'white', fontWeight: 600, marginTop: 2 }}>
                   {msg.role==='user'?'U':'✦'}
                 </div>
                 <div style={{ maxWidth: '80%' }}>
-                  <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 14, lineHeight: 1.65, background: msg.role==='user'?C.accent:C.surface, color: msg.role==='user'?'white':C.text, border: msg.role==='user'?'none':`1px solid ${C.border}`, ...(msg.role==='user'?{borderTopRightRadius:4}:{borderTopLeftRadius:4}) }}>
+                  <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 15, lineHeight: 1.65, background: msg.role==='user'?C.accent:C.surface, color: msg.role==='user'?'white':C.text, border: msg.role==='user'?'none':`1px solid ${C.border}`, ...(msg.role==='user'?{borderTopRightRadius:4}:{borderTopLeftRadius:4}) }}>
                     {msg.content.split('\n').map((l,li) => <div key={li} style={{ marginBottom: li<msg.content.split('\n').length-1?4:0 }}>{l.replace(/\*\*(.*?)\*\*/g,'$1')}</div>)}
                   </div>
                   {msg.action && !msg.actionResult && (
-                    <div style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, fontSize: 13, color: C.yellow, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, fontSize: 14, color: C.yellow, display: 'flex', alignItems: 'center', gap: 7 }}>
                       <div style={{ width: 11, height: 11, border: `2px solid ${C.yellowBorder}`, borderTopColor: C.yellow, borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}/>
                       Working on it…
                     </div>
@@ -479,8 +509,8 @@ function DashboardInner() {
                       {msg.options.map((opt: any, oi: number) => (
                         <button key={oi} onClick={() => send(opt.label)} style={{
                           padding: '9px 14px', border: `1.5px solid ${C.accent}`, borderRadius: 9,
-                          background: C.accentDim, color: C.accent, fontSize: 14, fontWeight: 500,
-                          cursor: 'pointer', fontFamily: 'Inter, sans-serif', textAlign: 'left' as const,
+                          background: C.accentDim, color: C.accent, fontSize: 15, fontWeight: 500,
+                          cursor: 'pointer', fontFamily: 'Poppins, sans-serif', textAlign: 'left' as const,
                           transition: 'all 0.15s',
                         }}
                           onMouseEnter={e => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = 'white' }}
@@ -492,7 +522,7 @@ function DashboardInner() {
                     </div>
                   )}
 
-                  <div style={{ fontSize: 11, color: C.text3, marginTop: 3, textAlign: msg.role==='user'?'right':'left' as const }}>
+                  <div style={{ fontSize: 12, color: C.text3, marginTop: 3, textAlign: msg.role==='user'?'right':'left' as const }}>
                     {msg.ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
                   </div>
                 </div>
@@ -500,7 +530,7 @@ function DashboardInner() {
             ))}
             {sending && (
               <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 12 }}>✦</div>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 13 }}>✦</div>
                 <div style={{ padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, borderTopLeftRadius: 4 }}>
                   <div style={{ display: 'flex', gap: 5 }}>
                     {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: C.text3, animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>)}
@@ -520,7 +550,7 @@ function DashboardInner() {
                 onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,120)+'px' }}
                 onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); send() } }}
                 placeholder={`Tell ignyous what you want to do with ${siteInfo?.site?.name||'your site'}…`}
-                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 15, fontFamily: 'Inter, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '10px 0' }}
+                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 16, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '10px 0' }}
               />
               <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 44, height: 44, borderRadius: 12, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:C.accent, cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="white"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
@@ -531,7 +561,7 @@ function DashboardInner() {
           {/* Chips */}
           <div style={{ padding: '0 24px 18px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
             {SUGGESTIONS.map(s => (
-              <button key={s} onClick={() => send(s)} style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
+              <button key={s} onClick={() => send(s)} style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.text2 }}
               >{s}</button>
@@ -543,21 +573,21 @@ function DashboardInner() {
         {visibleIssues.length > 0 && (
           <div style={{ background: C.white, border: `1.5px solid ${C.accentBorder}`, borderRadius: 16, padding: '14px 20px', marginBottom: 20, boxShadow: '0 2px 12px rgba(232,101,26,0.08)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>
                 ✦ {visibleIssues.length} issue{visibleIssues.length>1?'s':''} found — ignyous can fix all of these
               </div>
-              <button onClick={() => setDismissedIssues(issues.map(i=>i.title))} style={{ fontSize: 12, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Dismiss all</button>
+              <button onClick={() => setDismissedIssues(issues.map(i=>i.title))} style={{ fontSize: 13, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Dismiss all</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
               {visibleIssues.map((issue, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', borderRadius: 12, background: issue.severity==='high'?C.redBg:C.yellowBg, border: `1px solid ${issue.severity==='high'?C.redBorder:C.yellowBorder}` }}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{issue.icon}</span>
+                  <span style={{ fontSize: 19, flexShrink: 0 }}>{issue.icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2 }}>{issue.title}</div>
-                    <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.4, marginBottom: 8 }}>{issue.desc}</div>
-                    <button onClick={() => send(issue.prompt)} style={{ padding: '5px 12px', background: C.accent, border: 'none', borderRadius: 7, color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Fix with AI ✦</button>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{issue.title}</div>
+                    <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.4, marginBottom: 8 }}>{issue.desc}</div>
+                    <button onClick={() => send(issue.prompt)} style={{ padding: '5px 12px', background: C.accent, border: 'none', borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Fix with AI ✦</button>
                   </div>
-                  <button onClick={() => setDismissedIssues(p=>[...p,issue.title])} style={{ fontSize: 14, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>✕</button>
+                  <button onClick={() => setDismissedIssues(p=>[...p,issue.title])} style={{ fontSize: 15, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>✕</button>
                 </div>
               ))}
             </div>
@@ -573,8 +603,8 @@ function DashboardInner() {
             {/* GOAL CARDS — like image 2 */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
               <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>What would you like to do?</div>
-                <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>Click anything and ignyous will handle it</div>
+                <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>What would you like to do?</div>
+                <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>Click anything and ignyous will handle it</div>
               </div>
               <div style={{ padding: '16px 22px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 12 }}>
@@ -584,14 +614,14 @@ function DashboardInner() {
                       style={{
                         padding: '18px 16px', background: C.surface, border: `1.5px solid ${C.border}`,
                         borderRadius: 14, cursor: 'pointer', textAlign: 'left' as const,
-                        fontFamily: 'Inter, sans-serif', transition: 'all 0.15s',
+                        fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s',
                       }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.background='#FFF7ED'; e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 16px rgba(232,101,26,0.12)' }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface; e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='none' }}
                     >
-                      <div style={{ fontSize: 26, marginBottom: 10 }}>{action.icon}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 5, lineHeight: 1.2 }}>{action.label}</div>
-                      <div style={{ fontSize: 12, color: C.text3, lineHeight: 1.4 }}>{action.desc}</div>
+                      <div style={{ fontSize: 27, marginBottom: 10 }}>{action.icon}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 5, lineHeight: 1.2 }}>{action.label}</div>
+                      <div style={{ fontSize: 13, color: C.text3, lineHeight: 1.4 }}>{action.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -602,15 +632,15 @@ function DashboardInner() {
             {hasWoo && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
                 <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>🛒 WooCommerce Store</div>
-                  <button onClick={() => send('Show me my WooCommerce orders and revenue stats')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Ask AI ✦</button>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>🛒 WooCommerce Store</div>
+                  <button onClick={() => send('Show me my WooCommerce orders and revenue stats')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>
                 </div>
                 <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                  {['Orders','Revenue','Products'].map(l => <div key={l}><div style={{ fontSize: 11, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>—</div></div>)}
+                  {['Orders','Revenue','Products'].map(l => <div key={l}><div style={{ fontSize: 12, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 23, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>—</div></div>)}
                 </div>
                 <div style={{ padding: '0 20px 14px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
                   {['Add Product','View Orders','Run a Sale','Update Inventory'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in WooCommerce`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>{a}</button>
+                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in WooCommerce`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
                   ))}
                 </div>
               </div>
@@ -620,15 +650,15 @@ function DashboardInner() {
             {hasAmelia && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
                 <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>📅 Amelia Bookings</div>
-                  <button onClick={() => send('Show me my upcoming Amelia appointments')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Ask AI ✦</button>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📅 Amelia Bookings</div>
+                  <button onClick={() => send('Show me my upcoming Amelia appointments')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>
                 </div>
                 <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                  {['This Week','This Month','Total Services'].map(l => <div key={l}><div style={{ fontSize: 11, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>—</div></div>)}
+                  {['This Week','This Month','Total Services'].map(l => <div key={l}><div style={{ fontSize: 12, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 23, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>—</div></div>)}
                 </div>
                 <div style={{ padding: '0 20px 14px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
                   {['Add Service','View Calendar','Add Employee','Edit Hours'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in Amelia`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>{a}</button>
+                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in Amelia`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
                   ))}
                 </div>
               </div>
@@ -637,10 +667,10 @@ function DashboardInner() {
             {/* Events */}
             {hasEvents && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, padding: '14px 20px' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text, marginBottom: 12 }}>🎉 Events</div>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text, marginBottom: 12 }}>🎉 Events</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                   {['Add Event','View All Events','Edit Upcoming','Event Settings'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()}`)} style={{ padding: '8px 14px', border: `1px solid ${C.border}`, borderRadius: 9, background: C.surface, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>{a}</button>
+                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()}`)} style={{ padding: '8px 14px', border: `1px solid ${C.border}`, borderRadius: 9, background: C.surface, color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
                   ))}
                 </div>
               </div>
@@ -649,23 +679,23 @@ function DashboardInner() {
             {/* Contact forms */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>📬 Contact Forms & Leads</div>
-                {hasForms && <button onClick={() => send('Show me my recent form submissions')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Ask AI ✦</button>}
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📬 Contact Forms & Leads</div>
+                {hasForms && <button onClick={() => send('Show me my recent form submissions')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>}
               </div>
               <div style={{ padding: 20 }}>
                 {!hasForms ? (
                   <>
                     <div style={{ padding: '13px 15px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 10, marginBottom: 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.yellow, marginBottom: 3 }}>⚠ No contact form found</div>
-                      <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.5 }}>Visitors can't reach you. You're losing leads every day.</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.yellow, marginBottom: 3 }}>⚠ No contact form found</div>
+                      <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5 }}>Visitors can't reach you. You're losing leads every day.</div>
                     </div>
-                    <button onClick={() => send('Add a contact form to my site that texts me when someone submits it')} style={{ width: '100%', padding: '12px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                    <button onClick={() => send('Add a contact form to my site that texts me when someone submits it')} style={{ width: '100%', padding: '12px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                       ✦ Add Contact Form + SMS Alerts
                     </button>
                   </>
                 ) : (
                   <div style={{ textAlign: 'center' as const }}>
-                    <button onClick={() => send('Show me my recent contact form submissions and leads')} style={{ color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500 }}>
+                    <button onClick={() => send('Show me my recent contact form submissions and leads')} style={{ color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontSize: 15, fontWeight: 500 }}>
                       Load recent submissions ✦
                     </button>
                   </div>
@@ -676,13 +706,13 @@ function DashboardInner() {
             {/* Pages */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: C.text }}>📄 Pages ({pages.length})</div>
-                <button onClick={() => send('Review all my pages and tell me which need improvement')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Audit ✦</button>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📄 Pages ({pages.length})</div>
+                <button onClick={() => send('Review all my pages and tell me which need improvement')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Audit ✦</button>
               </div>
               {pages.length === 0 ? (
                 <div style={{ padding: 24, textAlign: 'center' as const }}>
-                  <div style={{ fontSize: 14, color: C.text3, marginBottom: 12 }}>No pages on your site yet</div>
-                  <button onClick={() => send("What pages should my site have? Let's create them.")} style={{ padding: '10px 24px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>✦ Build my pages</button>
+                  <div style={{ fontSize: 15, color: C.text3, marginBottom: 12 }}>No pages on your site yet</div>
+                  <button onClick={() => send("What pages should my site have? Let's create them.")} style={{ padding: '10px 24px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Build my pages</button>
                 </div>
               ) : (
                 <>
@@ -698,16 +728,16 @@ function DashboardInner() {
                             onError={e => { (e.target as HTMLImageElement).style.display='none' }}
                           />
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{page.title}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{page.title}</div>
                         <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
                           <Tag color={page.status==='publish'?'green':'gray'}>{page.status==='publish'?'Live':page.status}</Tag>
-                          <span style={{ fontSize: 11, color: C.text3, fontFamily: 'monospace' }}>/{page.slug}</span>
+                          <span style={{ fontSize: 12, color: C.text3, fontFamily: 'monospace' }}>/{page.slug}</span>
                         </div>
                       </div>
                     ))}
                   </div>
                   <div style={{ padding: '0 20px 16px' }}>
-                    <button onClick={() => send("What pages is my site missing? Suggest and create the important ones.")} style={{ width: '100%', padding: '10px', border: `1.5px dashed ${C.border}`, borderRadius: 10, background: 'transparent', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                    <button onClick={() => send("What pages is my site missing? Suggest and create the important ones.")} style={{ width: '100%', padding: '10px', border: `1.5px dashed ${C.border}`, borderRadius: 10, background: 'transparent', color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                       + Suggest & create missing pages
                     </button>
                   </div>
@@ -722,8 +752,8 @@ function DashboardInner() {
             {/* Site preview — big screenshot */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>Homepage Preview</div>
-                <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.blue, textDecoration: 'none', fontWeight: 500 }}>Open ↗</a>
+                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Homepage Preview</div>
+                <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.blue, textDecoration: 'none', fontWeight: 500 }}>Open ↗</a>
               </div>
               <div style={{ position: 'relative', height: 220, overflow: 'hidden', background: C.surface }}>
                 <img
@@ -733,19 +763,19 @@ function DashboardInner() {
                   onError={e => { (e.target as HTMLImageElement).style.display='none' }}
                 />
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(transparent, rgba(0,0,0,0.3))', display: 'flex', alignItems: 'flex-end', padding: '12px 14px' }}>
-                  <span style={{ color: 'white', fontSize: 12, fontFamily: 'monospace' }}>{cleanUrl}</span>
+                  <span style={{ color: 'white', fontSize: 13, fontFamily: 'monospace' }}>{cleanUrl}</span>
                 </div>
               </div>
               <div style={{ padding: '10px 18px', display: 'flex', gap: 8 }}>
-                <button onClick={() => setShowThemes(true)} style={{ flex: 1, padding: '8px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 9, color: C.accent, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>🎨 Change Theme</button>
-                <button onClick={() => send('Redesign my homepage to look more professional and modern')} style={{ flex: 1, padding: '8px', border: `1px solid ${C.border}`, borderRadius: 9, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>✦ Redesign</button>
+                <button onClick={() => setShowThemes(true)} style={{ flex: 1, padding: '8px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 9, color: C.accent, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>🎨 Change Theme</button>
+                <button onClick={() => send('Redesign my homepage to look more professional and modern')} style={{ flex: 1, padding: '8px', border: `1px solid ${C.border}`, borderRadius: 9, background: 'white', color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Redesign</button>
               </div>
             </div>
 
             {/* Health scores */}
             {scanReport?.scores && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>Site Health Scores</div>
+                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Site Health Scores</div>
                 <div style={{ padding: 16 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <ScoreRing score={scanReport.scores.overall} label="Overall" size={72}/>
@@ -758,14 +788,14 @@ function DashboardInner() {
                     <ScoreRing score={scanReport.scores.security} label="Security" size={44}/>
                     <ScoreRing score={scanReport.scores.mobile}   label="Mobile"  size={44}/>
                   </div>
-                  <button onClick={() => send('Run a full site audit and give me a prioritized fix list')} style={{ width: '100%', padding: '9px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>✦ Full AI Audit</button>
+                  <button onClick={() => send('Run a full site audit and give me a prioritized fix list')} style={{ width: '100%', padding: '9px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Full AI Audit</button>
                 </div>
               </div>
             )}
 
             {/* Site details */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>Site Details</div>
+              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Site Details</div>
               <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
                 {[
                   { label: 'Site Name',   value: siteInfo?.site?.name },
@@ -778,8 +808,8 @@ function DashboardInner() {
                   { label: 'Admin Email', value: siteInfo?.site?.admin_email },
                 ].map(item => (
                   <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <div style={{ fontSize: 12, color: C.text3, flexShrink: 0 }}>{item.label}</div>
-                    <div style={{ fontSize: 12, color: C.text, fontWeight: 500, textAlign: 'right' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 180 }}>{item.value || '—'}</div>
+                    <div style={{ fontSize: 13, color: C.text3, flexShrink: 0 }}>{item.label}</div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 500, textAlign: 'right' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 180 }}>{item.value || '—'}</div>
                   </div>
                 ))}
               </div>
@@ -788,26 +818,26 @@ function DashboardInner() {
             {/* Plugins */}
             <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
               <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>🔌 Plugins ({activePlugins.length} active)</div>
-                <button onClick={() => send('What plugins do I have installed? Are there any I should add or remove?')} style={{ padding: '4px 9px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', color: C.text2, fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Ask AI</button>
+                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>🔌 Plugins ({activePlugins.length} active)</div>
+                <button onClick={() => send('What plugins do I have installed? Are there any I should add or remove?')} style={{ padding: '4px 9px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI</button>
               </div>
               <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                 {activePlugins.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center' as const, color: C.text3, fontSize: 13 }}>
+                  <div style={{ padding: '20px', textAlign: 'center' as const, color: C.text3, fontSize: 14 }}>
                     No plugins detected yet.<br/>
-                    <button onClick={() => send('What plugins do I have installed on my site?')} style={{ marginTop: 8, color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>Ask AI to list them ✦</button>
+                    <button onClick={() => send('What plugins do I have installed on my site?')} style={{ marginTop: 8, color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontSize: 14 }}>Ask AI to list them ✦</button>
                   </div>
                 ) : activePlugins.map(p => (
                   <div key={p.slug||p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderBottom: `1px solid ${C.surface}` }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, flexShrink: 0 }}/>
-                    <div style={{ flex: 1, fontSize: 13, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.name}</div>
+                    <div style={{ flex: 1, fontSize: 14, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.name}</div>
                     {p.update && <Tag color="yellow">Update</Tag>}
                   </div>
                 ))}
               </div>
               {updates > 0 && (
                 <div style={{ padding: '10px 18px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => send('Update all my plugins to the latest versions')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                  <button onClick={() => send('Update all my plugins to the latest versions')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
                     ✦ Update {updates} Plugin{updates>1?'s':''}
                   </button>
                 </div>
@@ -817,7 +847,7 @@ function DashboardInner() {
             {/* SEO & Cache quick actions */}
             {(hasYoast || hasRocket) && (
               <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>
+                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>
                   {hasYoast ? '🔍 SEO' : '⚡ Performance'}
                 </div>
                 <div style={{ padding: '10px 18px 14px', display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
@@ -825,11 +855,60 @@ function DashboardInner() {
                     ? ['Audit all page SEO scores','Fix meta descriptions','Fix missing headings','Generate XML sitemap']
                     : ['Clear all caches','Optimize images','Enable lazy loading','Check page speed']
                   ).map(a => (
-                    <button key={a} onClick={() => send(a)} style={{ padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', textAlign: 'left' as const }}>{a}</button>
+                    <button key={a} onClick={() => send(a)} style={{ padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', textAlign: 'left' as const }}>{a}</button>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* ── SNAPSHOTS / ROLLBACK ── */}
+            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>📸 Snapshots & Rollback</div>
+                <div style={{ display: 'flex', gap: 7 }}>
+                  <button onClick={async () => { await autoSnapshot('Manual snapshot'); bridge('snapshots').then(r => { if (r.success) setSnapshots(r.data?.snapshots || []) }) }}
+                    style={{ padding: '5px 11px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 7, color: C.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    + Take Snapshot
+                  </button>
+                  <button onClick={() => setShowSnapshots(!showSnapshots)} style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer' }}>
+                    {showSnapshots ? 'Hide' : 'Show All'}
+                  </button>
+                </div>
+              </div>
+
+              {snapshots.length === 0 ? (
+                <div style={{ padding: '16px 18px', fontSize: 13, color: C.text3, lineHeight: 1.5 }}>
+                  No snapshots yet. ignyous automatically takes snapshots before major changes.
+                  <button onClick={async () => { await autoSnapshot('Initial snapshot'); bridge('snapshots').then(r => { if (r.success) setSnapshots(r.data?.snapshots || []) }) }}
+                    style={{ display: 'block', marginTop: 10, padding: '8px 14px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Take First Snapshot
+                  </button>
+                </div>
+              ) : (
+                <div style={{ maxHeight: showSnapshots ? 400 : 180, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+                  {(showSnapshots ? snapshots : snapshots.slice(0, 3)).map((snap, i) => (
+                    <div key={snap.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: `1px solid ${C.surface}` }}>
+                      <div style={{ fontSize: 20, flexShrink: 0 }}>📸</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{snap.label || 'Snapshot'}</div>
+                        <div style={{ fontSize: 12, color: C.text3 }}>
+                          {snap.created_at ? new Date(snap.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown time'}
+                        </div>
+                      </div>
+                      <button onClick={() => restoreSnapshot(snap.id, snap.label)}
+                        style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                  {!showSnapshots && snapshots.length > 3 && (
+                    <button onClick={() => setShowSnapshots(true)} style={{ width: '100%', padding: '10px', border: 'none', background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer' }}>
+                      Show {snapshots.length - 3} more snapshots
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
           </div>
         </div>

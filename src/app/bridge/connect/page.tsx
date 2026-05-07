@@ -43,10 +43,10 @@ function StepBar({ current, labels }: { current: number; labels: string[] }) {
         return (
           <div key={n} style={{ display: 'flex', alignItems: 'center', flex: i < labels.length - 1 ? 1 : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, background: done ? C.green : active ? C.accent : C.surface, border: `2px solid ${done ? C.green : active ? C.accent : C.border}`, color: done || active ? 'white' : C.text3, transition: 'all 0.2s' }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, background: done ? C.green : active ? C.accent : C.surface, border: `2px solid ${done ? C.green : active ? C.accent : C.border}`, color: done || active ? 'white' : C.text3, transition: 'all 0.2s' }}>
                 {done ? '✓' : n}
               </div>
-              <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? C.text : done ? C.green : C.text3, whiteSpace: 'nowrap' as const }}>{label}</span>
+              <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, color: active ? C.text : done ? C.green : C.text3, whiteSpace: 'nowrap' as const }}>{label}</span>
             </div>
             {i < labels.length - 1 && <div style={{ flex: 1, height: 2, margin: '0 10px', background: done ? C.green : C.border, minWidth: 16 }}/>}
           </div>
@@ -58,7 +58,7 @@ function StepBar({ current, labels }: { current: number; labels: string[] }) {
 
 function BackBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', marginBottom: 18 }}>
+    <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', marginBottom: 18 }}>
       ← Back
     </button>
   )
@@ -193,13 +193,13 @@ export default function ConnectPage() {
       <div style={{ maxWidth: 700, margin: '0 auto', padding: '40px 24px 80px' }}>
 
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, marginBottom: 12, background: C.blueBg, border: `1px solid ${C.blueBorder}`, fontSize: 12, fontWeight: 600, color: C.blue }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, marginBottom: 12, background: C.blueBg, border: `1px solid ${C.blueBorder}`, fontSize: 13, fontWeight: 600, color: C.blue }}>
             ◈ Connect Existing Site
           </div>
-          <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 28, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 29, fontWeight: 700, color: C.text, marginBottom: 8 }}>
             Connect your WordPress site
           </h1>
-          <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.65 }}>
+          <p style={{ fontSize: 16, color: C.text2, lineHeight: 1.65 }}>
             Scan your site, install one plugin, and ignyous connects automatically — no keys to copy.
           </p>
         </div>
@@ -210,44 +210,44 @@ export default function ConnectPage() {
         {step === 1 && (
           <Card>
             <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>What's the site URL?</div>
-              <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>We'll scan it to see what it's built with</div>
+              <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>What's the site URL?</div>
+              <div style={{ fontSize: 15, color: C.text2, marginTop: 2 }}>We'll scan it to see what it's built with</div>
             </div>
             <div style={{ padding: 24 }}>
               <div style={{ display: 'flex', border: `2px solid ${scanning ? C.accent : C.border}`, borderRadius: 12, overflow: 'hidden', marginBottom: 14, transition: 'border-color 0.2s' }}>
-                <div style={{ padding: '0 14px', background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', fontSize: 14, color: C.text3, flexShrink: 0, fontFamily: 'monospace' }}>https://</div>
+                <div style={{ padding: '0 14px', background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', fontSize: 15, color: C.text3, flexShrink: 0, fontFamily: 'monospace' }}>https://</div>
                 <input
                   value={url} onChange={e => setUrl(e.target.value.replace(/^https?:\/\//,''))}
                   onKeyDown={e => e.key === 'Enter' && runScan()}
                   placeholder="yoursite.com"
-                  style={{ flex: 1, border: 'none', padding: '14px 16px', fontSize: 16, color: C.text, fontFamily: 'Inter, sans-serif', background: C.white }}
+                  style={{ flex: 1, border: 'none', padding: '14px 16px', fontSize: 17, color: C.text, fontFamily: 'Poppins, sans-serif', background: C.white }}
                 />
-                <button onClick={runScan} disabled={scanning || !url.trim()} style={{ padding: '0 28px', background: scanning ? '#C9541A' : C.accent, border: 'none', color: 'white', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 600, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <button onClick={runScan} disabled={scanning || !url.trim()} style={{ padding: '0 28px', background: scanning ? '#C9541A' : C.accent, border: 'none', color: 'white', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 16, fontWeight: 600, fontFamily: 'Poppins, sans-serif', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   {scanning ? (<><Spinner color="white"/>Scanning…</>) : 'Scan →'}
                 </button>
               </div>
 
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const, marginBottom: 20 }}>
-                <span style={{ fontSize: 13, color: C.text3 }}>Try:</span>
+                <span style={{ fontSize: 14, color: C.text3 }}>Try:</span>
                 {['josefn21.sg-host.com', 'josefn22.sg-host.com'].map(u => (
-                  <button key={u} onClick={() => setUrl(u)} style={{ padding: '4px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>{u}</button>
+                  <button key={u} onClick={() => setUrl(u)} style={{ padding: '4px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{u}</button>
                 ))}
               </div>
 
               {/* Also check if already connected */}
               <div style={{ padding: '14px 16px', background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.blue, marginBottom: 4 }}>Already installed the plugin?</div>
-                <div style={{ fontSize: 13, color: C.text2, marginBottom: 10 }}>Enter the site URL above and click "Scan" — we'll detect it and reconnect automatically.</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.blue, marginBottom: 4 }}>Already installed the plugin?</div>
+                <div style={{ fontSize: 14, color: C.text2, marginBottom: 10 }}>Enter the site URL above and click "Scan" — we'll detect it and reconnect automatically.</div>
               </div>
 
-              {scanError && <div style={{ marginTop: 14, padding: '12px 16px', background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, color: C.red, fontSize: 14 }}>⚠ {scanError}</div>}
+              {scanError && <div style={{ marginTop: 14, padding: '12px 16px', background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, color: C.red, fontSize: 15 }}>⚠ {scanError}</div>}
 
               {scanning && (
                 <div style={{ marginTop: 16, padding: '28px', textAlign: 'center' as const, background: C.surface, borderRadius: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginBottom: 12 }}>
                     {[0,1,2,3,4].map(i => <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', background: C.accent, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}/>)}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: C.text }}>Scanning {url}…</div>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: C.text }}>Scanning {url}…</div>
                 </div>
               )}
             </div>
@@ -261,10 +261,10 @@ export default function ConnectPage() {
             <Card>
               <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>{url}</div>
-                  <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>Scanned in {(report.scan_duration_ms/1000).toFixed(1)}s</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>{url}</div>
+                  <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>Scanned in {(report.scan_duration_ms/1000).toFixed(1)}s</div>
                 </div>
-                <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: report.cms.is_wordpress ? C.greenBg : C.redBg, color: report.cms.is_wordpress ? C.green : C.red, border: `1px solid ${report.cms.is_wordpress ? C.greenBorder : C.redBorder}` }}>
+                <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: report.cms.is_wordpress ? C.greenBg : C.redBg, color: report.cms.is_wordpress ? C.green : C.red, border: `1px solid ${report.cms.is_wordpress ? C.greenBorder : C.redBorder}` }}>
                   {report.cms.is_wordpress ? '✓ WordPress' : '✗ Not WordPress'}
                 </span>
               </div>
@@ -285,9 +285,9 @@ export default function ConnectPage() {
                   return (
                     <div key={label} style={{ textAlign: 'center' as const }}>
                       <div style={{ width: size, height: size, borderRadius: '50%', background: bg, border: `2px solid ${bor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 5px' }}>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: size > 56 ? 18 : 13, fontWeight: 700, color: col }}>{s}</span>
+                        <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: size > 56 ? 18 : 13, fontWeight: 700, color: col }}>{s}</span>
                       </div>
-                      <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>{label}</div>
+                      <div style={{ fontSize: 12, color: C.text3, fontWeight: 500 }}>{label}</div>
                     </div>
                   )
                 })}
@@ -301,23 +301,23 @@ export default function ConnectPage() {
                   { label: '○ Forms',    value: `${report.forms?.count || 0} found` },
                 ].map(item => (
                   <div key={item.label} style={{ padding: '11px 14px', background: C.surface, borderRadius: 10 }}>
-                    <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>{item.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{item.value}</div>
+                    <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>{item.label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{item.value}</div>
                   </div>
                 ))}
               </div>
             </Card>
 
             {!report.cms.is_wordpress && (
-              <div style={{ padding: '14px 18px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 12, color: C.yellow, fontSize: 14 }}>
+              <div style={{ padding: '14px 18px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 12, color: C.yellow, fontSize: 15 }}>
                 ⚠ This doesn't appear to be a WordPress site. ignyous Bridge requires WordPress.
               </div>
             )}
 
             <button onClick={() => setStep(3)} disabled={!report.cms.is_wordpress} style={{
               padding: '14px', background: report.cms.is_wordpress ? C.accent : C.border, border: 'none', borderRadius: 12,
-              color: 'white', fontSize: 16, fontWeight: 600, cursor: report.cms.is_wordpress ? 'pointer' : 'not-allowed',
-              fontFamily: 'Inter, sans-serif', boxShadow: report.cms.is_wordpress ? '0 2px 10px rgba(232,101,26,0.3)' : 'none',
+              color: 'white', fontSize: 17, fontWeight: 600, cursor: report.cms.is_wordpress ? 'pointer' : 'not-allowed',
+              fontFamily: 'Poppins, sans-serif', boxShadow: report.cms.is_wordpress ? '0 2px 10px rgba(232,101,26,0.3)' : 'none',
             }}>
               Connect this site →
             </button>
@@ -336,8 +336,8 @@ export default function ConnectPage() {
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
                     <Spinner color={C.accent}/>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 4 }}>Connecting automatically…</div>
-                  <div style={{ fontSize: 14, color: C.text2 }}>ignyous is setting up the secure connection</div>
+                  <div style={{ fontSize: 17, fontWeight: 600, color: C.text, marginBottom: 4 }}>Connecting automatically…</div>
+                  <div style={{ fontSize: 15, color: C.text2 }}>ignyous is setting up the secure connection</div>
                 </div>
               </Card>
             )}
@@ -346,15 +346,15 @@ export default function ConnectPage() {
             {pluginStatus === 'found' && !connecting && (
               <Card style={{ marginBottom: 16 }}>
                 <div style={{ padding: '24px', textAlign: 'center' as const }}>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
-                  <div style={{ fontSize: 17, fontWeight: 600, color: C.green, fontFamily: 'Inter, sans-serif' }}>Plugin detected! Connecting…</div>
+                  <div style={{ fontSize: 37, marginBottom: 10 }}>✓</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: C.green, fontFamily: 'Poppins, sans-serif' }}>Plugin detected! Connecting…</div>
                 </div>
               </Card>
             )}
 
             {/* Error */}
             {connectError && (
-              <div style={{ padding: '13px 16px', background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, color: C.red, fontSize: 14, marginBottom: 16 }}>
+              <div style={{ padding: '13px 16px', background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, color: C.red, fontSize: 15, marginBottom: 16 }}>
                 ⚠ {connectError}
               </div>
             )}
@@ -362,38 +362,38 @@ export default function ConnectPage() {
             {/* Install steps */}
             <Card>
               <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>Install the ignyous Bridge plugin</div>
-                <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>4 steps, about 2 minutes — then ignyous connects automatically</div>
+                <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Install the ignyous Bridge plugin</div>
+                <div style={{ fontSize: 15, color: C.text2, marginTop: 2 }}>4 steps, about 2 minutes — then ignyous connects automatically</div>
               </div>
               <div style={{ padding: 24 }}>
 
                 {[
                   { n: 1, title: 'Download the plugin', desc: 'Click to download ignyous-bridge.zip to your computer',
-                    action: <a href="/api/plugin/bridge.zip" download style={{ padding: '9px 18px', background: C.accent, borderRadius: 9, color: 'white', textDecoration: 'none', fontSize: 14, fontWeight: 600, flexShrink: 0, display: 'inline-block' }}>↓ Download</a> },
+                    action: <a href="/api/plugin/bridge.zip" download style={{ padding: '9px 18px', background: C.accent, borderRadius: 9, color: 'white', textDecoration: 'none', fontSize: 15, fontWeight: 600, flexShrink: 0, display: 'inline-block' }}>↓ Download</a> },
                   { n: 2, title: 'Open WP Admin → Plugins → Add New → Upload Plugin', desc: '',
-                    action: <a href={`${siteUrl}/wp-admin/plugin-install.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 14, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
+                    action: <a href={`${siteUrl}/wp-admin/plugin-install.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 15, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
                   { n: 3, title: 'Upload ignyous-bridge.zip → Install Now → Activate Plugin', desc: '' },
                   { n: 4, title: 'Save Permalinks', desc: 'Settings → Permalinks → Post name → Save Changes',
-                    action: <a href={`${siteUrl}/wp-admin/options-permalink.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 14, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
+                    action: <a href={`${siteUrl}/wp-admin/options-permalink.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 15, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
                 ].map(s => (
                   <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.accent, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>{s.n}</div>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.accent, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{s.n}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{s.title}</div>
-                      {s.desc && <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>{s.desc}</div>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{s.title}</div>
+                      {s.desc && <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>{s.desc}</div>}
                     </div>
                     {s.action && s.action}
                   </div>
                 ))}
 
                 <div style={{ padding: '13px 16px', background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, marginBottom: 20 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.green, marginBottom: 4 }}>✓ Automatic after activation</div>
-                  <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5 }}>When you activate the plugin and click the button below, ignyous generates a secure key and connects automatically. Nothing to copy or paste.</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: C.green, marginBottom: 4 }}>✓ Automatic after activation</div>
+                  <div style={{ fontSize: 14, color: C.text2, lineHeight: 1.5 }}>When you activate the plugin and click the button below, ignyous generates a secure key and connects automatically. Nothing to copy or paste.</div>
                 </div>
 
                 {/* NOT FOUND message */}
                 {pluginStatus === 'not_found' && (
-                  <div style={{ padding: '12px 14px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 10, fontSize: 13, color: C.yellow, marginBottom: 14 }}>
+                  <div style={{ padding: '12px 14px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 10, fontSize: 14, color: C.yellow, marginBottom: 14 }}>
                     ⚠ {pluginMsg || 'Plugin not detected yet.'} Make sure you completed all 4 steps, then try again.
                   </div>
                 )}
@@ -403,8 +403,8 @@ export default function ConnectPage() {
                   onClick={checkAndConnect}
                   disabled={connecting || pluginStatus === 'checking'}
                   style={{
-                    width: '100%', padding: '18px', fontSize: 17, fontWeight: 700,
-                    fontFamily: 'Inter, sans-serif', border: 'none', borderRadius: 14,
+                    width: '100%', padding: '18px', fontSize: 18, fontWeight: 700,
+                    fontFamily: 'Poppins, sans-serif', border: 'none', borderRadius: 14,
                     background: connecting || pluginStatus === 'checking' ? '#C9541A' : C.accent,
                     color: 'white', cursor: connecting || pluginStatus === 'checking' ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
@@ -426,20 +426,20 @@ export default function ConnectPage() {
         {step === 4 && (
           <div style={{ textAlign: 'center' as const }}>
             <Card style={{ padding: '52px 40px' }}>
-              <div style={{ width: 80, height: 80, borderRadius: '50%', background: C.greenBg, border: `2px solid ${C.greenBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 36 }}>✓</div>
-              <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 26, fontWeight: 700, marginBottom: 10, color: C.text }}>
+              <div style={{ width: 80, height: 80, borderRadius: '50%', background: C.greenBg, border: `2px solid ${C.greenBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 37 }}>✓</div>
+              <h2 style={{ fontFamily: 'Poppins, sans-serif', fontSize: 27, fontWeight: 700, marginBottom: 10, color: C.text }}>
                 {connectedSiteName || url} is connected!
               </h2>
-              <p style={{ fontSize: 15, color: C.text2, marginBottom: 8, lineHeight: 1.65, maxWidth: 420, margin: '0 auto 8px' }}>
+              <p style={{ fontSize: 16, color: C.text2, marginBottom: 8, lineHeight: 1.65, maxWidth: 420, margin: '0 auto 8px' }}>
                 ignyous Bridge is live. Manage your site's content, design, and plugins through plain English chat.
               </p>
-              <p style={{ fontSize: 13, color: C.text3, marginBottom: 36 }}>
+              <p style={{ fontSize: 14, color: C.text3, marginBottom: 36 }}>
                 Your connection is saved — you can return any time without reconnecting.
               </p>
               <button onClick={openDashboard} style={{
                 padding: '16px 52px', background: C.accent, border: 'none', borderRadius: 14,
-                color: 'white', fontSize: 17, fontWeight: 700, cursor: 'pointer',
-                fontFamily: 'Inter, sans-serif', boxShadow: '0 4px 20px rgba(232,101,26,0.35)',
+                color: 'white', fontSize: 18, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'Poppins, sans-serif', boxShadow: '0 4px 20px rgba(232,101,26,0.35)',
               }}>
                 Open Site Dashboard →
               </button>
