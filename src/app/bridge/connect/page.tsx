@@ -122,19 +122,20 @@ export default function ConnectPage() {
 
       // Already connected — look for stored key
       if (pingData.already_connected) {
-  const storedKey = getStoredKey(siteUrl)
-  if (storedKey) {
-    setConnectedKey(storedKey)
-    setConnectedSiteName(pingData.site_name || siteUrl)
-    setPluginStatus('found')
-    setStep(4)
-    return
-  }
-  // No stored key — force reset by showing clear instructions
-  setConnectError('This site was previously connected but the key was lost. Deactivate and reactivate the ignyous Bridge plugin in WP Admin, then try again.')
-  setPluginStatus('not_found')
-  return
-}
+        const storedKey = getStoredKey(siteUrl)
+        if (storedKey) {
+          setConnectedKey(storedKey)
+          setConnectedSiteName(pingData.site_name || siteUrl)
+          setPluginStatus('found')
+          saveConnection(siteUrl, storedKey)
+          setStep(4)
+          return
+        }
+        // Connected but no stored key — need to reconnect
+        setConnectError('Site is connected but the key is missing. Deactivate and reactivate the plugin to reset.')
+        setPluginStatus('not_found')
+        return
+      }
 
       if (!pingData.plugin_found) {
         setPluginStatus('not_found')
@@ -157,7 +158,17 @@ export default function ConnectPage() {
         // ✅ Save key to localStorage immediately
         saveConnection(siteUrl, connectData.api_key)
         setConnectedKey(connectData.api_key)
-        setConnectedSiteName(connectData.site_info?.site_name || pingData.site_name || siteUrl)
+
+        // Save to database
+        fetch('/api/sites', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: siteUrl, apiKey: connectData.api_key,
+            name: connectData.site_info?.site_name || pingData.site_name,
+            wpVersion: pingData.wp_version,
+          }),
+        }).catch(() => {}) // non-fatal
+
         setStep(4)
       } else {
         setConnectError(connectData.message || 'Auto-connect failed. Try deactivating and reactivating the plugin.')

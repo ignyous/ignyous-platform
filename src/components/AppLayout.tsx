@@ -28,9 +28,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [status])
 
   async function loadSites() {
-    const res  = await fetch('/api/sites')
-    const data = await res.json()
-    if (data.sites) setSites(data.sites)
+    // Try DB first
+    try {
+      const res  = await fetch('/api/sites')
+      const data = await res.json()
+      if (data.sites?.length > 0) { setSites(data.sites); return }
+    } catch {}
+
+    // Fallback: read from localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem('ignyous_sites') || '[]')
+      const sitesFromStorage = stored.map((url: string) => {
+        const k    = `ignyous_conn_${url.replace(/[^a-z0-9]/gi, '_')}`
+        const data = JSON.parse(localStorage.getItem(k) || '{}')
+        return { id: url, url, name: null, connectedAt: new Date(data.savedAt || Date.now()).toISOString() }
+      }).filter((s: any) => s.url)
+      setSites(sitesFromStorage)
+    } catch {}
   }
 
   function siteSlug(url: string) {

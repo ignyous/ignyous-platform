@@ -1,234 +1,255 @@
 'use client'
 import { useState } from 'react'
 
-// WordPress.org themes with real screenshot URLs
 const THEMES = [
-  // Elementor-first
-  { slug: 'hello-elementor',   name: 'Hello Elementor',    builders: ['elementor'],            industry: ['all'],          style: ['minimal','blank'],      color: 'light', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/hello-elementor/screenshots/hello-elementor.jpg',   desc: 'The official Elementor companion theme. Blank canvas, blazing fast.' },
-  { slug: 'astra',             name: 'Astra',              builders: ['elementor','gutenberg'], industry: ['all'],          style: ['business','minimal'],   color: 'light', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/astra/screenshots/astra.jpg',                       desc: 'Most popular WordPress theme. Works beautifully with Elementor.' },
-  { slug: 'oceanwp',           name: 'OceanWP',            builders: ['elementor','gutenberg'], industry: ['ecommerce'],    style: ['business','ecommerce'], color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/oceanwp/screenshots/oceanwp.jpg',                   desc: 'Feature-rich with WooCommerce built in. Perfect for online stores.' },
-  { slug: 'neve',              name: 'Neve',               builders: ['elementor','gutenberg'], industry: ['all'],          style: ['modern','business'],    color: 'light', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/neve/screenshots/neve.jpg',                         desc: 'AMP-ready, mobile-first. Starter sites for every industry.' },
-  { slug: 'porto',             name: 'Porto',              builders: ['elementor'],             industry: ['ecommerce'],    style: ['ecommerce','modern'],   color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/storefront/screenshots/storefront.jpg',             desc: 'Multi-purpose eCommerce powerhouse.' },
-  // Gutenberg / Block
-  { slug: 'kadence',           name: 'Kadence',            builders: ['gutenberg'],             industry: ['all'],          style: ['modern','fast'],        color: 'light', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/kadence/screenshots/kadence.jpg',                   desc: 'Full site editing with global colors and fonts. Built for blocks.' },
-  { slug: 'generatepress',     name: 'GeneratePress',      builders: ['gutenberg','elementor'], industry: ['all'],          style: ['minimal','fast'],       color: 'light', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/generatepress/screenshots/generatepress.jpg',       desc: 'Lightweight and performance focused. Highest speed scores.' },
-  { slug: 'blocksy',           name: 'Blocksy',            builders: ['gutenberg'],             industry: ['all'],          style: ['modern','blog'],        color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/blocksy/screenshots/blocksy.jpg',                   desc: 'Advanced full-site editor with real-time customization.' },
-  { slug: 'twentytwentyfour', name: 'Twenty Twenty-Four', builders: ['gutenberg'],             industry: ['blog','all'],   style: ['minimal'],              color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/twentytwentyfour/screenshots/twentytwentyfour.jpg', desc: 'Official 2024 WordPress theme. Clean and versatile.' },
-  { slug: 'storefront',        name: 'Storefront',         builders: ['gutenberg'],             industry: ['ecommerce'],    style: ['ecommerce'],            color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/storefront/screenshots/storefront.jpg',             desc: 'Official WooCommerce theme. Built for online stores.' },
+  // Elementor
+  { slug: 'hello-elementor',  name: 'Hello Elementor',   builder: 'elementor', industry: ['all'],         style: ['minimal','blank'],    recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/hello-elementor/screenshots/hello-elementor.jpg',   desc: 'The official blank Elementor canvas. Fastest load times.' },
+  { slug: 'astra',            name: 'Astra',             builder: 'elementor', industry: ['all'],         style: ['business','minimal'], recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/astra/screenshots/astra.jpg',                       desc: 'Most popular WordPress theme. Works perfectly with Elementor.' },
+  { slug: 'neve',             name: 'Neve',              builder: 'elementor', industry: ['all'],         style: ['modern','business'],  recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/neve/screenshots/neve.jpg',                         desc: 'AMP-ready, mobile-first. Pre-built starter sites for every industry.' },
+  { slug: 'oceanwp',         name: 'OceanWP',           builder: 'elementor', industry: ['ecommerce'],   style: ['ecommerce','business'],recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/oceanwp/screenshots/oceanwp.jpg',                   desc: 'Feature-rich with WooCommerce built in. Great for stores.' },
+  { slug: 'generatepress',   name: 'GeneratePress',     builder: 'elementor', industry: ['all'],         style: ['minimal','fast'],     recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/generatepress/screenshots/generatepress.jpg',       desc: 'Extremely lightweight. Best performance scores available.' },
+  { slug: 'porto',           name: 'Porto',             builder: 'elementor', industry: ['ecommerce'],   style: ['ecommerce','modern'], recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/storefront/screenshots/storefront.jpg',             desc: 'Premium multipurpose eCommerce powerhouse with 40+ demos.' },
+  // Gutenberg / Block Editor
+  { slug: 'kadence',         name: 'Kadence',           builder: 'gutenberg', industry: ['all'],         style: ['modern','fast'],      recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/kadence/screenshots/kadence.jpg',                   desc: 'Full site editing with global styles. Built for blocks.' },
+  { slug: 'blocksy',        name: 'Blocksy',           builder: 'gutenberg', industry: ['all'],         style: ['modern','blog'],      recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/blocksy/screenshots/blocksy.jpg',                   desc: 'Advanced FSE with real-time customization and WooCommerce support.' },
+  { slug: 'twentytwentyfour',name: 'Twenty Twenty-Four',builder: 'gutenberg', industry: ['blog','all'],  style: ['minimal'],            recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/twentytwentyfour/screenshots/twentytwentyfour.jpg', desc: 'Official 2024 WordPress theme. Clean, versatile, fully block-based.' },
+  { slug: 'storefront',     name: 'Storefront',        builder: 'gutenberg', industry: ['ecommerce'],   style: ['ecommerce'],          recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/storefront/screenshots/storefront.jpg',             desc: 'Official WooCommerce theme. Purpose-built for online stores.' },
+  { slug: 'generatepress',  name: 'GeneratePress',     builder: 'gutenberg', industry: ['all'],         style: ['minimal','fast'],     recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/generatepress/screenshots/generatepress.jpg',       desc: 'Performance-first. Lightweight, accessible, and SEO-ready.' },
+  { slug: 'spectra-one',    name: 'Spectra One',       builder: 'gutenberg', industry: ['business'],    style: ['modern','business'],  recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/neve/screenshots/neve.jpg',                         desc: 'Purpose-built for Spectra blocks. Professional business layouts.' },
   // Avada
-  { slug: 'avada',             name: 'Avada',              builders: ['avada'],                 industry: ['all'],          style: ['business','powerful'],  color: 'dark', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/astra/screenshots/astra.jpg',                       desc: '#1 selling WordPress theme ever. Includes Fusion Builder.' },
-  { slug: 'enfold',            name: 'Enfold',             builders: ['avada'],                 industry: ['business'],     style: ['business','clean'],     color: 'light', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/neve/screenshots/neve.jpg',                         desc: 'Highly rated business theme with visual composer.' },
-  // Niche
-  { slug: 'restauranteur',     name: 'Restauranteur',      builders: ['gutenberg','elementor'], industry: ['restaurant'],   style: ['restaurant','elegant'], color: 'dark', recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/biagiotti/screenshots/biagiotti.jpg',               desc: 'Purpose-built for restaurants. Menus, reservations, hours.' },
-  { slug: 'photos',            name: 'Photos',             builders: ['gutenberg'],             industry: ['photography'],  style: ['photography','minimal'],color: 'dark', recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/photos/screenshots/photos.jpg',                     desc: 'Full-screen photography portfolio. Stunning visual impact.' },
+  { slug: 'avada',          name: 'Avada',             builder: 'avada',     industry: ['all'],         style: ['powerful','business'],recommended: true,  img: 'https://i0.wp.com/themes.svn.wordpress.org/astra/screenshots/astra.jpg',                       desc: '#1 selling WordPress theme. Includes Fusion Builder with 80+ elements.' },
+  { slug: 'enfold',         name: 'Enfold',            builder: 'avada',     industry: ['business'],    style: ['business','clean'],   recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/neve/screenshots/neve.jpg',                         desc: 'Highly rated. Clean design with built-in visual composer.' },
+  { slug: 'bridge',         name: 'Bridge',            builder: 'avada',     industry: ['all'],         style: ['creative','modern'],  recommended: false, img: 'https://i0.wp.com/themes.svn.wordpress.org/blocksy/screenshots/blocksy.jpg',                   desc: 'Creative multipurpose with 550+ pre-built websites.' },
 ]
 
-const INDUSTRIES = ['All Industries', 'all', 'ecommerce', 'restaurant', 'photography', 'business', 'blog']
-const STYLES     = ['All Styles', 'minimal', 'modern', 'business', 'ecommerce', 'restaurant', 'photography', 'elegant', 'fast', 'powerful']
-const COLORS     = ['Any Color', 'light', 'dark']
+const INDUSTRIES = ['All', 'Business', 'eCommerce', 'Restaurant', 'Photography', 'Blog', 'Portfolio']
+const STYLES     = ['All Styles', 'Minimal', 'Modern', 'Business', 'eCommerce', 'Creative', 'Elegant', 'Fast']
+
+type Builder = 'elementor' | 'gutenberg' | 'avada'
 
 interface Props {
   onSelect:     (theme: typeof THEMES[0]) => void
   onClose:      () => void
   currentTheme?: string
+  siteName?:    string
 }
 
-export default function ThemeBrowser({ onSelect, onClose, currentTheme }: Props) {
-  const [builder,  setBuilder]  = useState<'elementor' | 'gutenberg' | 'avada'>('elementor')
-  const [industry, setIndustry] = useState('All Industries')
+export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName }: Props) {
+  const [builder,  setBuilder]  = useState<Builder>('elementor')
+  const [industry, setIndustry] = useState('All')
   const [style,    setStyle]    = useState('All Styles')
   const [search,   setSearch]   = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [hovered,  setHovered]  = useState<string | null>(null)
 
-  const filtered = THEMES.filter(th => {
-    if (!th.builders.includes(builder)) return false
-    if (industry !== 'All Industries' && !th.industry.includes(industry) && !th.industry.includes('all')) return false
-    if (style !== 'All Styles' && !th.style.includes(style)) return false
-    if (search && !th.name.toLowerCase().includes(search.toLowerCase()) && !th.desc.toLowerCase().includes(search.toLowerCase())) return false
+  const filtered = THEMES.filter(t => {
+    if (t.builder !== builder) return false
+    if (industry !== 'All' && !t.industry.includes('all') && !t.industry.includes(industry.toLowerCase())) return false
+    if (style !== 'All Styles' && !t.style.includes(style.toLowerCase())) return false
+    if (search && !t.name.toLowerCase().includes(search.toLowerCase()) && !t.desc.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
   const recommended = filtered.filter(t => t.recommended)
-  const others      = filtered.filter(t => !t.recommended)
+  const rest        = filtered.filter(t => !t.recommended)
+  const display     = [...recommended, ...rest]
 
-  function ThemeCard({ theme }: { theme: typeof THEMES[0] }) {
-    const isCurrent  = currentTheme?.toLowerCase().includes(theme.slug)
-    const isSelected = selected === theme.slug
-
-    return (
-      <div style={{
-        borderRadius: 14, overflow: 'hidden', background: 'white',
-        border: `2px solid ${isSelected ? '#E8651A' : '#E2DDD8'}`,
-        boxShadow: isSelected ? '0 6px 24px rgba(232,101,26,0.18)' : '0 1px 4px rgba(0,0,0,0.08)',
-        transition: 'all 0.2s', cursor: 'pointer', position: 'relative',
-      }}
-        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = '#FED7AA' }}
-        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = '#E2DDD8' }}
-      >
-        {/* Recommended badge */}
-        {theme.recommended && (
-          <div style={{
-            position: 'absolute', top: 12, left: 12, zIndex: 2,
-            padding: '4px 10px', background: '#E8651A', color: 'white',
-            borderRadius: 20, fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
-          }}>Recommended</div>
-        )}
-        {isCurrent && (
-          <div style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 2,
-            padding: '4px 10px', background: '#1E7B4B', color: 'white',
-            borderRadius: 20, fontSize: 11, fontWeight: 700,
-          }}>Current</div>
-        )}
-        {isSelected && (
-          <div style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 2,
-            width: 28, height: 28, borderRadius: '50%', background: '#E8651A',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 14,
-          }}>✓</div>
-        )}
-
-        {/* Screenshot */}
-        <div style={{ height: 180, overflow: 'hidden', background: '#F7F5F2', position: 'relative' }}>
-          <img
-            src={theme.img} alt={theme.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.3s' }}
-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.03)')}
-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
-            onError={e => { (e.target as HTMLImageElement).src = `https://via.placeholder.com/400x250/F7F5F2/A89D94?text=${theme.name}` }}
-          />
-        </div>
-
-        {/* Info */}
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1410', marginBottom: 4, fontFamily: 'Sora, sans-serif' }}>{theme.name}</div>
-          <div style={{ fontSize: 12, color: '#6B6056', lineHeight: 1.5, marginBottom: 12, minHeight: 36 }}>{theme.desc}</div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' as const }}>
-            {theme.style.map(s => (
-              <span key={s} style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 500, background: '#F7F5F2', color: '#6B6056', border: '1px solid #E2DDD8', textTransform: 'capitalize' as const }}>{s}</span>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => { setSelected(theme.slug); onSelect(theme) }}
-              style={{
-                flex: 1, padding: '9px', border: 'none', borderRadius: 9,
-                background: isSelected ? '#1E7B4B' : '#E8651A', color: 'white',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-              }}
-            >
-              {isSelected ? '✓ Selected' : 'Use This Theme'}
-            </button>
-            <a
-              href={`https://wordpress.org/themes/${theme.slug}/`}
-              target="_blank" rel="noreferrer"
-              style={{
-                padding: '9px 12px', border: '1px solid #E2DDD8', borderRadius: 9,
-                color: '#6B6056', textDecoration: 'none', fontSize: 13, display: 'flex',
-                alignItems: 'center', background: 'white',
-              }}
-            >↗</a>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const BUILDER_TABS: { id: Builder; icon: string; label: string }[] = [
+    { id: 'gutenberg', icon: '⬡', label: 'Block Editor' },
+    { id: 'elementor', icon: '☰', label: 'Elementor' },
+    { id: 'avada',     icon: '★', label: 'Avada Builder' },
+  ]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{ width: '100%', height: '90vh', background: '#F7F5F2', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' }}>
+    <div style={{
+      position: 'fixed', inset: 0, background: '#F4F5F7', zIndex: 1000,
+      display: 'flex', flexDirection: 'column' as const, fontFamily: 'Inter, sans-serif',
+    }}>
 
-        {/* Header */}
-        <div style={{ padding: '22px 32px', background: 'white', borderBottom: '1px solid #E2DDD8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 700, fontFamily: 'Sora, sans-serif', color: '#1A1410' }}>Choose the Design</div>
-            <div style={{ fontSize: 14, color: '#6B6056', marginTop: 3 }}>
-              {currentTheme && `Currently: ${currentTheme} · `}{filtered.length} themes match your filters
-            </div>
-          </div>
-          <button onClick={onClose} style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid #E2DDD8', background: '#F7F5F2', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B6056' }}>✕</button>
+      {/* ── TOP BAR ── */}
+      <div style={{ background: 'white', borderBottom: '1px solid #E2E8F0', padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60, flexShrink: 0 }}>
+        {/* Back */}
+        <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#4A5568', fontFamily: 'Inter, sans-serif' }}>
+          ← Back
+        </button>
+
+        {/* Builder tabs - centered */}
+        <div style={{ display: 'flex', border: '1.5px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
+          {BUILDER_TABS.map(tab => (
+            <button key={tab.id} onClick={() => setBuilder(tab.id)} style={{
+              padding: '10px 24px', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+              fontSize: 15, fontWeight: builder === tab.id ? 600 : 400,
+              background: builder === tab.id ? '#1A202C' : 'white',
+              color: builder === tab.id ? 'white' : '#718096',
+              borderRight: tab.id !== 'avada' ? '1px solid #E2E8F0' : 'none',
+              display: 'flex', alignItems: 'center', gap: 7, transition: 'all 0.15s',
+            }}>
+              <span style={{ fontSize: 16 }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Filters bar */}
-        <div style={{ padding: '16px 32px', background: 'white', borderBottom: '1px solid #E2DDD8', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' as const }}>
-          {/* Search */}
-          <div style={{ position: 'relative', flex: 1, maxWidth: 380 }}>
-            <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16 }} viewBox="0 0 20 20" fill="#A89D94">
-              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
-            </svg>
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search styles, industry, features…"
-              style={{ width: '100%', padding: '10px 14px 10px 38px', border: '1.5px solid #E2DDD8', borderRadius: 12, fontSize: 14, fontFamily: 'DM Sans, sans-serif', color: '#1A1410', background: '#FAFAF8' }}
-            />
-          </div>
-
-          {/* Industry dropdown */}
-          <select value={industry} onChange={e => setIndustry(e.target.value)} style={{ padding: '10px 14px', border: '1.5px solid #E2DDD8', borderRadius: 12, fontSize: 14, fontFamily: 'DM Sans, sans-serif', color: '#1A1410', background: 'white', cursor: 'pointer', minWidth: 160 }}>
-            {INDUSTRIES.map(i => <option key={i} value={i}>{i === 'all' ? 'All Industries' : i.charAt(0).toUpperCase() + i.slice(1)}</option>)}
-          </select>
-
-          {/* Style dropdown */}
-          <select value={style} onChange={e => setStyle(e.target.value)} style={{ padding: '10px 14px', border: '1.5px solid #E2DDD8', borderRadius: 12, fontSize: 14, fontFamily: 'DM Sans, sans-serif', color: '#1A1410', background: 'white', cursor: 'pointer', minWidth: 140 }}>
-            {STYLES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-          </select>
-
-          {/* Builder switcher */}
-          <div style={{ display: 'flex', border: '1.5px solid #E2DDD8', borderRadius: 12, overflow: 'hidden', background: 'white', marginLeft: 'auto' }}>
-            {([
-              { id: 'gutenberg', label: '⬡ Block Editor' },
-              { id: 'elementor', label: '☰ Elementor' },
-              { id: 'avada',     label: '★ Avada' },
-            ] as const).map(b => (
-              <button key={b.id} onClick={() => setBuilder(b.id)} style={{
-                padding: '9px 18px', border: 'none', borderRight: '1px solid #E2DDD8',
-                background: builder === b.id ? '#1A1410' : 'white',
-                color: builder === b.id ? 'white' : '#6B6056',
-                fontSize: 13, fontWeight: builder === b.id ? 600 : 400,
-                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                transition: 'all 0.15s',
-              }}>{b.label}</button>
-            ))}
-          </div>
+        {/* Right: count + close */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 14, color: '#718096' }}>{display.length} themes</span>
+          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid #E2E8F0', background: 'white', cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#718096' }}>✕</button>
         </div>
+      </div>
 
-        {/* Theme grid */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+      {/* ── TITLE + SEARCH + FILTERS ── */}
+      <div style={{ background: 'white', padding: '28px 40px 20px', borderBottom: '1px solid #E2E8F0', flexShrink: 0 }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 28, fontWeight: 700, color: '#1A202C', textAlign: 'center' as const, marginBottom: 20 }}>
+          Choose the Design
+        </h1>
 
-          {filtered.length === 0 ? (
-            <div style={{ textAlign: 'center' as const, padding: '60px', color: '#A89D94', fontSize: 15 }}>
-              No themes match your filters. Try changing the builder or clearing some filters.
-            </div>
-          ) : (
-            <>
-              {/* Recommended section */}
-              {recommended.length > 0 && (
-                <div style={{ marginBottom: 32 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#A89D94', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 16 }}>
-                    ✦ Recommended for your site
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-                    {recommended.map(th => <ThemeCard key={th.slug} theme={th}/>)}
-                  </div>
-                </div>
-              )}
-
-              {/* All themes */}
-              {others.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#A89D94', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 16 }}>
-                    All Themes
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-                    {others.map(th => <ThemeCard key={th.slug} theme={th}/>)}
-                  </div>
-                </div>
-              )}
-            </>
+        {/* Search */}
+        <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto 18px' }}>
+          <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="18" height="18" viewBox="0 0 20 20" fill="#A0AEC0">
+            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/>
+          </svg>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by style, industry, features…"
+            style={{ width: '100%', padding: '13px 16px 13px 46px', border: '1.5px solid #E2E8F0', borderRadius: 12, fontSize: 15, fontFamily: 'Inter, sans-serif', color: '#1A202C', background: 'white' }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#A0AEC0', fontSize: 18 }}>✕</button>
           )}
         </div>
+
+        {/* Industry + Style filters */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+          {INDUSTRIES.map(ind => (
+            <button key={ind} onClick={() => setIndustry(ind)} style={{
+              padding: '6px 16px', border: `1.5px solid ${industry === ind ? '#E8651A' : '#E2E8F0'}`,
+              borderRadius: 20, background: industry === ind ? '#FFF7ED' : 'white',
+              color: industry === ind ? '#E8651A' : '#4A5568', fontSize: 14, fontWeight: industry === ind ? 600 : 400,
+              cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.15s',
+            }}>{ind}</button>
+          ))}
+          <div style={{ width: 1, height: 28, background: '#E2E8F0', margin: '0 4px' }}/>
+          <select value={style} onChange={e => setStyle(e.target.value)} style={{ padding: '6px 14px', border: '1.5px solid #E2E8F0', borderRadius: 20, fontSize: 14, fontFamily: 'Inter, sans-serif', color: '#4A5568', background: 'white', cursor: 'pointer' }}>
+            {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* ── THEME GRID ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px 60px' }}>
+
+        {display.length === 0 ? (
+          <div style={{ textAlign: 'center' as const, padding: '80px', color: '#718096', fontSize: 16 }}>
+            No themes match. Try changing the filters or search term.
+          </div>
+        ) : (
+          <>
+            {/* Recommended section */}
+            {recommended.length > 0 && (
+              <div style={{ marginBottom: 40 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 20 }}>
+                  ✦ Recommended for {siteName || 'your site'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+                  {recommended.map(theme => <ThemeCard key={theme.slug} theme={theme} selected={selected} hovered={hovered} setHovered={setHovered} setSelected={setSelected} onSelect={onSelect} currentTheme={currentTheme}/>)}
+                </div>
+              </div>
+            )}
+
+            {/* All themes */}
+            {rest.length > 0 && (
+              <div>
+                {recommended.length > 0 && (
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#A0AEC0', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 20 }}>
+                    All {builder === 'gutenberg' ? 'Block Editor' : builder === 'elementor' ? 'Elementor' : 'Avada'} Themes
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+                  {rest.map(theme => <ThemeCard key={theme.slug} theme={theme} selected={selected} hovered={hovered} setHovered={setHovered} setSelected={setSelected} onSelect={onSelect} currentTheme={currentTheme}/>)}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ThemeCard({ theme, selected, hovered, setHovered, setSelected, onSelect, currentTheme }: any) {
+  const isSelected = selected === theme.slug
+  const isCurrent  = currentTheme?.toLowerCase().includes(theme.slug)
+  const isHovered  = hovered === theme.slug
+
+  return (
+    <div
+      style={{
+        background: 'white', borderRadius: 16, overflow: 'hidden',
+        border: `2px solid ${isSelected ? '#E8651A' : isHovered ? '#CBD5E0' : '#E2E8F0'}`,
+        boxShadow: isSelected ? '0 8px 30px rgba(232,101,26,0.2)' : isHovered ? '0 4px 20px rgba(0,0,0,0.1)' : '0 1px 4px rgba(0,0,0,0.06)',
+        transition: 'all 0.2s', cursor: 'pointer', position: 'relative',
+      }}
+      onMouseEnter={() => setHovered(theme.slug)}
+      onMouseLeave={() => setHovered(null)}
+    >
+      {/* Recommended badge */}
+      {theme.recommended && (
+        <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, padding: '5px 13px', background: '#E8651A', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>
+          Recommended
+        </div>
+      )}
+      {isCurrent && (
+        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, padding: '5px 13px', background: '#1E7B4B', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+          Current
+        </div>
+      )}
+      {isSelected && !isCurrent && (
+        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: '50%', background: '#E8651A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16, boxShadow: '0 2px 8px rgba(232,101,26,0.4)' }}>✓</div>
+      )}
+
+      {/* Screenshot — tall card like reference image */}
+      <div style={{ height: 340, overflow: 'hidden', background: '#F7FAFC', position: 'relative' }}>
+        <img
+          src={theme.img} alt={theme.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block', transition: 'transform 0.4s' }}
+          onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.04)')}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+        {/* Hover overlay with preview button */}
+        {isHovered && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <a href={`https://wordpress.org/themes/${theme.slug}/`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+              style={{ padding: '10px 22px', background: 'white', borderRadius: 10, color: '#1A202C', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+              Preview ↗
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: '16px 20px 20px' }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#1A202C', marginBottom: 5, fontFamily: 'Inter, sans-serif' }}>{theme.name}</div>
+        <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.55, marginBottom: 14 }}>{theme.desc}</div>
+
+        {/* Style tags */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' as const }}>
+          {theme.style.map((s: string) => (
+            <span key={s} style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500, background: '#F7FAFC', color: '#4A5568', border: '1px solid #E2E8F0', textTransform: 'capitalize' as const }}>{s}</span>
+          ))}
+        </div>
+
+        <button
+          onClick={() => { setSelected(theme.slug); onSelect(theme) }}
+          style={{
+            width: '100%', padding: '11px', border: 'none', borderRadius: 10,
+            background: isSelected ? '#1E7B4B' : '#E8651A', color: 'white',
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+            transition: 'background 0.15s',
+          }}
+        >
+          {isSelected ? '✓ Selected' : 'Use This Theme'}
+        </button>
       </div>
     </div>
   )

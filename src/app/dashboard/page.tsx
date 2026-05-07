@@ -17,7 +17,7 @@ interface SiteInfo {
   content:   { pages: number; posts: number; media_count?: number }
 }
 interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string }
-interface Message { role: 'user'|'assistant'; content: string; action?: any; actionResult?: ActionResult; ts: Date }
+interface Message { role: 'user'|'assistant'; content: string; action?: any; actionResult?: ActionResult; options?: Array<{label: string; action: string}>; ts: Date }
 
 // ─── Memory ───────────────────────────────────────────────────────
 function getSiteMem(k: string) { try { return JSON.parse(localStorage.getItem(`ignyous_${k}`) || '{}') } catch { return {} } }
@@ -269,7 +269,7 @@ function DashboardInner() {
 
       if (data.action?.type === 'open_theme_browser') { setShowThemes(true) }
 
-      const aiMsg: Message = { role: 'assistant', content: data.text || 'Done!', action: data.action, ts: new Date() }
+      const aiMsg: Message = { role: 'assistant', content: data.text || 'Done!', action: data.action, options: data.options, ts: new Date() }
       setMessages(prev => [...prev, aiMsg])
       if (data.action && data.action.type !== 'open_theme_browser') executeAction(data.action, aiMsg)
       saveSiteMem(siteKey, { last_action: data.action?.type, last_msg: msg.slice(0, 80) })
@@ -430,6 +430,26 @@ function DashboardInner() {
                     </div>
                   )}
                   {msg.actionResult && <ActionFeedback result={msg.actionResult}/>}
+
+                  {/* Clickable options from AI */}
+                  {msg.options && msg.options.length > 0 && !msg.actionResult && (
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column' as const, gap: 7 }}>
+                      {msg.options.map((opt: any, oi: number) => (
+                        <button key={oi} onClick={() => send(opt.label)} style={{
+                          padding: '9px 14px', border: `1.5px solid ${C.accent}`, borderRadius: 9,
+                          background: C.accentDim, color: C.accent, fontSize: 14, fontWeight: 500,
+                          cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textAlign: 'left' as const,
+                          transition: 'all 0.15s',
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = 'white' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = C.accentDim; e.currentTarget.style.color = C.accent }}
+                        >
+                          → {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div style={{ fontSize: 11, color: C.text3, marginTop: 3, textAlign: msg.role==='user'?'right':'left' as const }}>
                     {msg.ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
                   </div>
