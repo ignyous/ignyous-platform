@@ -215,7 +215,7 @@ function BuilderInner() {
           }}>← Back</a>
 
           <select value={currentPage?.id || ''} onChange={e => { const p = pages.find(pg => pg.id === parseInt(e.target.value)); if (p) setCurrentPage(p) }}
-            style={{ padding: '7px 12px', border: `1.5px solid ${C.border}`, borderRadius: 9, fontSize: 14, fontFamily: 'DM Sans, sans-serif', color: C.text, background: 'white', cursor: 'pointer', maxWidth: 220 }}>
+            style={{ padding: '7px 12px', border: `1.5px solid ${C.border}`, borderRadius: 9, fontSize: 14, fontFamily: 'Inter, sans-serif', color: C.text, background: 'white', cursor: 'pointer', maxWidth: 220 }}>
             <option value="">Select page…</option>
             {pages.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
           </select>
@@ -229,7 +229,7 @@ function BuilderInner() {
         <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 9, overflow: 'hidden' }}>
           {(['desktop','mobile'] as const).map(m => (
             <button key={m} onClick={() => setPreviewMode(m)} style={{
-              padding: '6px 14px', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+              padding: '6px 14px', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
               fontSize: 12, fontWeight: previewMode===m?600:400,
               background: previewMode===m?C.sidebar:'white',
               color: previewMode===m?'white':C.text2,
@@ -247,13 +247,13 @@ function BuilderInner() {
               Unsaved changes
             </div>
           )}
-          <button onClick={() => refreshPreview()} style={{ padding: '7px 13px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+          <button onClick={() => refreshPreview()} style={{ padding: '7px 13px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             ↺ Refresh
           </button>
-          <button onClick={savePage} disabled={saving} style={{ padding: '7px 16px', background: C.green, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+          <button onClick={savePage} disabled={saving} style={{ padding: '7px 16px', background: C.green, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             {saving ? 'Saving…' : '✓ Save'}
           </button>
-          <button style={{ padding: '7px 16px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+          <button style={{ padding: '7px 16px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             Publish →
           </button>
         </div>
@@ -276,7 +276,7 @@ function BuilderInner() {
                 flex: 1, padding: '10px 4px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: sidebarTab===tab.id?600:400,
                 background: 'transparent', color: sidebarTab===tab.id?C.accent:C.text3,
                 borderBottom: `2px solid ${sidebarTab===tab.id?C.accent:'transparent'}`, marginBottom: -1,
-                fontFamily: 'DM Sans, sans-serif',
+                fontFamily: 'Inter, sans-serif',
               }}>{tab.label}</button>
             ))}
           </div>
@@ -304,7 +304,7 @@ function BuilderInner() {
                 </div>
               ))}
               <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
-                <button onClick={() => sendMessage('Create a new page — ask me what it should be called and what content to put on it')} style={{ width: '100%', padding: '8px', border: `1.5px dashed ${C.border}`, borderRadius: 9, background: 'transparent', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                <button onClick={() => sendMessage('Create a new page — ask me what it should be called and what content to put on it')} style={{ width: '100%', padding: '8px', border: `1.5px dashed ${C.border}`, borderRadius: 9, background: 'transparent', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                   + New page with AI
                 </button>
               </div>
@@ -343,7 +343,7 @@ function BuilderInner() {
               <div style={{ marginTop: 16, padding: '12px', background: C.surface, borderRadius: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Let AI choose</div>
                 <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.5, marginBottom: 8 }}>Describe the vibe and AI will pick the perfect palette</div>
-                <button onClick={() => sendMessage('Analyze my site and recommend the best color palette for my industry and brand. Apply it if I approve.')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                <button onClick={() => sendMessage('Analyze my site and recommend the best color palette for my industry and brand. Apply it if I approve.')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                   ✦ AI Pick Colors
                 </button>
               </div>
@@ -369,13 +369,13 @@ function BuilderInner() {
               </div>
 
               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
-                <button onClick={() => sendMessage('I want to change my WordPress theme. Show me options that fit my type of business.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('I want to change my WordPress theme. Show me options that fit my type of business.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   🎨 Change Theme
                 </button>
-                <button onClick={() => sendMessage('Update my site name and tagline — ask me what they should be.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('Update my site name and tagline — ask me what they should be.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   ✏ Update Site Name & Tagline
                 </button>
-                <button onClick={() => sendMessage('Upload a logo for my site — tell me what format to use and how to update it.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
+                <button onClick={() => sendMessage('Upload a logo for my site — tell me what format to use and how to update it.')} style={{ padding: '10px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500, textAlign: 'left' as const }}>
                   🖼 Update Logo
                 </button>
               </div>
@@ -435,7 +435,7 @@ function BuilderInner() {
                       <button key={si} onClick={() => sendMessage(s)} style={{
                         padding: '7px 11px', border: `1px solid ${C.border}`, borderRadius: 8,
                         background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer',
-                        textAlign: 'left' as const, fontFamily: 'DM Sans, sans-serif',
+                        textAlign: 'left' as const, fontFamily: 'Inter, sans-serif',
                         transition: 'all 0.1s',
                       }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent }}
@@ -472,7 +472,7 @@ function BuilderInner() {
                 onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,100)+'px' }}
                 onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()} }}
                 placeholder="e.g. Make the heading darker, add a promo banner…"
-                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontFamily: 'DM Sans, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '4px 0' }}
+                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontFamily: 'Inter, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '4px 0' }}
               />
               <button onClick={() => sendMessage()} disabled={sending||!input.trim()} style={{
                 alignSelf: 'flex-end', width: 34, height: 34, borderRadius: 9, border: 'none', flexShrink: 0,

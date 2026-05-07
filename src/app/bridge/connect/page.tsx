@@ -58,7 +58,7 @@ function StepBar({ current, labels }: { current: number; labels: string[] }) {
 
 function BackBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', marginBottom: 18 }}>
+    <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif', marginBottom: 18 }}>
       ← Back
     </button>
   )
@@ -196,7 +196,7 @@ export default function ConnectPage() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, marginBottom: 12, background: C.blueBg, border: `1px solid ${C.blueBorder}`, fontSize: 12, fontWeight: 600, color: C.blue }}>
             ◈ Connect Existing Site
           </div>
-          <h1 style={{ fontFamily: 'Sora, sans-serif', fontSize: 28, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+          <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 28, fontWeight: 700, color: C.text, marginBottom: 8 }}>
             Connect your WordPress site
           </h1>
           <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.65 }}>
@@ -210,7 +210,7 @@ export default function ConnectPage() {
         {step === 1 && (
           <Card>
             <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Sora, sans-serif', color: C.text }}>What's the site URL?</div>
+              <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>What's the site URL?</div>
               <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>We'll scan it to see what it's built with</div>
             </div>
             <div style={{ padding: 24 }}>
@@ -220,9 +220,9 @@ export default function ConnectPage() {
                   value={url} onChange={e => setUrl(e.target.value.replace(/^https?:\/\//,''))}
                   onKeyDown={e => e.key === 'Enter' && runScan()}
                   placeholder="yoursite.com"
-                  style={{ flex: 1, border: 'none', padding: '14px 16px', fontSize: 16, color: C.text, fontFamily: 'DM Sans, sans-serif', background: C.white }}
+                  style={{ flex: 1, border: 'none', padding: '14px 16px', fontSize: 16, color: C.text, fontFamily: 'Inter, sans-serif', background: C.white }}
                 />
-                <button onClick={runScan} disabled={scanning || !url.trim()} style={{ padding: '0 28px', background: scanning ? '#C9541A' : C.accent, border: 'none', color: 'white', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <button onClick={runScan} disabled={scanning || !url.trim()} style={{ padding: '0 28px', background: scanning ? '#C9541A' : C.accent, border: 'none', color: 'white', cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 15, fontWeight: 600, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   {scanning ? (<><Spinner color="white"/>Scanning…</>) : 'Scan →'}
                 </button>
               </div>
@@ -230,7 +230,7 @@ export default function ConnectPage() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const, marginBottom: 20 }}>
                 <span style={{ fontSize: 13, color: C.text3 }}>Try:</span>
                 {['josefn21.sg-host.com', 'josefn22.sg-host.com'].map(u => (
-                  <button key={u} onClick={() => setUrl(u)} style={{ padding: '4px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{u}</button>
+                  <button key={u} onClick={() => setUrl(u)} style={{ padding: '4px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>{u}</button>
                 ))}
               </div>
 
@@ -261,7 +261,7 @@ export default function ConnectPage() {
             <Card>
               <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Sora, sans-serif', color: C.text }}>{url}</div>
+                  <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>{url}</div>
                   <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>Scanned in {(report.scan_duration_ms/1000).toFixed(1)}s</div>
                 </div>
                 <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: report.cms.is_wordpress ? C.greenBg : C.redBg, color: report.cms.is_wordpress ? C.green : C.red, border: `1px solid ${report.cms.is_wordpress ? C.greenBorder : C.redBorder}` }}>
@@ -285,7 +285,7 @@ export default function ConnectPage() {
                   return (
                     <div key={label} style={{ textAlign: 'center' as const }}>
                       <div style={{ width: size, height: size, borderRadius: '50%', background: bg, border: `2px solid ${bor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 5px' }}>
-                        <span style={{ fontFamily: 'Sora, sans-serif', fontSize: size > 56 ? 18 : 13, fontWeight: 700, color: col }}>{s}</span>
+                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: size > 56 ? 18 : 13, fontWeight: 700, color: col }}>{s}</span>
                       </div>
                       <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>{label}</div>
                     </div>
@@ -317,7 +317,7 @@ export default function ConnectPage() {
             <button onClick={() => setStep(3)} disabled={!report.cms.is_wordpress} style={{
               padding: '14px', background: report.cms.is_wordpress ? C.accent : C.border, border: 'none', borderRadius: 12,
               color: 'white', fontSize: 16, fontWeight: 600, cursor: report.cms.is_wordpress ? 'pointer' : 'not-allowed',
-              fontFamily: 'Sora, sans-serif', boxShadow: report.cms.is_wordpress ? '0 2px 10px rgba(232,101,26,0.3)' : 'none',
+              fontFamily: 'Inter, sans-serif', boxShadow: report.cms.is_wordpress ? '0 2px 10px rgba(232,101,26,0.3)' : 'none',
             }}>
               Connect this site →
             </button>
@@ -347,7 +347,7 @@ export default function ConnectPage() {
               <Card style={{ marginBottom: 16 }}>
                 <div style={{ padding: '24px', textAlign: 'center' as const }}>
                   <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
-                  <div style={{ fontSize: 17, fontWeight: 600, color: C.green, fontFamily: 'Sora, sans-serif' }}>Plugin detected! Connecting…</div>
+                  <div style={{ fontSize: 17, fontWeight: 600, color: C.green, fontFamily: 'Inter, sans-serif' }}>Plugin detected! Connecting…</div>
                 </div>
               </Card>
             )}
@@ -362,7 +362,7 @@ export default function ConnectPage() {
             {/* Install steps */}
             <Card>
               <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Sora, sans-serif', color: C.text }}>Install the ignyous Bridge plugin</div>
+                <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Inter, sans-serif', color: C.text }}>Install the ignyous Bridge plugin</div>
                 <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>4 steps, about 2 minutes — then ignyous connects automatically</div>
               </div>
               <div style={{ padding: 24 }}>
@@ -404,7 +404,7 @@ export default function ConnectPage() {
                   disabled={connecting || pluginStatus === 'checking'}
                   style={{
                     width: '100%', padding: '18px', fontSize: 17, fontWeight: 700,
-                    fontFamily: 'Sora, sans-serif', border: 'none', borderRadius: 14,
+                    fontFamily: 'Inter, sans-serif', border: 'none', borderRadius: 14,
                     background: connecting || pluginStatus === 'checking' ? '#C9541A' : C.accent,
                     color: 'white', cursor: connecting || pluginStatus === 'checking' ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
@@ -427,7 +427,7 @@ export default function ConnectPage() {
           <div style={{ textAlign: 'center' as const }}>
             <Card style={{ padding: '52px 40px' }}>
               <div style={{ width: 80, height: 80, borderRadius: '50%', background: C.greenBg, border: `2px solid ${C.greenBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 36 }}>✓</div>
-              <h2 style={{ fontFamily: 'Sora, sans-serif', fontSize: 26, fontWeight: 700, marginBottom: 10, color: C.text }}>
+              <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: 26, fontWeight: 700, marginBottom: 10, color: C.text }}>
                 {connectedSiteName || url} is connected!
               </h2>
               <p style={{ fontSize: 15, color: C.text2, marginBottom: 8, lineHeight: 1.65, maxWidth: 420, margin: '0 auto 8px' }}>
@@ -439,7 +439,7 @@ export default function ConnectPage() {
               <button onClick={openDashboard} style={{
                 padding: '16px 52px', background: C.accent, border: 'none', borderRadius: 14,
                 color: 'white', fontSize: 17, fontWeight: 700, cursor: 'pointer',
-                fontFamily: 'Sora, sans-serif', boxShadow: '0 4px 20px rgba(232,101,26,0.35)',
+                fontFamily: 'Inter, sans-serif', boxShadow: '0 4px 20px rgba(232,101,26,0.35)',
               }}>
                 Open Site Dashboard →
               </button>

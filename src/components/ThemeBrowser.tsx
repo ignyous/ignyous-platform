@@ -151,6 +151,7 @@ export default function ThemeBrowser({ onSelect, onClose, currentTheme, siteName
 function Card({ theme, selected, setSelected, onSelect, currentTheme }: any) {
   const [imgErr, setImgErr] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const isSelected = selected === theme.slug + theme.builder
   const isCurrent  = currentTheme?.toLowerCase().includes(theme.slug)
 
@@ -208,13 +209,29 @@ function Card({ theme, selected, setSelected, onSelect, currentTheme }: any) {
             <span key={s} style={{ padding: '3px 9px', borderRadius: 20, fontSize: 12, background: '#F7FAFC', color: '#4A5568', border: '1px solid #E2E8F0', textTransform: 'capitalize' as const }}>{s}</span>
           ))}
         </div>
-        <button onClick={() => { setSelected(theme.slug + theme.builder); onSelect(theme) }} style={{
-          width: '100%', padding: '11px', border: 'none', borderRadius: 10,
-          background: isSelected ? '#1E7B4B' : '#E8651A', color: 'white',
-          fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-        }}>
-          {isSelected ? '✓ Selected' : 'Use This Theme'}
-        </button>
+        {!confirming ? (
+          <button onClick={() => setConfirming(true)} style={{
+            width: '100%', padding: '11px', border: 'none', borderRadius: 10,
+            background: isSelected ? '#1E7B4B' : '#E8651A', color: 'white',
+            fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+          }}>
+            {isSelected ? '✓ Selected' : 'Use This Theme'}
+          </button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+            <div style={{ fontSize: 13, color: '#4A5568', fontWeight: 500, textAlign: 'center' as const }}>
+              Install <strong>{theme.name}</strong> and activate it?
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setConfirming(false)} style={{ flex: 1, padding: '9px', border: '1px solid #E2E8F0', borderRadius: 9, background: 'white', color: '#4A5568', fontSize: 14, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                Cancel
+              </button>
+              <button onClick={() => { setSelected(theme.slug + theme.builder); setConfirming(false); onSelect(theme) }} style={{ flex: 2, padding: '9px', border: 'none', borderRadius: 9, background: '#E8651A', color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                ✓ Yes, Install
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

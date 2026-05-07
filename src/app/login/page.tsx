@@ -64,7 +64,7 @@ export default function LoginPage() {
                 <path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/>
               </svg>
             </div>
-            <span style={{ fontFamily: 'Sora, sans-serif', fontSize: 24, fontWeight: 700, color: C.text }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 24, fontWeight: 700, color: C.text }}>
               ignyous<span style={{ color: C.accent }}>.ai</span>
             </span>
           </div>
@@ -79,7 +79,7 @@ export default function LoginPage() {
             {(['login', 'register'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
                 flex: 1, padding: '16px', border: 'none', cursor: 'pointer',
-                background: tab === t ? C.white : C.surface, fontFamily: 'DM Sans, sans-serif',
+                background: tab === t ? C.white : C.surface, fontFamily: 'Inter, sans-serif',
                 fontSize: 14, fontWeight: tab === t ? 600 : 400,
                 color: tab === t ? C.text : C.text3,
                 borderBottom: `2px solid ${tab === t ? C.accent : 'transparent'}`,
@@ -92,7 +92,7 @@ export default function LoginPage() {
             {/* Google button */}
             <button onClick={handleGoogle} style={{
               width: '100%', padding: '12px', border: `1.5px solid ${C.border}`, borderRadius: 12,
-              background: C.white, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+              background: C.white, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
               fontSize: 14, fontWeight: 500, color: C.text,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               marginBottom: 20, transition: 'all 0.15s',
@@ -129,14 +129,14 @@ export default function LoginPage() {
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: C.text2, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Name</label>
                   <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Joe Smith"
-                    style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'DM Sans, sans-serif', color: C.text }}/>
+                    style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'Inter, sans-serif', color: C.text }}/>
                 </div>
               )}
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: C.text2, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com"
-                  style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'DM Sans, sans-serif', color: C.text }}/>
+                  style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'Inter, sans-serif', color: C.text }}/>
               </div>
 
               <div style={{ marginBottom: 22 }}>
@@ -145,14 +145,14 @@ export default function LoginPage() {
                   {tab === 'login' && <a href="/forgot-password" style={{ fontSize: 12, color: C.accent, textDecoration: 'none' }}>Forgot?</a>}
                 </div>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••"
-                  style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'DM Sans, sans-serif', color: C.text }}/>
+                  style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: 'Inter, sans-serif', color: C.text }}/>
                 {tab === 'register' && <div style={{ fontSize: 11, color: C.text3, marginTop: 5 }}>Minimum 8 characters</div>}
               </div>
 
               <button type="submit" disabled={loading} style={{
                 width: '100%', padding: '14px', background: loading ? '#C9541A' : C.accent,
                 border: 'none', borderRadius: 12, color: 'white', fontSize: 15, fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Sora, sans-serif',
+                cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 boxShadow: '0 2px 10px rgba(232,101,26,0.3)',
               }}>

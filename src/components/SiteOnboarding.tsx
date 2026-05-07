@@ -133,11 +133,11 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: c.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18 }}>✦</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Sora, sans-serif', color: c.text }}>Your site needs some attention</div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Inter, sans-serif', color: c.text }}>Your site needs some attention</div>
             <div style={{ fontSize: 13, color: c.text2 }}>{visible.length} issues found — ignyous can fix all of these for you</div>
           </div>
         </div>
-        <button onClick={onDismiss} style={{ fontSize: 12, color: c.text3, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Dismiss all</button>
+        <button onClick={onDismiss} style={{ fontSize: 12, color: c.text3, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>Dismiss all</button>
       </div>
 
       {/* Issues */}
@@ -158,12 +158,12 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
               <button onClick={() => onAsk(gap.prompt)} style={{
                 padding: '7px 14px', background: c.accent, border: 'none', borderRadius: 8,
                 color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap' as const,
+                fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' as const,
               }}>Fix with AI ✦</button>
               <button onClick={() => dismiss(gap.id)} style={{
                 padding: '7px 10px', border: `1px solid ${c.border}`, borderRadius: 8,
                 background: 'white', color: c.text3, fontSize: 12, cursor: 'pointer',
-                fontFamily: 'DM Sans, sans-serif',
+                fontFamily: 'Inter, sans-serif',
               }}>✕</button>
             </div>
           </div>
@@ -176,7 +176,7 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
           <button onClick={() => onAsk(`My site has ${visible.length} issues that need fixing: ${visible.map(g => g.title).join(', ')}. Let's fix them one by one, starting with the most important.`)} style={{
             width: '100%', padding: '12px', background: c.accent, border: 'none', borderRadius: 10,
             color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'Sora, sans-serif', boxShadow: '0 2px 8px rgba(232,101,26,0.25)',
+            fontFamily: 'Inter, sans-serif', boxShadow: '0 2px 8px rgba(232,101,26,0.25)',
           }}>
             ✦ Fix all {visible.length} issues with AI
           </button>

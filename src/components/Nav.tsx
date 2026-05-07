@@ -31,7 +31,7 @@ export default function Nav() {
           </svg>
         </div>
         <span style={{
-          fontFamily: 'Sora, sans-serif', fontSize: 16, fontWeight: 700, color: '#1A1410',
+          fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 700, color: '#1A1410',
         }}>
           ignyous<span style={{ color: '#E8651A' }}>.ai</span>
         </span>

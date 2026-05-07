@@ -79,7 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div style={{ width: 34, height: 34, background: C.accent, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 16 16" fill="white"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
             </div>
-            <span style={{ fontFamily: 'Sora, sans-serif', fontSize: 18, fontWeight: 700, color: 'white' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 700, color: 'white' }}>
               ignyous<span style={{ color: C.accent }}>.ai</span>
             </span>
           </div>
@@ -241,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <button onClick={() => signOut({ callbackUrl: '/login' })} style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px',
                       background: 'none', border: 'none', cursor: 'pointer', color: '#B91C1C', fontSize: 15,
-                      textAlign: 'left' as const, fontFamily: 'DM Sans, sans-serif',
+                      textAlign: 'left' as const, fontFamily: 'Inter, sans-serif',
                     }}>
                       <span style={{ fontSize: 16 }}>🚪</span> Sign Out
                     </button>
