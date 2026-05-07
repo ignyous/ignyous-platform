@@ -184,6 +184,9 @@ function DashboardInner() {
   const [dismissedIssues, setDismissedIssues] = useState<string[]>([])
   const [snapshots, setSnapshots]       = useState<Array<{id: string; label: string; created_at: string}>>([])
   const [showSnapshots, setShowSnapshots] = useState(false)
+  const [previewUrl, setPreviewUrl]     = useState('')
+  const [iframeKey, setIframeKey]       = useState(0)
+  const [previewMode, setPreviewMode]   = useState<'desktop'|'mobile'>('desktop')
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -242,6 +245,7 @@ function DashboardInner() {
           : `Hi! I'm now connected to **${siteName}**.\n\nI can see ${pageCt} pages and ${plugCt} active plugins. I'm scanning for issues now.\n\nJust tell me in plain English what you want — I'll handle everything.`,
       }])
       saveSiteMem(siteKey, { welcomed: true, site_name: info?.site?.name, last_visit: Date.now() })
+      setPreviewUrl(cleanUrl)
     } catch {
       setMessages([{ role: 'assistant', content: 'Connected! What would you like to do with your site?', ts: new Date() }])
     } finally {
@@ -323,6 +327,7 @@ function DashboardInner() {
           const pageUrl = targetPage?.link
           const pageTitle = action.title || targetPage?.title || 'Page'
           result = { type: 'update_page', success: r.success, message: r.success ? `"${pageTitle}" updated successfully` : `Failed: ${r.error || r.message}`, url: pageUrl }
+          if (r.success && pageUrl) { setPreviewUrl(pageUrl); setIframeKey(k => k + 1) }
           break
         }
         case 'create_page': {
@@ -470,16 +475,20 @@ function DashboardInner() {
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: '24px 32px 60px', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+      {/* ── MAIN LAYOUT: AI LEFT + PREVIEW RIGHT ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px - 62px)' }}>
 
-        {/* ════ 1. AI CHAT HERO — FULL WIDTH ════ */}
-        <div style={{ background: C.white, border: `2px solid ${C.border}`, borderRadius: 20, overflow: 'hidden', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.07)' }}>
-          <div style={{ padding: '16px 24px 0', background: `linear-gradient(120deg, ${C.accentDim} 0%, white 55%)` }}>
+        {/* ── LEFT: AI CHAT + ISSUES + ACTIONS ── */}
+        <div style={{ width: 440, flexShrink: 0, display: 'flex', flexDirection: 'column' as const, borderRight: `1px solid ${C.border}`, background: C.white, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+
+        {/* ════ 1. AI CHAT HERO ════ */}
+        <div style={{ background: C.white, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ padding: '14px 20px 0', background: `linear-gradient(120deg, ${C.accentDim} 0%, white 55%)` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18 }}>✦</div>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 17 }}>✦</div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>Ask ignyous anything</div>
-                <div style={{ fontSize: 14, color: C.text2 }}>Plain English — I'll handle all the technical work</div>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>Ask ignyous anything</div>
+                <div style={{ fontSize: 13, color: C.text2 }}>Plain English — I'll handle everything</div>
               </div>
             </div>
           </div>
@@ -559,9 +568,9 @@ function DashboardInner() {
           </div>
 
           {/* Chips */}
-          <div style={{ padding: '0 24px 18px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
+          <div style={{ padding: '0 20px 14px', display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
             {SUGGESTIONS.map(s => (
-              <button key={s} onClick={() => send(s)} style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
+              <button key={s} onClick={() => send(s)} style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.text2 }}
               >{s}</button>
@@ -569,351 +578,117 @@ function DashboardInner() {
           </div>
         </div>
 
-        {/* ════ 2. ISSUES STRIP ════ */}
+        {/* ════ ISSUES STRIP ════ */}
         {visibleIssues.length > 0 && (
-          <div style={{ background: C.white, border: `1.5px solid ${C.accentBorder}`, borderRadius: 16, padding: '14px 20px', marginBottom: 20, boxShadow: '0 2px 12px rgba(232,101,26,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>
-                ✦ {visibleIssues.length} issue{visibleIssues.length>1?'s':''} found — ignyous can fix all of these
-              </div>
-              <button onClick={() => setDismissedIssues(issues.map(i=>i.title))} style={{ fontSize: 13, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Dismiss all</button>
+          <div style={{ margin: '0 12px 12px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12, padding: '12px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.accent, marginBottom: 10 }}>
+              ✦ {visibleIssues.length} issue{visibleIssues.length>1?'s':''} found
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 7 }}>
               {visibleIssues.map((issue, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', borderRadius: 12, background: issue.severity==='high'?C.redBg:C.yellowBg, border: `1px solid ${issue.severity==='high'?C.redBorder:C.yellowBorder}` }}>
-                  <span style={{ fontSize: 19, flexShrink: 0 }}>{issue.icon}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{issue.title}</div>
-                    <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.4, marginBottom: 8 }}>{issue.desc}</div>
-                    <button onClick={() => send(issue.prompt)} style={{ padding: '5px 12px', background: C.accent, border: 'none', borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Fix with AI ✦</button>
-                  </div>
-                  <button onClick={() => setDismissedIssues(p=>[...p,issue.title])} style={{ fontSize: 15, color: C.text3, background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}>✕</button>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'white', border: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 16 }}>{issue.icon}</span>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: C.text }}>{issue.title}</div>
+                  <button onClick={() => send(issue.prompt)} style={{ padding: '4px 10px', background: C.accent, border: 'none', borderRadius: 6, color: 'white', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Fix ✦</button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ════ 3. TWO COLUMN ════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20 }}>
-
-          {/* ── LEFT COLUMN ── */}
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 16 }}>
-
-            {/* GOAL CARDS — like image 2 */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>What would you like to do?</div>
-                <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>Click anything and ignyous will handle it</div>
-              </div>
-              <div style={{ padding: '16px 22px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 12 }}>
-                  {ACTIONS.map(action => (
-                    <button key={action.label}
-                      onClick={() => action.prompt==='OPEN_THEME_BROWSER' ? setShowThemes(true) : send(action.prompt)}
-                      style={{
-                        padding: '18px 16px', background: C.surface, border: `1.5px solid ${C.border}`,
-                        borderRadius: 14, cursor: 'pointer', textAlign: 'left' as const,
-                        fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.background='#FFF7ED'; e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow='0 4px 16px rgba(232,101,26,0.12)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface; e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='none' }}
-                    >
-                      <div style={{ fontSize: 27, marginBottom: 10 }}>{action.icon}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 5, lineHeight: 1.2 }}>{action.label}</div>
-                      <div style={{ fontSize: 13, color: C.text3, lineHeight: 1.4 }}>{action.desc}</div>
-                    </button>
-                  ))}
+        {/* ════ QUICK ACTIONS ════ */}
+        <div style={{ padding: '12px 12px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 10, paddingLeft: 4 }}>Quick Actions</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {ACTIONS.slice(0, 8).map(action => (
+              <button key={action.label}
+                onClick={() => action.prompt==='OPEN_THEME_BROWSER' ? setShowThemes(true) : send(action.prompt)}
+                style={{
+                  padding: '12px 14px', background: C.white, border: `1.5px solid ${C.border}`,
+                  borderRadius: 12, cursor: 'pointer', textAlign: 'left' as const,
+                  fontFamily: 'Poppins, sans-serif', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 9,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.background=C.accentDim }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.white }}
+              >
+                <span style={{ fontSize: 20 }}>{action.icon}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{action.label}</div>
+                  <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.3 }}>{action.desc}</div>
                 </div>
-              </div>
+              </button>
+            ))}
+          </div>
+          <a href={`/content?site=${siteUrl}`} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', marginTop: 8, background: C.accentDim, border: `1.5px solid ${C.accentBorder}`, borderRadius: 12, textDecoration: 'none', transition: 'all 0.15s' }}>
+            <span style={{ fontSize: 20 }}>✍️</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.accent, lineHeight: 1.2 }}>Content Studio</div>
+              <div style={{ fontSize: 11, color: C.text2 }}>Generate & schedule AI posts</div>
             </div>
+          </a>
+        </div>
 
-            {/* WooCommerce */}
-            {hasWoo && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>🛒 WooCommerce Store</div>
-                  <button onClick={() => send('Show me my WooCommerce orders and revenue stats')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>
-                </div>
-                <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                  {['Orders','Revenue','Products'].map(l => <div key={l}><div style={{ fontSize: 12, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 23, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>—</div></div>)}
-                </div>
-                <div style={{ padding: '0 20px 14px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
-                  {['Add Product','View Orders','Run a Sale','Update Inventory'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in WooCommerce`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
-                  ))}
-                </div>
-              </div>
-            )}
+        </div>{/* end left panel */}
 
-            {/* Amelia */}
-            {hasAmelia && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📅 Amelia Bookings</div>
-                  <button onClick={() => send('Show me my upcoming Amelia appointments')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>
-                </div>
-                <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
-                  {['This Week','This Month','Total Services'].map(l => <div key={l}><div style={{ fontSize: 12, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 4 }}>{l}</div><div style={{ fontSize: 23, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>—</div></div>)}
-                </div>
-                <div style={{ padding: '0 20px 14px', display: 'flex', gap: 7, flexWrap: 'wrap' as const }}>
-                  {['Add Service','View Calendar','Add Employee','Edit Hours'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()} in Amelia`)} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* ── RIGHT: LIVE SITE PREVIEW ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, background: '#E8E4DF', overflow: 'hidden' }}>
 
-            {/* Events */}
-            {hasEvents && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, padding: '14px 20px' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text, marginBottom: 12 }}>🎉 Events</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                  {['Add Event','View All Events','Edit Upcoming','Event Settings'].map(a => (
-                    <button key={a} onClick={() => send(`Help me ${a.toLowerCase()}`)} style={{ padding: '8px 14px', border: `1px solid ${C.border}`, borderRadius: 9, background: C.surface, color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>{a}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Contact forms */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📬 Contact Forms & Leads</div>
-                {hasForms && <button onClick={() => send('Show me my recent form submissions')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI ✦</button>}
-              </div>
-              <div style={{ padding: 20 }}>
-                {!hasForms ? (
-                  <>
-                    <div style={{ padding: '13px 15px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 10, marginBottom: 12 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.yellow, marginBottom: 3 }}>⚠ No contact form found</div>
-                      <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5 }}>Visitors can't reach you. You're losing leads every day.</div>
-                    </div>
-                    <button onClick={() => send('Add a contact form to my site that texts me when someone submits it')} style={{ width: '100%', padding: '12px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
-                      ✦ Add Contact Form + SMS Alerts
-                    </button>
-                  </>
-                ) : (
-                  <div style={{ textAlign: 'center' as const }}>
-                    <button onClick={() => send('Show me my recent contact form submissions and leads')} style={{ color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontSize: 15, fontWeight: 500 }}>
-                      Load recent submissions ✦
-                    </button>
-                  </div>
-                )}
-              </div>
+          {/* Preview toolbar */}
+          <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {['#FF5F57','#FFBD2E','#28CA41'].map(col => <div key={col} style={{ width: 11, height: 11, borderRadius: '50%', background: col }}/>)}
             </div>
+            <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', fontSize: 12, color: C.text3, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+              {previewUrl || cleanUrl}
+            </div>
+            {/* Desktop / Mobile toggle */}
+            <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+              {(['desktop','mobile'] as const).map(m => (
+                <button key={m} onClick={() => setPreviewMode(m)} style={{ padding: '5px 12px', border: 'none', cursor: 'pointer', fontSize: 12, background: previewMode===m?C.text:'white', color: previewMode===m?'white':C.text2, fontFamily: 'Poppins, sans-serif' }}>
+                  {m === 'desktop' ? '🖥' : '📱'}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { setIframeKey(k => k+1) }} style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer' }}>↺</button>
+            <a href={previewUrl || cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, textDecoration: 'none' }}>↗</a>
+          </div>
 
-            {/* Pages */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>📄 Pages ({pages.length})</div>
-                <button onClick={() => send('Review all my pages and tell me which need improvement')} style={{ padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 13, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Audit ✦</button>
-              </div>
-              {pages.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center' as const }}>
-                  <div style={{ fontSize: 15, color: C.text3, marginBottom: 12 }}>No pages on your site yet</div>
-                  <button onClick={() => send("What pages should my site have? Let's create them.")} style={{ padding: '10px 24px', background: C.accent, border: 'none', borderRadius: 10, color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Build my pages</button>
-                </div>
+          {/* iframe */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
+            <div style={{
+              width: previewMode==='mobile' ? 390 : '100%',
+              height: '100%', minHeight: 500, background: C.white,
+              borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+              overflow: 'hidden', position: 'relative',
+            }}>
+              {(previewUrl || cleanUrl) ? (
+                <iframe
+                  key={iframeKey}
+                  src={previewUrl || cleanUrl}
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                  title="Live site preview"
+                  sandbox="allow-same-origin allow-scripts allow-forms"
+                />
               ) : (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px,1fr))', gap: 14, padding: '16px 20px' }}>
-                    {pages.slice(0,6).map(page => (
-                      <div key={page.id} onClick={() => send(`Edit the "${page.title}" page — review content and suggest improvements`)} style={{ cursor: 'pointer' }}>
-                        {/* Screenshot */}
-                        <div style={{ height: 90, borderRadius: 10, overflow: 'hidden', background: C.surface, border: `1px solid ${C.border}`, marginBottom: 8, position: 'relative' }}>
-                          <img
-                            src={`https://image.thum.io/get/width/320/crop/200/noanimate/${page.link||`${cleanUrl}/${page.slug}`}`}
-                            alt={page.title}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={e => { (e.target as HTMLImageElement).style.display='none' }}
-                          />
-                        </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{page.title}</div>
-                        <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
-                          <Tag color={page.status==='publish'?'green':'gray'}>{page.status==='publish'?'Live':page.status}</Tag>
-                          <span style={{ fontSize: 12, color: C.text3, fontFamily: 'monospace' }}>/{page.slug}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ padding: '0 20px 16px' }}>
-                    <button onClick={() => send("What pages is my site missing? Suggest and create the important ones.")} style={{ width: '100%', padding: '10px', border: `1.5px dashed ${C.border}`, borderRadius: 10, background: 'transparent', color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
-                      + Suggest & create missing pages
-                    </button>
-                  </div>
-                </>
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, color: C.text3, gap: 12 }}>
+                  <div style={{ fontSize: 40 }}>🌐</div>
+                  <div style={{ fontSize: 15, fontWeight: 500 }}>Connect a site to see the preview</div>
+                </div>
               )}
             </div>
           </div>
 
-          {/* ── RIGHT COLUMN ── */}
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 14 }}>
-
-            {/* Site preview — big screenshot */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Homepage Preview</div>
-                <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.blue, textDecoration: 'none', fontWeight: 500 }}>Open ↗</a>
-              </div>
-              <div style={{ position: 'relative', height: 220, overflow: 'hidden', background: C.surface }}>
-                <img
-                  src={`https://image.thum.io/get/width/800/crop/500/noanimate/${cleanUrl}`}
-                  alt="Site preview"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }}
-                  onError={e => { (e.target as HTMLImageElement).style.display='none' }}
-                />
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 60, background: 'linear-gradient(transparent, rgba(0,0,0,0.3))', display: 'flex', alignItems: 'flex-end', padding: '12px 14px' }}>
-                  <span style={{ color: 'white', fontSize: 13, fontFamily: 'monospace' }}>{cleanUrl}</span>
-                </div>
-              </div>
-              <div style={{ padding: '10px 18px', display: 'flex', gap: 8 }}>
-                <button onClick={() => setShowThemes(true)} style={{ flex: 1, padding: '8px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 9, color: C.accent, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>🎨 Change Theme</button>
-                <button onClick={() => send('Redesign my homepage to look more professional and modern')} style={{ flex: 1, padding: '8px', border: `1px solid ${C.border}`, borderRadius: 9, background: 'white', color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Redesign</button>
-              </div>
-            </div>
-
-            {/* Health scores */}
-            {scanReport?.scores && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Site Health Scores</div>
-                <div style={{ padding: 16 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                    <ScoreRing score={scanReport.scores.overall} label="Overall" size={72}/>
-                    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12, justifyContent: 'center' }}>
-                      <ScoreRing score={scanReport.scores.seo}         label="SEO"   size={44}/>
-                      <ScoreRing score={scanReport.scores.performance} label="Speed" size={44}/>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                    <ScoreRing score={scanReport.scores.security} label="Security" size={44}/>
-                    <ScoreRing score={scanReport.scores.mobile}   label="Mobile"  size={44}/>
-                  </div>
-                  <button onClick={() => send('Run a full site audit and give me a prioritized fix list')} style={{ width: '100%', padding: '9px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>✦ Full AI Audit</button>
-                </div>
-              </div>
-            )}
-
-            {/* Site details */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Site Details</div>
-              <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
-                {[
-                  { label: 'Site Name',   value: siteInfo?.site?.name },
-                  { label: 'Description',value: siteInfo?.site?.description },
-                  { label: 'Theme',       value: siteInfo?.theme?.name },
-                  { label: 'Builder',     value: siteInfo?.builder?.[0]?.name || 'Gutenberg' },
-                  { label: 'WP Version', value: siteInfo?.wordpress?.version },
-                  { label: 'Pages',       value: `${siteInfo?.content?.pages || pages.length}` },
-                  { label: 'Posts',       value: `${siteInfo?.content?.posts || 0}` },
-                  { label: 'Admin Email', value: siteInfo?.site?.admin_email },
-                ].map(item => (
-                  <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <div style={{ fontSize: 13, color: C.text3, flexShrink: 0 }}>{item.label}</div>
-                    <div style={{ fontSize: 13, color: C.text, fontWeight: 500, textAlign: 'right' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 180 }}>{item.value || '—'}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Plugins */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>🔌 Plugins ({activePlugins.length} active)</div>
-                <button onClick={() => send('What plugins do I have installed? Are there any I should add or remove?')} style={{ padding: '4px 9px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Ask AI</button>
-              </div>
-              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                {activePlugins.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center' as const, color: C.text3, fontSize: 14 }}>
-                    No plugins detected yet.<br/>
-                    <button onClick={() => send('What plugins do I have installed on my site?')} style={{ marginTop: 8, color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif', fontSize: 14 }}>Ask AI to list them ✦</button>
-                  </div>
-                ) : activePlugins.map(p => (
-                  <div key={p.slug||p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderBottom: `1px solid ${C.surface}` }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, flexShrink: 0 }}/>
-                    <div style={{ flex: 1, fontSize: 14, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.name}</div>
-                    {p.update && <Tag color="yellow">Update</Tag>}
-                  </div>
-                ))}
-              </div>
-              {updates > 0 && (
-                <div style={{ padding: '10px 18px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => send('Update all my plugins to the latest versions')} style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>
-                    ✦ Update {updates} Plugin{updates>1?'s':''}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* SEO & Cache quick actions */}
-            {(hasYoast || hasRocket) && (
-              <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>
-                  {hasYoast ? '🔍 SEO' : '⚡ Performance'}
-                </div>
-                <div style={{ padding: '10px 18px 14px', display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
-                  {(hasYoast
-                    ? ['Audit all page SEO scores','Fix meta descriptions','Fix missing headings','Generate XML sitemap']
-                    : ['Clear all caches','Optimize images','Enable lazy loading','Check page speed']
-                  ).map(a => (
-                    <button key={a} onClick={() => send(a)} style={{ padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: 'white', color: C.text, fontSize: 14, cursor: 'pointer', fontFamily: 'Poppins, sans-serif', textAlign: 'left' as const }}>{a}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── SNAPSHOTS / ROLLBACK ── */}
-            <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>📸 Snapshots & Rollback</div>
-                <div style={{ display: 'flex', gap: 7 }}>
-                  <button onClick={async () => { await autoSnapshot('Manual snapshot'); bridge('snapshots').then(r => { if (r.success) setSnapshots(r.data?.snapshots || []) }) }}
-                    style={{ padding: '5px 11px', background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 7, color: C.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    + Take Snapshot
-                  </button>
-                  <button onClick={() => setShowSnapshots(!showSnapshots)} style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer' }}>
-                    {showSnapshots ? 'Hide' : 'Show All'}
-                  </button>
-                </div>
-              </div>
-
-              {snapshots.length === 0 ? (
-                <div style={{ padding: '16px 18px', fontSize: 13, color: C.text3, lineHeight: 1.5 }}>
-                  No snapshots yet. ignyous automatically takes snapshots before major changes.
-                  <button onClick={async () => { await autoSnapshot('Initial snapshot'); bridge('snapshots').then(r => { if (r.success) setSnapshots(r.data?.snapshots || []) }) }}
-                    style={{ display: 'block', marginTop: 10, padding: '8px 14px', background: C.accent, border: 'none', borderRadius: 8, color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Take First Snapshot
-                  </button>
-                </div>
-              ) : (
-                <div style={{ maxHeight: showSnapshots ? 400 : 180, overflowY: 'auto', overscrollBehavior: 'contain' }}>
-                  {(showSnapshots ? snapshots : snapshots.slice(0, 3)).map((snap, i) => (
-                    <div key={snap.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: `1px solid ${C.surface}` }}>
-                      <div style={{ fontSize: 20, flexShrink: 0 }}>📸</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{snap.label || 'Snapshot'}</div>
-                        <div style={{ fontSize: 12, color: C.text3 }}>
-                          {snap.created_at ? new Date(snap.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown time'}
-                        </div>
-                      </div>
-                      <button onClick={() => restoreSnapshot(snap.id, snap.label)}
-                        style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-                        Restore
-                      </button>
-                    </div>
-                  ))}
-                  {!showSnapshots && snapshots.length > 3 && (
-                    <button onClick={() => setShowSnapshots(true)} style={{ width: '100%', padding: '10px', border: 'none', background: C.surface, color: C.text2, fontSize: 13, cursor: 'pointer' }}>
-                      Show {snapshots.length - 3} more snapshots
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
+          {/* Preview status bar */}
+          <div style={{ background: C.white, borderTop: `1px solid ${C.border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: C.text3, flexShrink: 0 }}>
+            <span>Live preview — changes appear here automatically</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green }}/>
+              Connected
+            </span>
           </div>
         </div>
-      </div>
-    </div>
+
+      </div>{/* end main layout */}
   )
 }
 
