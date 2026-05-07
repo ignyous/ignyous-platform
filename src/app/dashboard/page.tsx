@@ -334,7 +334,7 @@ function DashboardInner() {
           break
         }
         case 'update_site_options': {
-          const r = await bridge('settings', 'PATCH', { blogname: action.blogname, blogdescription: action.blogdescription, ...action.options })
+          const r = await bridge('site/settings', 'PATCH', { blogname: action.blogname, blogdescription: action.blogdescription, ...action.options })
           result = { type: 'update_site_options', success: r.success, message: r.success ? 'Site settings updated' : `Failed: ${r.error}` }
           // Targeted update - just update siteInfo name without full reload
           if (r.success && action.blogname && siteInfo) {
