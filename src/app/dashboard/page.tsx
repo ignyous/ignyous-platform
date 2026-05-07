@@ -181,11 +181,14 @@ function DashboardInner() {
   const [sending, setSending]           = useState(false)
   const [showThemes, setShowThemes]     = useState(false)
   const [dismissedIssues, setDismissedIssues] = useState<string[]>([])
-  const messagesEndRef                  = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { if (siteUrl && apiKey) loadAll() }, [siteUrl, apiKey])
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+  }, [messages])
 
   async function bridge(endpoint: string, method = 'GET', body?: any) {
     const res = await fetch('/api/wordpress', {
@@ -262,16 +265,26 @@ function DashboardInner() {
         wp_version:       siteInfo?.wordpress?.version,
         theme:            siteInfo?.theme?.name,
         builder:          siteInfo?.builder?.[0]?.name,
-        pages:            pages.map(p => ({ id: p.id, title: p.title, slug: p.slug, url: p.link, status: p.status })),
+        pages:            pages.map(p => ({
+          id: p.id, title: p.title, slug: p.slug, url: p.link, status: p.status,
+          has_form: (p as any).has_form,
+          has_elementor: (p as any).has_elementor,
+        })),
         active_plugins:   activePlugins.map(p => ({ name: p.name, slug: p.slug })),
         plugin_count:     activePlugins.length,
-        seo_score:        scanReport?.scores?.seo,
-        performance_score:scanReport?.scores?.performance,
-        overall_score:    scanReport?.scores?.overall,
-        has_seo_plugin:   activePlugins.some(p => (p.slug||'').includes('yoast') || (p.slug||'').includes('rank-math')),
-        meta_description: scanReport?.seo?.meta_description,
-        page_title:       scanReport?.seo?.title,
-        load_time_ms:     scanReport?.performance?.load_time_ms,
+        // Specific plugin detection for common checks
+        has_contact_form_7: activePlugins.some(p => (p.slug||'').includes('contact-form-7') || (p.name||'').toLowerCase().includes('contact form 7')),
+        has_wpforms:        activePlugins.some(p => (p.slug||'').includes('wpforms')),
+        has_gravity_forms:  activePlugins.some(p => (p.slug||'').includes('gravityforms')),
+        has_woocommerce:    activePlugins.some(p => (p.slug||'').includes('woocommerce')),
+        has_amelia:         activePlugins.some(p => (p.slug||'').includes('amelia')),
+        has_yoast:          activePlugins.some(p => (p.slug||'').includes('yoast') || (p.slug||'').includes('rank-math')),
+        seo_score:          scanReport?.scores?.seo,
+        performance_score:  scanReport?.scores?.performance,
+        overall_score:      scanReport?.scores?.overall,
+        meta_description:   scanReport?.seo?.meta_description,
+        load_time_ms:       scanReport?.performance?.load_time_ms,
+        forms_count:        scanReport?.forms?.count || 0,
       }
 
       const res  = await fetch('/api/ai', {
@@ -300,36 +313,49 @@ function DashboardInner() {
       switch (action.type) {
         case 'update_page': {
           const r = await bridge(`pages/${action.pageId}`, 'PATCH', { title: action.title, content: action.content, status: action.status })
-          result = { type: 'update_page', success: r.success, message: r.success ? `"${action.title}" updated` : `Failed: ${r.error}`, url: pages.find(p => p.id === action.pageId)?.link }
+          const pageUrl = pages.find(p => p.id === action.pageId)?.link
+          result = { type: 'update_page', success: r.success, message: r.success ? `"${action.title || 'Page'}" updated successfully` : `Failed: ${r.error}`, url: pageUrl }
           break
         }
         case 'create_page': {
           const r = await bridge('pages', 'POST', { title: action.title, content: action.content || '', status: action.status || 'publish' })
           if (r.success) {
-            const pg = r.data?.page || r.data
+            const pg  = r.data?.page || r.data
             const url = pg?.link || `${cleanUrl}/${(action.title||'').toLowerCase().replace(/\s+/g,'-')}`
-            result = { type: 'create_page', success: true, message: `"${action.title}" page created and published`, url, title: action.title }
-            bridge('pages').then(r2 => { if (r2.success) setPages(r2.data?.pages || r2.data?.data?.pages || []) })
+            result = { type: 'create_page', success: true, message: `"${action.title}" created and published`, url, title: action.title }
+            // Targeted page list refresh - no full reload
+            const pagesRes = await bridge('pages')
+            if (pagesRes.success) setPages(pagesRes.data?.pages || pagesRes.data?.data?.pages || [])
           } else {
-            result = { type: 'create_page', success: false, message: `Failed to create page: ${r.error}` }
+            result = { type: 'create_page', success: false, message: `Failed: ${r.error}` }
           }
           break
         }
         case 'update_site_options': {
           const r = await bridge('settings', 'PATCH', { blogname: action.blogname, blogdescription: action.blogdescription, ...action.options })
           result = { type: 'update_site_options', success: r.success, message: r.success ? 'Site settings updated' : `Failed: ${r.error}` }
-          if (r.success) loadAll()
+          // Targeted update - just update siteInfo name without full reload
+          if (r.success && action.blogname && siteInfo) {
+            setSiteInfo(prev => prev ? { ...prev, site: { ...prev.site, name: action.blogname } } : prev)
+          }
           break
         }
         case 'install_plugin': {
           const r = await bridge('plugins/install', 'POST', { slug: action.slug, activate: true })
           result = { type: 'install_plugin', success: r.success, message: r.success ? `${action.name || action.slug} installed & activated` : `Failed: ${r.error}` }
-          if (r.success) loadAll()
+          // Refresh plugin list only
+          if (r.success) {
+            const infoRes = await bridge('site')
+            if (infoRes.success) {
+              const d = infoRes.data?.site ? infoRes.data : infoRes.data?.data || infoRes.data
+              setSiteInfo(d)
+            }
+          }
           break
         }
         case 'install_theme': {
           const r = await bridge('themes/install', 'POST', { slug: action.slug, activate: true })
-          result = { type: 'install_theme', success: r.success, message: r.success ? `Theme "${action.name || action.slug}" installed` : `Could not auto-install. Go to WP Admin → Appearance → Themes to install ${action.name}.` }
+          result = { type: 'install_theme', success: r.success, message: r.success ? `Theme "${action.name || action.slug}" installed and activated` : `Could not auto-install. Go to WP Admin → Appearance → Themes to install manually.` }
           break
         }
         case 'scan_site': {
@@ -427,7 +453,7 @@ function DashboardInner() {
           </div>
 
           {/* Messages */}
-          <div style={{ padding: '14px 24px', maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+          <div ref={chatContainerRef} style={{ padding: '14px 24px', maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: msg.role==='user'?'row-reverse':'row', gap: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'white', fontWeight: 600, marginTop: 2 }}>

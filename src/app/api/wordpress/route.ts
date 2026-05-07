@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       data: body || undefined,
-      timeout: 20000,
+      timeout: 60000,
     })
 
     return NextResponse.json(response.data)
