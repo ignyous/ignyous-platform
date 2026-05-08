@@ -105,12 +105,17 @@ function ContentInner() {
   }
 
   async function approvePost(postId: string, action: 'approve' | 'reject') {
-    await fetch('/api/content/approve', {
+    const res  = await fetch('/api/content/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ postId, action }),
     })
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: action === 'approve' ? 'approved' : 'rejected' } : p))
-    if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: action === 'approve' ? 'approved' : 'rejected' }))
+    const data = await res.json()
+    const newStatus = action === 'approve'
+      ? (data.published ? 'published' : 'approved')
+      : 'rejected'
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus, publishedUrl: data.url || p.publishedUrl } : p))
+    if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: newStatus }))
+    if (data.warning) alert('⚠️ ' + data.warning)
   }
 
   async function cancelPost(postId: string) {

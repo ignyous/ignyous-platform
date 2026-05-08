@@ -210,6 +210,7 @@ function DashboardInner() {
   const [iframeKey, setIframeKey]       = useState(0)
   const [previewMode, setPreviewMode]   = useState<'desktop'|'mobile'>('desktop')
   const [variationPreview, setVariationPreview] = useState<{label: string; fields: Record<string,string>} | null>(null)
+  const [pendingAction, setPendingAction]       = useState<{action: any; msg: Message} | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -330,7 +331,16 @@ function DashboardInner() {
 
       const aiMsg: Message = { role: 'assistant', content: data.text || 'Done!', action: data.action, options: data.options, ts: new Date() }
       setMessages(prev => [...prev, aiMsg])
-      if (data.action && data.action.type !== 'open_theme_browser') executeAction(data.action, aiMsg)
+
+      if (data.action) {
+        const a = data.action
+        if (a.type === 'open_theme_browser') { setShowThemes(true) }
+        // For page content changes — stage as preview first, don't auto-execute
+        else if (['update_page','create_page'].includes(a.type) && (a.content || a.title)) {
+          setPendingAction({ action: a, msg: aiMsg })
+        }
+        else { executeAction(a, aiMsg) }
+      }
       saveSiteMem(siteKey, { last_action: data.action?.type, last_msg: msg.slice(0, 80) })
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Check that ANTHROPIC_API_KEY is set in .env.local.', ts: new Date() }])
@@ -340,6 +350,25 @@ function DashboardInner() {
   }
 
   // ── Execute action ─────────────────────────────────────────────
+  async function confirmPendingAction() {
+    if (!pendingAction) return
+    const { action, msg } = pendingAction
+    setPendingAction(null)
+    setVariationPreview(null)
+    await executeAction(action, msg)
+  }
+
+  function discardPendingAction() {
+    if (!pendingAction) return
+    const { msg } = pendingAction
+    setPendingAction(null)
+    setVariationPreview(null)
+    setMessages(prev => prev.map(m => m === msg
+      ? { ...m, actionResult: { type: m.action?.type || '', success: false, message: '✗ Change discarded — no modifications made' } }
+      : m
+    ))
+  }
+
   async function executeAction(action: any, msg: Message) {
     let result: ActionResult = { type: action.type, success: false, message: 'Action failed' }
 
@@ -720,10 +749,10 @@ function DashboardInner() {
               {['#FF5F57','#FFBD2E','#28CA41'].map(col => <div key={col} style={{ width: 11, height: 11, borderRadius: '50%', background: col }}/>)}
             </div>
             <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', fontSize: 12, color: C.text3, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-              {variationPreview ? `✦ Preview: ${variationPreview.label}` : (previewUrl || cleanUrl)}
+              {pendingAction ? `✦ Draft preview — "${pendingAction.action.title || 'Proposed change'}"` : variationPreview ? `✦ Preview: ${variationPreview.label}` : (previewUrl || cleanUrl)}
             </div>
-            {variationPreview && (
-              <button onClick={() => setVariationPreview(null)} style={{ padding: '5px 12px', background: '#1a1a4e', border: 'none', borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>← Back to live</button>
+            {(pendingAction || variationPreview) && (
+              <button onClick={() => { setPendingAction(null); setVariationPreview(null) }} style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.1)', border: `1px solid ${C.border}`, borderRadius: 7, color: C.text2, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>← Live site</button>
             )}
             <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
               {(['desktop','mobile'] as const).map(m => (
@@ -732,12 +761,72 @@ function DashboardInner() {
                 </button>
               ))}
             </div>
-            <button onClick={() => { setIframeKey(k => k+1) }} style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer' }}>↺</button>
-            <a href={previewUrl || cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, textDecoration: 'none' }}>↗</a>
+            {!pendingAction && !variationPreview && <>
+              <button onClick={() => { setIframeKey(k => k+1) }} style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer' }}>↺</button>
+              <a href={previewUrl || cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, textDecoration: 'none' }}>↗</a>
+            </>}
           </div>
 
-          {/* Variation preview overlay */}
-          {variationPreview ? (
+          {/* ── PENDING ACTION PREVIEW ── */}
+          {pendingAction ? (() => {
+            const a = pendingAction.action
+            const targetPage = pages.find(p => p.id === a.pageId)
+            const previewHtml = `<!DOCTYPE html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Draft Preview — ${a.title || targetPage?.title || 'New Page'}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;color:#1a1a2e;background:#fff}
+  .preview-banner{background:#1a1a4e;color:white;padding:10px 20px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between}
+  .preview-banner span{background:#f3af00;color:#1a1a4e;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .page-title{padding:40px 40px 20px;border-bottom:2px solid #f0f0fa;background:#fafafa}
+  .page-title h1{font-size:32px;font-weight:800;color:#1a1a2e;line-height:1.2}
+  .page-title .meta{font-size:13px;color:#999;margin-top:8px}
+  .page-content{padding:32px 40px;max-width:860px;font-size:16px;line-height:1.8;color:#2d2d2d}
+  .page-content h1,.page-content h2,.page-content h3{color:#1a1a4e;margin:24px 0 12px;font-weight:700}
+  .page-content h2{font-size:24px}.page-content h3{font-size:20px}
+  .page-content p{margin-bottom:16px}
+  .page-content ul,.page-content ol{margin:12px 0 12px 24px}
+  .page-content li{margin-bottom:6px}
+  .page-content strong{font-weight:700}
+  .page-content a{color:#1a1a4e;text-decoration:underline}
+  .page-content img{max-width:100%;border-radius:8px;margin:12px 0}
+  .draft-footer{background:#f0f0fa;border-top:2px solid #c8c8e8;padding:16px 40px;font-size:13px;color:#6b6b8a;text-align:center}
+</style></head><body>
+<div class="preview-banner">
+  <div>📄 ${a.type === 'create_page' ? 'New page' : `"${targetPage?.title || 'Page'}"` } — proposed changes</div>
+  <span>DRAFT PREVIEW</span>
+</div>
+<div class="page-title">
+  <h1>${a.title || targetPage?.title || 'Page'}</h1>
+  <div class="meta">Draft · Not published · ${new Date().toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'})}</div>
+</div>
+<div class="page-content">${a.content || '<p style="color:#999;font-style:italic">No content preview available</p>'}</div>
+<div class="draft-footer">This is a draft preview only — nothing has been changed on your live site yet</div>
+</body></html>`
+            return (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' }}>
+                {/* Action bar */}
+                <div style={{ background: '#1a1a4e', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  <div style={{ flex: 1, color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: 600 }}>
+                    👁 Preview of proposed change — review before publishing
+                  </div>
+                  <button onClick={confirmPendingAction} style={{ padding: '9px 22px', background: '#f3af00', border: 'none', borderRadius: 8, color: '#1a1a4e', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    ✓ Publish this change
+                  </button>
+                  <button onClick={discardPendingAction} style={{ padding: '9px 18px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    ✗ Discard
+                  </button>
+                </div>
+                {/* Draft iframe */}
+                <div style={{ flex: 1, padding: 16, background: '#e8e4df', display: 'flex', justifyContent: 'center', overflow: 'auto' }}>
+                  <div style={{ width: previewMode==='mobile'?390:'100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+                    <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', minHeight: 600, border: 'none', display: 'block' }} title="Draft preview" sandbox="allow-same-origin"/>
+                  </div>
+                </div>
+              </div>
+            )
+          })() : variationPreview ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
               <div style={{ width: previewMode==='mobile'?390:'100%', maxWidth: 860, background: C.white, borderRadius: 12, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
                 {/* Mock browser chrome */}
@@ -804,10 +893,10 @@ function DashboardInner() {
 
           {/* Preview status bar */}
           <div style={{ background: C.white, borderTop: `1px solid ${C.border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: C.text3, flexShrink: 0 }}>
-            <span>{variationPreview ? `Previewing: ${variationPreview.label} — reply in chat to apply` : 'Live preview — changes appear here automatically'}</span>
+            <span>{pendingAction ? 'Draft preview — approve or discard before anything goes live' : variationPreview ? `Previewing: ${variationPreview.label} — reply in chat to apply` : 'Live preview — changes appear here automatically'}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: variationPreview ? C.gold : C.green }}/>
-              {variationPreview ? 'Preview Mode' : 'Connected'}
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: pendingAction ? C.yellow : variationPreview ? C.gold : C.green }}/>
+              {pendingAction ? 'Pending Approval' : variationPreview ? 'Preview Mode' : 'Connected'}
             </span>
           </div>
         </div>
