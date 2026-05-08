@@ -66,6 +66,8 @@ function ContentInner() {
     if (f === 'once') setRequireApproval(false)
     else setRequireApproval(true)
   }
+
+  async function fetchCategories() {
     setLoadingCats(true)
     try {
       const res  = await fetch('/api/wordpress', {
