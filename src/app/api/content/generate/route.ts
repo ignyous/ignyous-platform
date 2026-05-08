@@ -107,7 +107,7 @@ Return as JSON only:
           method: 'POST',
           headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from:    'ignyous AI <noreply@ignyous.ai>',
+            from:    'ignyous AI <onboarding@resend.dev>',
             to:      adminEmail,
             subject: `[ignyous] Approve post: "${post.title}"`,
             html: `
