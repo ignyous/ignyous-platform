@@ -170,26 +170,43 @@ function DashboardInner() {
   const urlSite  = params.get('site') || ''
   const urlKey   = params.get('key')  || ''
 
-  // Auto-load first connected site from localStorage if none in URL
   const [siteUrl, setSiteUrl] = useState(urlSite)
   const [apiKey,  setApiKey]  = useState(urlKey)
 
+  // Load apiKey from DB — single source of truth, no localStorage needed
   useEffect(() => {
-    if (!urlSite) {
-      // Try to load first stored site
+    async function resolveKey() {
+      // If URL has both site and key, use them directly
+      if (urlSite && urlKey) { setSiteUrl(urlSite); setApiKey(urlKey); return }
+
       try {
-        const list = JSON.parse(localStorage.getItem('ignyous_sites') || '[]')
-        if (list.length > 0) {
-          const firstSite = list[0]
-          const key = getStoredKey(firstSite)
-          if (key) { setSiteUrl(firstSite); setApiKey(key); return }
+        const res   = await fetch('/api/sites')
+        const data  = await res.json()
+        const sites: Array<{url: string; apiKey: string}> = data.sites || []
+
+        if (urlSite) {
+          // Find this specific site's key from DB
+          const match = sites.find(s => s.url === urlSite || s.url === urlSite.replace(/\/$/, ''))
+          if (match?.apiKey) { setApiKey(match.apiKey); return }
+          // Not in DB yet — provision it (generates key, stores in DB)
+          const provRes  = await fetch('/api/sites/provision', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: urlSite }),
+          })
+          const provData = await provRes.json()
+          if (provData.apiKey) setApiKey(provData.apiKey)
+        } else if (sites.length > 0) {
+          // No site in URL — load first one from DB
+          setSiteUrl(sites[0].url)
+          setApiKey(sites[0].apiKey)
+        } else {
+          setLoading(false)
         }
-      } catch {}
-    } else if (!urlKey) {
-      const stored = getStoredKey(urlSite)
-      if (stored) setApiKey(stored)
-      else setLoading(false)
+      } catch {
+        setLoading(false)
+      }
     }
+    resolveKey()
   }, [urlSite, urlKey])
 
   const cleanUrl = siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`

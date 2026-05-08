@@ -102,7 +102,19 @@ export default function ConnectPage() {
         body: JSON.stringify({ url: siteUrl }),
       })
       const data = await res.json()
-      if (data.success && data.report) { setReport(data.report); setStep(2) }
+      if (data.success && data.report) {
+        setReport(data.report)
+
+        // Pre-generate API key in DB now — user will copy it into the plugin
+        const provRes  = await fetch('/api/sites/provision', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: siteUrl, wpVersion: data.report?.cms?.version }),
+        })
+        const provData = await provRes.json()
+        if (provData.apiKey) setConnectedKey(provData.apiKey)
+
+        setStep(2)
+      }
       else setScanError(data.error || 'Could not reach that site.')
     } catch { setScanError('Connection failed — check the URL') }
     finally { setScanning(false) }
@@ -363,38 +375,47 @@ export default function ConnectPage() {
             <Card>
               <div style={{ padding: '18px 24px', borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'Poppins, sans-serif', color: C.text }}>Install the ignyous Bridge plugin</div>
-                <div style={{ fontSize: 15, color: C.text2, marginTop: 2 }}>4 steps, about 2 minutes — then ignyous connects automatically</div>
+                <div style={{ fontSize: 15, color: C.text2, marginTop: 2 }}>3 steps, about 2 minutes</div>
               </div>
               <div style={{ padding: 24 }}>
 
+                {/* YOUR KEY — most important thing */}
+                {connectedKey && (
+                  <div style={{ background: '#0f172a', borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f3af00', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8 }}>Your ignyous API Key — copy this</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <code style={{ flex: 1, fontSize: 13, color: '#94a3b8', wordBreak: 'break-all' as const, fontFamily: 'monospace', lineHeight: 1.6 }}>{connectedKey}</code>
+                      <button onClick={() => { navigator.clipboard.writeText(connectedKey); alert('Copied!') }} style={{ flexShrink: 0, padding: '8px 16px', background: '#f3af00', border: 'none', borderRadius: 8, color: '#1a1a4e', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Copy</button>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>Paste this into WP Admin → ignyous Bridge settings → Save</div>
+                  </div>
+                )}
+
                 {[
-                  { n: 1, title: 'Download the plugin', desc: 'Click to download ignyous-bridge.zip to your computer',
-                    action: <a href="/api/plugin/bridge.zip" download style={{ padding: '9px 18px', background: C.accent, borderRadius: 9, color: 'white', textDecoration: 'none', fontSize: 15, fontWeight: 600, flexShrink: 0, display: 'inline-block' }}>↓ Download</a> },
-                  { n: 2, title: 'Open WP Admin → Plugins → Add New → Upload Plugin', desc: '',
-                    action: <a href={`${siteUrl}/wp-admin/plugin-install.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 15, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
-                  { n: 3, title: 'Upload ignyous-bridge.zip → Install Now → Activate Plugin', desc: '' },
-                  { n: 4, title: 'Save Permalinks', desc: 'Settings → Permalinks → Post name → Save Changes',
-                    action: <a href={`${siteUrl}/wp-admin/options-permalink.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 15, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
+                  { n: 1, title: 'Download & install the plugin',
+                    desc: 'Download ignyous-bridge.zip → WP Admin → Plugins → Add New → Upload → Activate',
+                    action: <a href="/api/plugin/bridge.zip" download style={{ padding: '9px 18px', background: '#1a1a4e', borderRadius: 9, color: 'white', textDecoration: 'none', fontSize: 14, fontWeight: 600, flexShrink: 0, display: 'inline-block' }}>↓ Download Plugin</a> },
+                  { n: 2, title: 'Paste your API key into the plugin',
+                    desc: 'WP Admin → Settings → ignyous Bridge → paste the key above → Save',
+                    action: <a href={`${siteUrl}/wp-admin/options-general.php?page=ignyous-bridge`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 14, flexShrink: 0, display: 'inline-block' }}>Open Settings ↗</a> },
+                  { n: 3, title: 'Save Permalinks',
+                    desc: 'Settings → Permalinks → Post name → Save Changes (required for REST API)',
+                    action: <a href={`${siteUrl}/wp-admin/options-permalink.php`} target="_blank" rel="noreferrer" style={{ padding: '9px 16px', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text2, textDecoration: 'none', fontSize: 14, flexShrink: 0, display: 'inline-block' }}>Open ↗</a> },
                 ].map(s => (
                   <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.accent, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{s.n}</div>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#1a1a4e', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{s.n}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{s.title}</div>
-                      {s.desc && <div style={{ fontSize: 14, color: C.text2, marginTop: 2 }}>{s.desc}</div>}
+                      {s.desc && <div style={{ fontSize: 13, color: C.text2, marginTop: 2 }}>{s.desc}</div>}
                     </div>
                     {s.action && s.action}
                   </div>
                 ))}
 
-                <div style={{ padding: '13px 16px', background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, marginBottom: 20 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: C.green, marginBottom: 4 }}>✓ Automatic after activation</div>
-                  <div style={{ fontSize: 14, color: C.text2, lineHeight: 1.5 }}>When you activate the plugin and click the button below, ignyous generates a secure key and connects automatically. Nothing to copy or paste.</div>
-                </div>
-
                 {/* NOT FOUND message */}
                 {pluginStatus === 'not_found' && (
                   <div style={{ padding: '12px 14px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 10, fontSize: 14, color: C.yellow, marginBottom: 14 }}>
-                    ⚠ {pluginMsg || 'Plugin not detected yet.'} Make sure you completed all 4 steps, then try again.
+                    ⚠ {pluginMsg || 'Plugin not detected yet.'} Make sure you completed all 3 steps, then try again.
                   </div>
                 )}
 
