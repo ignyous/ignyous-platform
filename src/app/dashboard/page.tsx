@@ -547,13 +547,16 @@ function DashboardInner() {
 
       {/* Key mismatch warning */}
       {keyError && (
-        <div style={{ background: '#FEF2F2', borderBottom: `1px solid #FECACA`, padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.red, flex: 1 }}>
-            ⚠️ API key mismatch — the key in ignyous doesn't match your plugin. Paste your plugin's key below to sync:
+        <div style={{ background: '#1a1a4e', borderBottom: `3px solid #f3af00`, padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>
+            🔑 API key mismatch
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)', flex: 1 }}>
+            Go to WP Admin → Settings → ignyous Bridge, copy your key, paste it here:
           </span>
           <input
-            placeholder="Paste plugin API key (igk_...)"
-            style={{ padding: '6px 12px', border: `1.5px solid #FECACA`, borderRadius: 8, fontSize: 13, fontFamily: 'monospace', width: 320 }}
+            placeholder="igk_... (paste key, press Enter)"
+            style={{ padding: '8px 14px', border: `2px solid #f3af00`, borderRadius: 8, fontSize: 13, fontFamily: 'monospace', width: 340, background: 'rgba(255,255,255,0.1)', color: 'white', outline: 'none' }}
             onKeyDown={async e => {
               if (e.key === 'Enter') {
                 const newKey = (e.target as HTMLInputElement).value.trim()
@@ -568,7 +571,10 @@ function DashboardInner() {
               }
             }}
           />
-          <span style={{ fontSize: 12, color: C.red }}>Press Enter to save</span>
+          <a href={`${cleanUrl}/wp-admin/options-general.php?page=ignyous-bridge`} target="_blank" rel="noreferrer"
+            style={{ padding: '8px 14px', background: '#f3af00', borderRadius: 8, color: '#1a1a4e', fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
+            Open WP Admin ↗
+          </a>
         </div>
       )}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
