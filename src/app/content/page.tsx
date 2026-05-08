@@ -57,9 +57,17 @@ function ContentInner() {
   const [categories, setCategories]           = useState<Array<{id:number;name:string;count:number}>>([])
   const [selectedCategory, setSelectedCategory] = useState<number|'auto'>('auto')
   const [loadingCats, setLoadingCats]         = useState(false)
+  const [toast, setToast]                     = useState<{msg:string;type:'success'|'error'}|null>(null)
+  const [publishingId, setPublishingId]       = useState<string|null>(null)
+  const [scheduleFilter, setScheduleFilter]   = useState<'upcoming'|'completed'|'cancelled'>('upcoming')
 
   useEffect(() => { loadPosts() }, [])
   useEffect(() => { if (siteUrl && apiKey) fetchCategories() }, [siteUrl, apiKey])
+
+  function showToast(msg: string, type: 'success'|'error' = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   function setFrequencyAndApproval(f: string) {
     setFrequency(f)
@@ -111,17 +119,33 @@ function ContentInner() {
   }
 
   async function approvePost(postId: string, action: 'approve' | 'reject') {
-    const res  = await fetch('/api/content/approve', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId, action }),
-    })
-    const data = await res.json()
-    const newStatus = action === 'approve'
-      ? (data.published ? 'published' : 'approved')
-      : 'rejected'
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: newStatus, publishedUrl: data.url || p.publishedUrl } : p))
-    if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: newStatus }))
-    if (data.warning) alert('⚠️ ' + data.warning)
+    setPublishingId(postId)
+    try {
+      const res  = await fetch('/api/content/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, action }),
+      })
+      const data = await res.json()
+      if (action === 'approve') {
+        if (data.published) {
+          setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'published', publishedUrl: data.url || p.publishedUrl } : p))
+          setPreview(null)
+          showToast('✅ Post published successfully!')
+        } else {
+          setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'approved' } : p))
+          if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: 'approved' }))
+          showToast(data.warning ? '⚠️ ' + data.warning : '✓ Post approved', data.warning ? 'error' : 'success')
+        }
+      } else {
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'rejected' } : p))
+        setPreview(null)
+        showToast('Post cancelled')
+      }
+    } catch (e: any) {
+      showToast('Action failed: ' + e.message, 'error')
+    } finally {
+      setPublishingId(null)
+    }
   }
 
   async function cancelPost(postId: string) {
@@ -130,27 +154,29 @@ function ContentInner() {
   }
 
   async function publishNow(postId: string) {
-    setGenerating(true)
+    setPublishingId(postId)
     try {
       const res  = await fetch('/api/content/publish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ postId }),
       })
       const data = await res.json()
-      if (!res.ok) { alert('Publish failed: ' + (data.error || 'Unknown error')); return }
+      if (!res.ok) { showToast('Publish failed: ' + (data.error || 'Unknown error'), 'error'); return }
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'published', publishedUrl: data.publishedUrl } : p))
-      if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: 'published', publishedUrl: data.publishedUrl }))
-    } catch (e: any) { alert('Publish error: ' + e.message) }
-    finally { setGenerating(false) }
+      if (preview?.id === postId) setPreview(null)
+      showToast('✅ Post published to WordPress!')
+    } catch (e: any) { showToast('Publish error: ' + e.message, 'error') }
+    finally { setPublishingId(null) }
   }
 
-  async function saveEdit(postId: string, title: string, content: string) {
+  async function saveEdit(postId: string, title: string, editContent: string) {
     await fetch('/api/content/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId, action: 'edit', title, content }),
+      body: JSON.stringify({ postId, action: 'edit', title, content: editContent }),
     })
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, title, content } : p))
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, title, content: editContent } : p))
     setEditingPost(null)
+    showToast('✓ Post updated')
   }
 
   const FREQUENCIES = [
@@ -339,10 +365,19 @@ function ContentInner() {
                     </div>
                     {preview.status === 'pending_approval' && (
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => approvePost(preview.id, 'approve')} style={{ ...BTN('gold'), flex: 1, justifyContent: 'center', display: 'flex' }}>
-                          {preview.frequency === 'once' ? '🚀 Publish Post' : '✓ Approve & Schedule'}
+                        <button onClick={() => approvePost(preview.id, 'approve')}
+                          disabled={publishingId === preview.id}
+                          style={{ ...BTN('gold'), flex: 1, justifyContent: 'center', display: 'flex',
+                            opacity: publishingId === preview.id ? 0.7 : 1,
+                            transform: publishingId === preview.id ? 'scale(0.97)' : 'scale(1)',
+                            transition: 'all 0.2s' }}>
+                          {publishingId === preview.id
+                            ? '⏳ Publishing…'
+                            : preview.frequency === 'once' ? '🚀 Publish Post' : '✓ Approve & Schedule'}
                         </button>
-                        <button onClick={() => approvePost(preview.id, 'reject')} style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✕ Cancel Post</button>
+                        <button onClick={() => approvePost(preview.id, 'reject')}
+                          disabled={publishingId === preview.id}
+                          style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✕ Cancel Post</button>
                       </div>
                     )}
                     {(preview.status === 'approved' || preview.status === 'scheduled') && preview.frequency !== 'once' && (
@@ -396,18 +431,43 @@ function ContentInner() {
         )}
 
         {/* ── SCHEDULED TAB ── */}
-        {tab === 'scheduled' && (
+        {tab === 'scheduled' && (() => {
+          const filteredPosts = posts.filter(p => {
+            if (scheduleFilter === 'completed')  return p.status === 'published'
+            if (scheduleFilter === 'cancelled')  return p.status === 'rejected'
+            return p.status !== 'published' && p.status !== 'rejected'
+          })
+          const FILTER_BTNS: { key: 'upcoming'|'completed'|'cancelled'; label: string }[] = [
+            { key: 'upcoming',  label: '🕐 Upcoming'  },
+            { key: 'completed', label: '✅ Completed' },
+            { key: 'cancelled', label: '✕ Cancelled' },
+          ]
+          return (
           <div>
-            {posts.length === 0 ? (
+            {/* Filter bar + Refresh */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' as const }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {FILTER_BTNS.map(f => (
+                  <button key={f.key} onClick={() => setScheduleFilter(f.key)}
+                    style={{ ...BTN(scheduleFilter === f.key ? 'primary' : 'ghost'), fontSize: 13, padding: '6px 16px' }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={loadPosts} style={{ ...BTN('ghost'), fontSize: 13, padding: '6px 14px', marginLeft: 'auto' }}>↺ Refresh</button>
+            </div>
+            {filteredPosts.length === 0 ? (
               <div style={{ textAlign: 'center' as const, padding: '80px', color: C.text3 }}>
                 <div style={{ fontSize: 48, marginBottom: 14 }}>📋</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>No posts scheduled yet</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 24 }}>Generate your first AI post to get started</div>
-                <button onClick={() => setTab('generate')} style={{ ...BTN('gold'), fontSize: 15, padding: '12px 28px' }}>Generate a Post</button>
+                <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>No {scheduleFilter} posts</div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 24 }}>
+                  {scheduleFilter === 'upcoming' ? 'Generate your first AI post to get started' : `No ${scheduleFilter} posts found`}
+                </div>
+                {scheduleFilter === 'upcoming' && <button onClick={() => setTab('generate')} style={{ ...BTN('gold'), fontSize: 15, padding: '12px 28px' }}>Generate a Post</button>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 14 }}>
-                {posts.map(post => (
+                {filteredPosts.map(post => (
                   <div key={post.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
                     {/* Edit mode */}
                     {editingPost?.id === post.id ? (
@@ -473,8 +533,12 @@ function ContentInner() {
                               </>
                             )}
                             {(post.status === 'scheduled' || post.status === 'approved') && post.frequency !== 'once' && (
-                              <button onClick={() => publishNow(post.id)} disabled={generating} style={{ ...BTN('gold'), fontSize: 12, padding: '5px 12px' }}>
-                                🚀 Publish Now
+                              <button onClick={() => publishNow(post.id)} disabled={publishingId === post.id}
+                                style={{ ...BTN('gold'), fontSize: 12, padding: '5px 12px',
+                                  opacity: publishingId === post.id ? 0.7 : 1,
+                                  transform: publishingId === post.id ? 'scale(0.97)' : 'scale(1)',
+                                  transition: 'all 0.2s' }}>
+                                {publishingId === post.id ? '⏳ Publishing…' : '🚀 Publish Now'}
                               </button>
                             )}
                             {/* Edit & Cancel — shown for non-published posts */}
@@ -496,9 +560,30 @@ function ContentInner() {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* ── GLOBAL TOAST ── */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
+          background: toast.type === 'success' ? '#1E7B4B' : '#B91C1C',
+          color: 'white', padding: '14px 22px', borderRadius: 12,
+          fontSize: 14, fontWeight: 600, fontFamily: 'Poppins, sans-serif',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          animation: 'slideUp 0.3s ease',
+          maxWidth: 380,
+        }}>
+          {toast.msg}
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 18, lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+      )}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
+      `}</style>
     </div>
   )
 }
