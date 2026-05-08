@@ -83,7 +83,7 @@ h2{color:#B91C1C}p{color:#666}a{display:inline-block;margin-top:20px;background:
   if (action === 'approve') {
     let published = false, publishedUrl = '', publishError = ''
     try {
-      const site = await prisma.site.findFirst({ where: { id: post.siteId } }).catch(() => null)
+      const site = await prisma.site.findFirst({ where: { url: post.siteId } }).catch(() => null)
       if (site?.apiKey && site?.url) {
         await takeSnapshot(site.url, site.apiKey, `Before publishing: "${post.title}"`)
         const { ok, data } = await bridgeCall(site.url, site.apiKey, 'posts', {

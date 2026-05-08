@@ -118,7 +118,7 @@ Return ONLY this exact format:
     let immediatePublishUrl = ''
     if (frequency === 'once' && !requireApproval) {
       try {
-        const site = await prisma.site.findFirst({ where: { id: siteId } })
+        const site = await prisma.site.findFirst({ where: { url: siteUrl } })
         if (site?.apiKey && site?.url) {
           const base    = site.url.replace(/\/$/, '')
           const headers: Record<string,string> = { 'Authorization': `Bearer ${site.apiKey}`, 'Content-Type': 'application/json' }

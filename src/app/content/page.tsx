@@ -102,7 +102,7 @@ function ContentInner() {
       if (data.success) {
         setPreview(data.post)
         setPosts(prev => [data.post, ...prev])
-        if (!requireApproval) setTab('scheduled')
+        if (!requireApproval && frequency !== 'once') setTab('scheduled')
       } else {
         alert('Error: ' + (data.error || 'Unknown error'))
       }
@@ -343,7 +343,7 @@ function ContentInner() {
                         <button onClick={() => approvePost(preview.id, 'reject')} style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✗ Reject</button>
                       </div>
                     )}
-                    {(preview.status === 'approved' || preview.status === 'scheduled') && (
+                    {(preview.status === 'approved' || preview.status === 'scheduled') && preview.frequency !== 'once' && (
                       <button onClick={() => publishNow(preview.id)} disabled={generating} style={{ ...BTN('gold'), width: '100%', justifyContent: 'center', display: 'flex' }}>
                         {generating ? '⏳ Publishing…' : '🚀 Publish Now to WordPress'}
                       </button>
@@ -470,7 +470,7 @@ function ContentInner() {
                                 <button onClick={() => approvePost(post.id, 'reject')} style={{ ...BTN('danger'), fontSize: 12, padding: '5px 12px' }}>✗ Reject</button>
                               </>
                             )}
-                            {(post.status === 'scheduled' || post.status === 'approved') && (
+                            {(post.status === 'scheduled' || post.status === 'approved') && post.frequency !== 'once' && (
                               <button onClick={() => publishNow(post.id)} disabled={generating} style={{ ...BTN('gold'), fontSize: 12, padding: '5px 12px' }}>
                                 🚀 Publish Now
                               </button>

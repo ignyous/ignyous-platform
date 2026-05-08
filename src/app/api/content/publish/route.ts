@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already published', publishedUrl: post.publishedUrl }, { status: 400 })
     }
 
-    const site = await prisma.site.findFirst({ where: { id: post.siteId } })
+    const site = await prisma.site.findFirst({ where: { url: post.siteId } })
     if (!site?.apiKey || !site?.url) {
       return NextResponse.json({ error: 'Site credentials not found — reconnect the site' }, { status: 400 })
     }
