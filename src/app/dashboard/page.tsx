@@ -34,9 +34,10 @@ function getStoredKey(siteUrl: string): string {
 
 // ─── Colors ───────────────────────────────────────────────────────
 const C = {
-  bg: '#F0EDE8', white: '#FFFFFF', text: '#1A1410', text2: '#6B6056', text3: '#A89D94',
-  border: '#E2DDD8', surface: '#F7F5F2',
-  accent: '#E8651A', accentDim: '#FFF7ED', accentBorder: '#FED7AA',
+  bg: '#F4F4FB', white: '#FFFFFF', text: '#1A1A2E', text2: '#6B6B8A', text3: '#A0A0C0',
+  border: '#E2E2F0', surface: '#F7F7FD',
+  accent: '#1a1a4e', accentDim: '#F0F0FA', accentBorder: '#C8C8E8',
+  gold: '#f3af00', goldDim: '#fffbeb', goldBorder: '#fde68a',
   green: '#1E7B4B', greenBg: '#F0FAF5', greenBorder: '#B8E5CF',
   blue: '#1B5FA8', blueBg: '#EFF6FF', blueBorder: '#BFDBFE',
   red: '#B91C1C', redBg: '#FEF2F2', redBorder: '#FECACA',
@@ -356,7 +357,8 @@ function DashboardInner() {
     try {
       switch (action.type) {
         case 'update_page': {
-          const r = await bridge(`pages/${action.pageId}`, 'PATCH', { title: action.title, content: action.content, status: action.status })
+          // Try POST first (ignyous bridge), fall back with helpful error
+          const r = await bridge(`pages/${action.pageId}`, 'POST', { title: action.title, content: action.content, status: action.status || 'publish' })
           const targetPage = pages.find(p => p.id === action.pageId)
           const pageUrl = targetPage?.link
           const pageTitle = action.title || targetPage?.title || 'Page'
@@ -505,8 +507,8 @@ function DashboardInner() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {updates > 0 && <button onClick={() => send('Update all my plugins to the latest versions')} style={{ padding: '7px 12px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, fontSize: 13, color: C.yellow, fontWeight: 500, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>⚠ {updates} update{updates>1?'s':''}</button>}
-          <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>WP Admin ↗</a>
-          <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>View Site ↗</a>
+          <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid #1a1a4e`, borderRadius: 8, background: '#1a1a4e', color: 'white', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>WP Admin ↗</a>
+          <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>View Site ↗</a>
         </div>
       </div>
 
@@ -514,29 +516,29 @@ function DashboardInner() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px - 62px)' }}>
 
         {/* ── LEFT: AI CHAT + ISSUES + ACTIONS ── */}
-        <div style={{ width: 440, flexShrink: 0, display: 'flex', flexDirection: 'column' as const, borderRight: `1px solid ${C.border}`, background: C.white, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+        <div style={{ width: 500, flexShrink: 0, display: 'flex', flexDirection: 'column' as const, borderRight: `1px solid ${C.border}`, background: C.white, overflowY: 'auto', overscrollBehavior: 'contain' }}>
 
         {/* ════ 1. AI CHAT HERO ════ */}
         <div style={{ background: C.white, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ padding: '14px 20px 0', background: `linear-gradient(120deg, ${C.accentDim} 0%, white 55%)` }}>
+          <div style={{ padding: '14px 20px 0', background: `linear-gradient(120deg, rgba(26,26,78,0.06) 0%, white 55%)`, borderRadius: '0 0 0 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 17 }}>✦</div>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: '#1a1a4e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 17 }}>✦</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>Ask ignyous anything</div>
-                <div style={{ fontSize: 13, color: C.text2 }}>Plain English — I'll handle everything</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: C.text2 }}>Plain English — I'll handle everything</div>
               </div>
             </div>
           </div>
 
           {/* Messages */}
-          <div ref={chatContainerRef} style={{ padding: '14px 24px', height: 300, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+          <div ref={chatContainerRef} style={{ padding: '14px 20px', height: 320, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' as const, gap: 12, background: 'rgba(26,26,78,0.03)', borderRadius: 15, margin: '10px 14px 0' }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: msg.role==='user'?'row-reverse':'row', gap: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?C.accent:C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'white', fontWeight: 600, marginTop: 2 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?'#1a1a4e':C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'white', fontWeight: 700, marginTop: 2 }}>
                   {msg.role==='user'?'U':'✦'}
                 </div>
                 <div style={{ maxWidth: '80%' }}>
-                  <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 15, lineHeight: 1.65, background: msg.role==='user'?C.accent:C.surface, color: msg.role==='user'?'white':C.text, border: msg.role==='user'?'none':`1px solid ${C.border}`, ...(msg.role==='user'?{borderTopRightRadius:4}:{borderTopLeftRadius:4}) }}>
+                  <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 15, fontWeight: 500, lineHeight: 1.65, background: msg.role==='user'?'#1a1a4e':C.surface, color: msg.role==='user'?'white':C.text, border: msg.role==='user'?'none':`1px solid ${C.border}`, ...(msg.role==='user'?{borderTopRightRadius:4}:{borderTopLeftRadius:4}) }}>
                     {msg.content.split('\n').map((l,li) => <div key={li} style={{ marginBottom: li<msg.content.split('\n').length-1?4:0 }}>{l.replace(/\*\*(.*?)\*\*/g,'$1')}</div>)}
                   </div>
                   {msg.action && !msg.actionResult && (
@@ -552,13 +554,13 @@ function DashboardInner() {
                     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column' as const, gap: 7 }}>
                       {msg.options.map((opt: any, oi: number) => (
                         <button key={oi} onClick={() => send(opt.label)} style={{
-                          padding: '9px 14px', border: `1.5px solid ${C.accent}`, borderRadius: 9,
-                          background: C.accentDim, color: C.accent, fontSize: 15, fontWeight: 500,
+                          padding: '9px 14px', border: `1.5px solid #1a1a4e`, borderRadius: 9,
+                          background: '#1a1a4e', color: 'white', fontSize: 15, fontWeight: 600,
                           cursor: 'pointer', fontFamily: 'Poppins, sans-serif', textAlign: 'left' as const,
                           transition: 'all 0.15s',
                         }}
-                          onMouseEnter={e => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = 'white' }}
-                          onMouseLeave={e => { e.currentTarget.style.background = C.accentDim; e.currentTarget.style.color = C.accent }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#f3af00'; e.currentTarget.style.color = '#1a1a4e'; e.currentTarget.style.borderColor = '#f3af00' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = '#1a1a4e'; e.currentTarget.style.color = 'white'; e.currentTarget.style.borderColor = '#1a1a4e' }}
                         >
                           → {opt.label}
                         </button>
@@ -596,8 +598,8 @@ function DashboardInner() {
                 placeholder={`Tell ignyous what you want to do with ${siteInfo?.site?.name||'your site'}…`}
                 rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 16, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '10px 0' }}
               />
-              <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 44, height: 44, borderRadius: 12, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:C.accent, cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="white"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+              <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 44, height: 44, borderRadius: 12, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:'#f3af00', cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="#1a1a4e"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
               </button>
             </div>
           </div>
@@ -637,7 +639,7 @@ function DashboardInner() {
           {/* SEO HERO CARD — first and biggest */}
           <button onClick={() => send(SEO_ACTION.prompt)} style={{
             width: '100%', padding: '16px 18px', marginBottom: 12,
-            background: 'linear-gradient(135deg, #1A202C 0%, #2D3748 100%)',
+            background: 'linear-gradient(135deg, #1a1a4e 0%, #2d2d7a 100%)',
             border: 'none', borderRadius: 14, cursor: 'pointer', textAlign: 'left' as const,
             fontFamily: 'Poppins, sans-serif', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
           }}
@@ -681,13 +683,6 @@ function DashboardInner() {
               </button>
             ))}
           </div>
-          <a href={`/content?site=${siteUrl}`} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', marginTop: 8, background: C.accentDim, border: `1.5px solid ${C.accentBorder}`, borderRadius: 12, textDecoration: 'none', transition: 'all 0.15s' }}>
-            <span style={{ fontSize: 20 }}>✍️</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.accent, lineHeight: 1.2 }}>Content Studio</div>
-              <div style={{ fontSize: 11, color: C.text2 }}>Generate & schedule AI posts</div>
-            </div>
-          </a>
         </div>
 
         </div>{/* end left panel */}

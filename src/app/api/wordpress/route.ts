@@ -13,7 +13,12 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanEndpoint = endpoint.replace(/^\/+/, '').replace(/\.\./g, '')
-    const url = `${siteUrl.replace(/\/$/, '')}/wp-json/ignyous/v1/${cleanEndpoint}`
+    
+    // Categories use WP native REST API (public, no auth needed)
+    const isCategories = cleanEndpoint === 'categories'
+    const url = isCategories
+      ? `${siteUrl.replace(/\/$/, '')}/wp-json/wp/v2/categories?per_page=100&orderby=count&order=desc`
+      : `${siteUrl.replace(/\/$/, '')}/wp-json/ignyous/v1/${cleanEndpoint}`
 
     const response = await axios({
       method: method.toUpperCase(),
@@ -26,6 +31,12 @@ export async function POST(req: NextRequest) {
       timeout: 60000,
     })
 
+    // Normalize categories response
+    if (isCategories && Array.isArray(response.data)) {
+      return NextResponse.json({
+        categories: response.data.map((c: any) => ({ id: c.id, name: c.name, count: c.count, slug: c.slug }))
+      })
+    }
     return NextResponse.json(response.data)
 
   } catch (err) {

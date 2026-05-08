@@ -48,10 +48,46 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
 }
 
-// Approve/reject from dashboard
+// Approve/reject/edit from dashboard
 export async function POST(req: NextRequest) {
-  const { postId, action } = await req.json()
+  const { postId, action, title, content } = await req.json()
+
+  if (action === 'edit') {
+    const post = await prisma.scheduledPost.update({
+      where: { id: postId },
+      data:  { title: title ?? undefined, content: content ?? undefined },
+    })
+    return NextResponse.json({ success: true, post })
+  }
+
   const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'scheduled'
+  
+  // If approving, publish to WordPress
+  if (action === 'approve') {
+    const post = await prisma.scheduledPost.findUnique({ where: { id: postId } })
+    if (post && post.siteId) {
+      try {
+        // Fetch stored API key
+        const site = await prisma.site.findFirst({ where: { id: post.siteId } }).catch(() => null)
+        if (site?.apiKey) {
+          const wpRes = await fetch(`${site.url.replace(/\/$/, '')}/wp-json/ignyous/v1/posts`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${site.apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: post.title, content: post.content, excerpt: post.excerpt,
+              status: 'publish', featured_image_url: post.imageUrl || undefined,
+            })
+          })
+          const wpData = await wpRes.json().catch(() => ({}))
+          if (wpData.success && wpData.data?.post?.link) {
+            await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'published', publishedUrl: wpData.data.post.link, approvalToken: null } })
+            return NextResponse.json({ success: true, published: true, url: wpData.data.post.link })
+          }
+        }
+      } catch (_e) { /* fall through to just mark approved */ }
+    }
+  }
+
   const post = await prisma.scheduledPost.update({
     where: { id: postId },
     data:  { status, approvalToken: null }
