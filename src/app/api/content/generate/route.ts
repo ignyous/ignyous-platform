@@ -100,35 +100,33 @@ Return as JSON only:
       if (!process.env.RESEND_API_KEY) {
         console.warn('[content/generate] RESEND_API_KEY not set — skipping email')
       } else {
-      const approveUrl = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=approve`
-      const rejectUrl  = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=reject`
+        const approveUrl = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=approve`
+        const rejectUrl  = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=reject`
 
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from:    'ignyous AI <noreply@ignyous.ai>',
-          to:      adminEmail,
-          subject: `[ignyous] Approve post: "${post.title}"`,
-          html: `
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from:    'ignyous AI <noreply@ignyous.ai>',
+            to:      adminEmail,
+            subject: `[ignyous] Approve post: "${post.title}"`,
+            html: `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
   <img src="${process.env.NEXTAUTH_URL}/logo.png" alt="ignyous.ai" style="height:32px;margin-bottom:20px"/>
   <h2>New post ready for approval</h2>
-  <h3 style="color:#E8651A">${post.title}</h3>
+  <h3 style="color:#1a1a4e">${post.title}</h3>
   <p style="color:#666">${post.excerpt}</p>
   ${imageUrl ? `<img src="${imageUrl}" alt="${imageAlt}" style="width:100%;border-radius:8px;margin:16px 0"/>` : ''}
   <div style="margin:24px 0;display:flex;gap:12px">
-    <a href="${approveUrl}" style="background:#1E7B4B;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold">✓ Approve & Schedule</a>
+    <a href="${approveUrl}" style="background:#1E7B4B;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold">✓ Approve &amp; Schedule</a>
     <a href="${rejectUrl}"  style="background:#B91C1C;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold">✗ Reject</a>
   </div>
   <p style="color:#999;font-size:12px">Or approve from your <a href="${process.env.NEXTAUTH_URL}/content">ignyous dashboard</a></p>
 </div>`
+          })
         })
-      })
+      }
     }
-
-      } // end RESEND_API_KEY check
-    } // end requireApproval check
 
     return NextResponse.json({ success: true, post: { ...scheduled, generatedContent: post } })
   } catch (err: any) {
