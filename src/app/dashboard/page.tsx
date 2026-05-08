@@ -536,7 +536,7 @@ function DashboardInner() {
           </div>
 
           {/* Messages */}
-          <div ref={chatContainerRef} style={{ padding: '14px 16px', height: 320, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' as const, gap: 12, background: 'rgba(255,255,255,0.55)', borderRadius: 15, margin: '12px 14px 14px', backdropFilter: 'blur(4px)', boxShadow: 'inset 0 1px 4px rgba(26,26,78,0.07)' }}>
+          <div ref={chatContainerRef} style={{ padding: '14px 16px 0', height: 320, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' as const, gap: 12, background: 'rgba(255,255,255,0.55)', borderRadius: '15px 15px 0 0', margin: '12px 14px 0', backdropFilter: 'blur(4px)', boxShadow: 'inset 0 1px 4px rgba(26,26,78,0.07)' }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: msg.role==='user'?'row-reverse':'row', gap: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: msg.role==='user'?'#1a1a4e':C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'white', fontWeight: 700, marginTop: 2 }}>
@@ -610,9 +610,9 @@ function DashboardInner() {
             )}
           </div>
 
-          {/* Input */}
-          <div style={{ padding: '0 14px 12px' }}>
-            <div style={{ display: 'flex', gap: 10, border: `2px solid #C8C8E8`, borderRadius: 16, padding: '4px 4px 4px 16px', background: 'white', transition: 'border-color 0.2s', boxShadow: '0 2px 8px rgba(26,26,78,0.08)' }}
+          {/* Input — docked inside the chat container, 6px from edges */}
+          <div style={{ margin: '0 14px 14px', padding: 6, background: 'rgba(255,255,255,0.55)', borderRadius: '0 0 15px 15px', boxShadow: 'inset 0 -1px 4px rgba(26,26,78,0.07)' }}>
+            <div style={{ display: 'flex', gap: 10, border: `2px solid #C8C8E8`, borderRadius: 12, padding: '4px 4px 4px 14px', background: 'white', transition: 'border-color 0.2s', boxShadow: '0 2px 8px rgba(26,26,78,0.08)' }}
               onFocusCapture={e => e.currentTarget.style.borderColor = '#1a1a4e'}
               onBlurCapture={e => e.currentTarget.style.borderColor = '#C8C8E8'}
             >
@@ -620,23 +620,23 @@ function DashboardInner() {
                 onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,120)+'px' }}
                 onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); send() } }}
                 placeholder={`Tell ignyous what you want to do with ${siteInfo?.site?.name||'your site'}…`}
-                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 15, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '10px 0' }}
+                rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 15, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '8px 0' }}
               />
-              <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 44, height: 44, borderRadius: 12, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:'#f3af00', cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="#1a1a4e"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
+              <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 40, height: 40, borderRadius: 10, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:'#f3af00', cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="17" height="17" viewBox="0 0 20 20" fill="#1a1a4e"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Chips */}
-          <div style={{ padding: '0 14px 16px', display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-            {SUGGESTIONS.map(s => (
-              <button key={s} onClick={() => send(s)} style={{ padding: '5px 11px', border: `1px solid #C8C8E8`, borderRadius: 20, background: 'rgba(255,255,255,0.7)', color: C.text2, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor='#1a1a4e'; e.currentTarget.style.color='#1a1a4e'; e.currentTarget.style.background='white' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor='#C8C8E8'; e.currentTarget.style.color=C.text2; e.currentTarget.style.background='rgba(255,255,255,0.7)' }}
-              >{s}</button>
-            ))}
-          </div>
+        {/* Suggestion chips — outside the chat zone, white bg */}
+        <div style={{ padding: '12px 16px 14px', display: 'flex', gap: 6, flexWrap: 'wrap' as const, background: C.white, borderBottom: `1px solid ${C.border}` }}>
+          {SUGGESTIONS.map(s => (
+            <button key={s} onClick={() => send(s)} style={{ padding: '5px 11px', border: `1px solid ${C.border}`, borderRadius: 20, background: C.white, color: C.text2, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor='#1a1a4e'; e.currentTarget.style.color='#1a1a4e' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.text2 }}
+            >{s}</button>
+          ))}
         </div>
 
         {/* ════ ISSUES STRIP ════ */}
