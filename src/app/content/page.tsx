@@ -404,6 +404,19 @@ function ContentInner() {
                             ))}
                             <span style={{ padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 500, background: C.surface, color: C.text3, border: `1px solid ${C.border}` }}>{post.frequency}</span>
                           </div>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' as const, marginBottom: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: C.text3 }}>
+                              📅 Created: {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                            {post.scheduledFor && post.status !== 'published' && (
+                              <span style={{ fontSize: 12, fontWeight: 600, color: C.primary, background: C.primaryDim, padding: '2px 10px', borderRadius: 20, border: `1px solid ${C.primaryBorder}` }}>
+                                🕐 Scheduled: {new Date(post.scheduledFor).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })} at {new Date(post.scheduledFor).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                              </span>
+                            )}
+                            {post.status === 'published' && post.publishedUrl && (
+                              <a href={post.publishedUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>✅ View Live Post ↗</a>
+                            )}
+                          </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: C.text3 }}>
                               {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}

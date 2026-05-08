@@ -112,7 +112,7 @@ const SUGGESTIONS = [
 // ─── ACTION FEEDBACK COMPONENT ───────────────────────────────────
 const ActionFeedback = ({ result, onRollback }: { result: ActionResult; onRollback?: () => void }) => (
   <div style={{ marginTop: 8, padding: '11px 14px', borderRadius: 10, background: result.success ? C.greenBg : C.redBg, border: `1px solid ${result.success ? C.greenBorder : C.redBorder}` }}>
-    <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url || (result.success && onRollback) ? 7 : 0 }}>
+    <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url || onRollback ? 7 : 0 }}>
       {result.success ? '✓' : '✗'} {result.message}
     </div>
     {result.url && (
@@ -123,15 +123,14 @@ const ActionFeedback = ({ result, onRollback }: { result: ActionResult; onRollba
     )}
     {result.success && onRollback && (
       <button onClick={onRollback} style={{
-        marginTop: 8, padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 7,
-        background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer',
-        fontFamily: 'Poppins, sans-serif', display: 'flex', alignItems: 'center', gap: 6,
-        transition: 'all 0.15s',
+        marginTop: 8, padding: '7px 14px', border: `1.5px solid #1a1a4e`, borderRadius: 8,
+        background: '#1a1a4e', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
       }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text2 }}
+        onMouseEnter={e => { e.currentTarget.style.background = C.red; e.currentTarget.style.borderColor = C.red }}
+        onMouseLeave={e => { e.currentTarget.style.background = '#1a1a4e'; e.currentTarget.style.borderColor = '#1a1a4e' }}
       >
-        ↩ Undo this change
+        ↩ Roll back to this snapshot
       </button>
     )}
   </div>
@@ -210,6 +209,7 @@ function DashboardInner() {
   const [previewUrl, setPreviewUrl]     = useState('')
   const [iframeKey, setIframeKey]       = useState(0)
   const [previewMode, setPreviewMode]   = useState<'desktop'|'mobile'>('desktop')
+  const [variationPreview, setVariationPreview] = useState<{label: string; fields: Record<string,string>} | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -416,8 +416,9 @@ function DashboardInner() {
         }
         case 'take_snapshot': {
           const r = await bridge('snapshot', 'POST', { label: action.label || 'Manual snapshot', page_id: action.pageId || 0 })
-          result = { type: 'take_snapshot', success: r.success, message: r.success ? `📸 Snapshot saved: "${action.label || 'Snapshot'}"` : `Snapshot failed: ${r.error}` }
-          if (r.success) setSnapshots(prev => [{ id: r.data?.snapshot_id, label: action.label, created_at: new Date().toISOString() }, ...prev].slice(0, 20))
+          const snapId = r.data?.snapshot_id || ''
+          result = { type: 'take_snapshot', success: r.success, message: r.success ? `📸 Snapshot saved: "${action.label || 'Snapshot'}"` : `Snapshot failed: ${r.error}`, snapshotId: snapId }
+          if (r.success) setSnapshots(prev => [{ id: snapId, label: action.label || 'Snapshot', created_at: new Date().toISOString() }, ...prev].slice(0, 20))
           break
         }
         default:
@@ -494,19 +495,23 @@ function DashboardInner() {
       {showThemes && <ThemeBrowser onSelect={onThemeSelect} onClose={() => setShowThemes(false)} currentTheme={siteInfo?.theme?.name}/>}
 
       {/* Site header strip */}
-      <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '10px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
+      <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentDim, border: `1px solid ${C.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19 }}>🌐</div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: C.text }}>{siteInfo?.site?.name || siteUrl}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{siteInfo?.site?.name || siteUrl}</div>
             <div style={{ fontSize: 13, color: C.text3, display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block'}}/>
               {cleanUrl} · WP {siteInfo?.wordpress?.version} · {siteInfo?.theme?.name || '?'} · {activePlugins.length} plugins
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {updates > 0 && <button onClick={() => send('Update all my plugins to the latest versions')} style={{ padding: '7px 12px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, fontSize: 13, color: C.yellow, fontWeight: 500, cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>⚠ {updates} update{updates>1?'s':''}</button>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          {updates > 0 && <button onClick={() => send('Update all my plugins to the latest versions')} style={{ padding: '7px 12px', background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, borderRadius: 8, fontSize: 13, color: C.yellow, fontWeight: 600, cursor: 'pointer' }}>⚠ {updates} update{updates>1?'s':''}</button>}
+          {/* Content Scheduler */}
+          <a href={`/content?site=${encodeURIComponent(siteUrl)}`} style={{ padding: '7px 14px', background: C.gold, border: 'none', borderRadius: 8, color: '#1a1a4e', fontSize: 14, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(243,175,0,0.3)' }}>✍️ Content Scheduler</a>
+          {/* Backups */}
+          <a href={`/snapshots?site=${encodeURIComponent(siteUrl)}`} style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>🗂 Backups</a>
           <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid #1a1a4e`, borderRadius: 8, background: '#1a1a4e', color: 'white', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>WP Admin ↗</a>
           <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>View Site ↗</a>
         </div>
@@ -552,19 +557,38 @@ function DashboardInner() {
                   {/* Clickable options from AI */}
                   {msg.options && msg.options.length > 0 && !msg.actionResult && (
                     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column' as const, gap: 7 }}>
-                      {msg.options.map((opt: any, oi: number) => (
-                        <button key={oi} onClick={() => send(opt.label)} style={{
-                          padding: '9px 14px', border: `1.5px solid #1a1a4e`, borderRadius: 9,
-                          background: '#1a1a4e', color: 'white', fontSize: 15, fontWeight: 600,
-                          cursor: 'pointer', fontFamily: 'Poppins, sans-serif', textAlign: 'left' as const,
-                          transition: 'all 0.15s',
-                        }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#f3af00'; e.currentTarget.style.color = '#1a1a4e'; e.currentTarget.style.borderColor = '#f3af00' }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#1a1a4e'; e.currentTarget.style.color = 'white'; e.currentTarget.style.borderColor = '#1a1a4e' }}
-                        >
-                          → {opt.label}
-                        </button>
-                      ))}
+                      {msg.options.map((opt: any, oi: number) => {
+                        const isVariation = /^variation\s+[a-c]/i.test(opt.label)
+                        return (
+                          <button key={oi} onClick={() => {
+                            if (isVariation) {
+                              const varLetter = opt.label.match(/variation\s+([a-c])/i)?.[1]?.toUpperCase()
+                              if (varLetter) {
+                                const fields: Record<string,string> = {}
+                                const varBlock = msg.content.match(new RegExp(`Variation ${varLetter}[^\n]*\n([\\s\\S]*?)(?=---\n|Variation [A-C]|$)`))?.[1] || ''
+                                varBlock.split('\n').forEach(line => {
+                                  const m = line.match(/[-•]\s*\*?\*?([^:*]+)\*?\*?:\s*["""]?(.+?)["""]?\s*$/)
+                                  if (m) fields[m[1].trim()] = m[2].trim()
+                                })
+                                setVariationPreview({ label: opt.label, fields })
+                              }
+                            }
+                            send(opt.label)
+                          }} style={{
+                            padding: '9px 14px', borderRadius: 9,
+                            border: isVariation ? `1.5px solid #f3af00` : `1.5px solid #1a1a4e`,
+                            background: isVariation ? '#fffbeb' : '#1a1a4e',
+                            color: isVariation ? '#92400E' : 'white',
+                            fontSize: 14, fontWeight: 600,
+                            cursor: 'pointer', textAlign: 'left' as const, transition: 'all 0.15s',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#f3af00'; e.currentTarget.style.color = '#1a1a4e'; e.currentTarget.style.borderColor = '#f3af00' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = isVariation ? '#fffbeb' : '#1a1a4e'; e.currentTarget.style.color = isVariation ? '#92400E' : 'white'; e.currentTarget.style.borderColor = isVariation ? '#f3af00' : '#1a1a4e' }}
+                          >
+                            {isVariation ? '✦ ' : '→ '}{opt.label}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
 
@@ -688,7 +712,7 @@ function DashboardInner() {
         </div>{/* end left panel */}
 
         {/* ── RIGHT: LIVE SITE PREVIEW ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, background: '#E8E4DF', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, background: '#E8E4DF', overflow: 'hidden', position: 'relative' }}>
 
           {/* Preview toolbar */}
           <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -696,12 +720,14 @@ function DashboardInner() {
               {['#FF5F57','#FFBD2E','#28CA41'].map(col => <div key={col} style={{ width: 11, height: 11, borderRadius: '50%', background: col }}/>)}
             </div>
             <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 12px', fontSize: 12, color: C.text3, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-              {previewUrl || cleanUrl}
+              {variationPreview ? `✦ Preview: ${variationPreview.label}` : (previewUrl || cleanUrl)}
             </div>
-            {/* Desktop / Mobile toggle */}
+            {variationPreview && (
+              <button onClick={() => setVariationPreview(null)} style={{ padding: '5px 12px', background: '#1a1a4e', border: 'none', borderRadius: 7, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>← Back to live</button>
+            )}
             <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
               {(['desktop','mobile'] as const).map(m => (
-                <button key={m} onClick={() => setPreviewMode(m)} style={{ padding: '5px 12px', border: 'none', cursor: 'pointer', fontSize: 12, background: previewMode===m?C.text:'white', color: previewMode===m?'white':C.text2, fontFamily: 'Poppins, sans-serif' }}>
+                <button key={m} onClick={() => setPreviewMode(m)} style={{ padding: '5px 12px', border: 'none', cursor: 'pointer', fontSize: 12, background: previewMode===m?C.text:'white', color: previewMode===m?'white':C.text2 }}>
                   {m === 'desktop' ? '🖥' : '📱'}
                 </button>
               ))}
@@ -710,37 +736,78 @@ function DashboardInner() {
             <a href={previewUrl || cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '5px 10px', border: `1px solid ${C.border}`, borderRadius: 7, background: 'white', color: C.text2, fontSize: 12, textDecoration: 'none' }}>↗</a>
           </div>
 
-          {/* iframe */}
-          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
-            <div style={{
-              width: previewMode==='mobile' ? 390 : '100%',
-              height: '100%', minHeight: 500, background: C.white,
-              borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-              overflow: 'hidden', position: 'relative',
-            }}>
-              {(previewUrl || cleanUrl) ? (
-                <iframe
-                  key={iframeKey}
-                  src={previewUrl || cleanUrl}
-                  style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                  title="Live site preview"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
-                />
-              ) : (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, color: C.text3, gap: 12 }}>
-                  <div style={{ fontSize: 40 }}>🌐</div>
-                  <div style={{ fontSize: 15, fontWeight: 500 }}>Connect a site to see the preview</div>
+          {/* Variation preview overlay */}
+          {variationPreview ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
+              <div style={{ width: previewMode==='mobile'?390:'100%', maxWidth: 860, background: C.white, borderRadius: 12, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+                {/* Mock browser chrome */}
+                <div style={{ background: '#f0f0f0', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #ddd' }}>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {['#FF5F57','#FFBD2E','#28CA41'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }}/>)}
+                  </div>
+                  <div style={{ flex: 1, background: 'white', borderRadius: 5, padding: '4px 10px', fontSize: 11, color: '#999' }}>{cleanUrl}</div>
                 </div>
-              )}
+                {/* Hero section mock */}
+                <div style={{ background: 'linear-gradient(135deg, #1a1a4e 0%, #2d2d7a 100%)', padding: '60px 48px', textAlign: 'center' as const }}>
+                  <div style={{ display: 'inline-block', background: 'rgba(243,175,0,0.2)', border: '1px solid rgba(243,175,0,0.4)', borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 600, color: '#f3af00', marginBottom: 20, letterSpacing: '0.05em' }}>
+                    ✦ PREVIEW — {variationPreview.label.toUpperCase()}
+                  </div>
+                  <h1 style={{ fontSize: previewMode==='mobile'?24:36, fontWeight: 800, color: 'white', marginBottom: 16, lineHeight: 1.25 }}>
+                    {variationPreview.fields['Headline'] || variationPreview.fields['Title'] || 'Hero Headline'}
+                  </h1>
+                  <p style={{ fontSize: previewMode==='mobile'?14:18, fontWeight: 500, color: 'rgba(255,255,255,0.75)', marginBottom: 32, maxWidth: 560, margin: '0 auto 32px' }}>
+                    {variationPreview.fields['Subtext'] || variationPreview.fields['Subtitle'] || variationPreview.fields['Description'] || ''}
+                  </p>
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' as const }}>
+                    {(variationPreview.fields['Button'] || variationPreview.fields['CTA'] || variationPreview.fields['Button Text']) && (
+                      <div style={{ padding: '14px 32px', background: '#f3af00', borderRadius: 8, color: '#1a1a4e', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+                        {variationPreview.fields['Button'] || variationPreview.fields['CTA'] || variationPreview.fields['Button Text']}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Body placeholder */}
+                <div style={{ padding: '32px 48px', background: 'white' }}>
+                  {Object.entries(variationPreview.fields).filter(([k]) => !['Headline','Title','Subtext','Subtitle','Button','CTA','Button Text','Description'].includes(k)).map(([key, val]) => (
+                    <div key={key} style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a4e', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>{key}</div>
+                      <div style={{ fontSize: 15, color: '#444', lineHeight: 1.6 }}>{val}</div>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                    {[1,2,3].map(n => <div key={n} style={{ flex: 1, height: 80, background: '#f5f5f5', borderRadius: 8 }}/>)}
+                  </div>
+                  <div style={{ height: 16, background: '#f5f5f5', borderRadius: 4, marginTop: 20, width: '70%' }}/>
+                  <div style={{ height: 16, background: '#f5f5f5', borderRadius: 4, marginTop: 10, width: '50%' }}/>
+                </div>
+                <div style={{ padding: '12px 48px', background: '#1a1a4e', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>This is a preview — not live yet</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#f3af00' }}>Reply in chat to apply or change →</div>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* iframe */
+            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
+              <div style={{ width: previewMode==='mobile' ? 390 : '100%', height: '100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden', position: 'relative' }}>
+                {(previewUrl || cleanUrl) ? (
+                  <iframe key={iframeKey} src={previewUrl || cleanUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Live site preview" sandbox="allow-same-origin allow-scripts allow-forms"/>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, color: C.text3, gap: 12 }}>
+                    <div style={{ fontSize: 40 }}>🌐</div>
+                    <div style={{ fontSize: 15, fontWeight: 500 }}>Connect a site to see the preview</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Preview status bar */}
           <div style={{ background: C.white, borderTop: `1px solid ${C.border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: C.text3, flexShrink: 0 }}>
-            <span>Live preview — changes appear here automatically</span>
+            <span>{variationPreview ? `Previewing: ${variationPreview.label} — reply in chat to apply` : 'Live preview — changes appear here automatically'}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.green }}/>
-              Connected
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: variationPreview ? C.gold : C.green }}/>
+              {variationPreview ? 'Preview Mode' : 'Connected'}
             </span>
           </div>
         </div>

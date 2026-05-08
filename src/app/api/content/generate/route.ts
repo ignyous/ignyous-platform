@@ -84,12 +84,22 @@ Return as JSON only:
         status:       requireApproval ? 'pending_approval' : 'scheduled',
         approvalToken: requireApproval ? approvalToken : null,
         frequency:    frequency || 'once',
-        scheduledFor: new Date(Date.now() + 60000), // 1 min from now for preview
+        scheduledFor: (() => {
+          const now = new Date()
+          if (frequency === 'once') { now.setMinutes(now.getMinutes() + 5); return now }
+          if (frequency === 'daily') { now.setDate(now.getDate() + 1); now.setHours(9,0,0,0); return now }
+          if (frequency === 'weekly') { now.setDate(now.getDate() + 7); now.setHours(9,0,0,0); return now }
+          if (frequency === 'monthly') { now.setMonth(now.getMonth() + 1); now.setDate(1); now.setHours(9,0,0,0); return now }
+          return now
+        })(),
       }
     })
 
     // Send approval email if required
-    if (requireApproval && adminEmail && process.env.RESEND_API_KEY) {
+    if (requireApproval && adminEmail) {
+      if (!process.env.RESEND_API_KEY) {
+        console.warn('[content/generate] RESEND_API_KEY not set — skipping email')
+      } else {
       const approveUrl = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=approve`
       const rejectUrl  = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=reject`
 
@@ -97,7 +107,7 @@ Return as JSON only:
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from:    'ignyous@ignyous.ai',
+          from:    'ignyous AI <noreply@ignyous.ai>',
           to:      adminEmail,
           subject: `[ignyous] Approve post: "${post.title}"`,
           html: `
@@ -116,6 +126,9 @@ Return as JSON only:
         })
       })
     }
+
+      } // end RESEND_API_KEY check
+    } // end requireApproval check
 
     return NextResponse.json({ success: true, post: { ...scheduled, generatedContent: post } })
   } catch (err: any) {

@@ -6,10 +6,10 @@ import Link from 'next/link'
 
 const C = {
   primary: '#1a1a4e', primaryHover: '#252566', primaryBorder: 'rgba(255,255,255,0.1)',
-  gold: '#f3af00', goldDim: '#fffbeb',
+  gold: '#f3af00',
   text: '#1A1A2E', text2: '#6B6B8A', text3: '#A0A0C0',
   border: '#E2E2F0', surface: '#F7F7FD', white: '#FFFFFF',
-  green: '#1E7B4B', red: '#B91C1C',
+  green: '#1E7B4B',
 }
 interface Site { id: string; url: string; name: string | null; connectedAt: string }
 function siteSlug(u: string) { return u.replace(/^https?:\/\//, '').replace(/\/$/, '') }
@@ -21,19 +21,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sites, setSites]         = useState<Site[]>([])
   const [showMenu, setShowMenu]   = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [activeSiteUrl, setActiveSiteUrl] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
     if (status === 'authenticated') loadSites()
   }, [status])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search)
-      setActiveSiteUrl(p.get('site') || '')
-    }
-  }, [path])
 
   async function loadSites() {
     try {
@@ -52,7 +44,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const currentSite = sites.find(s => path.includes(encodeURIComponent(s.url)) || path.includes(s.url.replace(/^https?:\/\//,'')))
-  const schedulerUrl = activeSiteUrl ? `/content?site=${encodeURIComponent(activeSiteUrl)}` : '/content'
 
   if (status === 'loading') return (
     <div style={{ minHeight:'100vh', background:C.surface, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -68,7 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div style={{ display:'flex', minHeight:'100vh', fontFamily:'Poppins, sans-serif' }}>
       <style>{`
         *{font-family:Poppins,sans-serif!important;font-weight:500;}
-        h1,h2,h3,h4,h5,h6,.font-bold,.fw-bold{font-weight:700!important;}
+        h1,h2,h3,h4,h5,h6{font-weight:700!important;}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
         ::-webkit-scrollbar{width:4px;height:4px}
@@ -77,8 +68,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* SIDEBAR */}
       <div style={{ width:W, flexShrink:0, background:C.primary, display:'flex', flexDirection:'column' as const, position:'sticky', top:0, height:'100vh', overflowY:'auto', overflowX:'hidden', transition:'width .2s ease' }}>
-
-        {/* Logo row */}
         <div style={{ padding:'16px 12px', borderBottom:`1px solid ${C.primaryBorder}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, minHeight:60 }}>
           {!collapsed && (
             <div style={{ display:'flex', alignItems:'center', gap:9, overflow:'hidden' }}>
@@ -98,7 +87,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* My Sites */}
         {!collapsed && <div style={{ padding:'16px 14px 5px', fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.35)', textTransform:'uppercase' as const, letterSpacing:'0.1em' }}>My Sites</div>}
 
         <div style={{ flex:1, overflowY:'auto' }}>
@@ -107,7 +95,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             const slug   = siteSlug(site.url)
             const active = path.includes(encodeURIComponent(site.url)) || path.includes(slug)
             return (
-              <Link key={site.id} href={`/dashboard?site=${encodeURIComponent(site.url)}&key=`} title={collapsed ? (site.name||slug) : ''} style={{
+              <Link key={site.id} href={`/dashboard?site=${encodeURIComponent(site.url)}&key=`} title={collapsed?(site.name||slug):''} style={{
                 display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
                 justifyContent:collapsed?'center':'flex-start', textDecoration:'none', transition:'background 0.15s',
                 background:active?'rgba(243,175,0,0.13)':'transparent', borderLeft:`3px solid ${active?C.gold:'transparent'}`,
@@ -126,7 +114,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
           <Link href="/bridge/connect" title={collapsed?'Connect a site':''} style={{
             display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
-            justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, fontWeight:500, transition:'color 0.15s',
+            justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, transition:'color 0.15s',
           }}
             onMouseEnter={e=>(e.currentTarget.style.color='white')}
             onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.4)')}
@@ -136,12 +124,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        {/* Bottom */}
         <div style={{ borderTop:`1px solid ${C.primaryBorder}`, padding:'8px 0' }}>
           {[{icon:'⚙',label:'Settings',href:'/settings'},{icon:'❓',label:'Help',href:'/help'}].map(item=>(
             <Link key={item.href} href={item.href} title={collapsed?item.label:''} style={{
               display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
-              justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, fontWeight:500, transition:'color 0.15s',
+              justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, transition:'color 0.15s',
             }}
               onMouseEnter={e=>(e.currentTarget.style.color='white')}
               onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.4)')}
@@ -154,8 +141,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* MAIN */}
       <div style={{ flex:1, display:'flex', flexDirection:'column' as const, minWidth:0 }}>
-
-        {/* Topbar */}
+        {/* Topbar — no Content Scheduler here, it lives in the site strip */}
         <div style={{ height:60, background:C.primary, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', position:'sticky', top:0, zIndex:50, boxShadow:'0 2px 16px rgba(26,26,78,0.25)' }}>
           <div style={{ fontSize:15, fontWeight:500, color:'rgba(255,255,255,0.65)', display:'flex', alignItems:'center', gap:8 }}>
             {currentSite ? <>
@@ -164,26 +150,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span style={{ fontWeight:700, color:'white' }}>{currentSite.name || siteSlug(currentSite.url)}</span>
             </> : <span style={{ fontWeight:700, color:'white' }}>Dashboard</span>}
           </div>
-
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            {/* Content Scheduler */}
-            <Link href={schedulerUrl} style={{
-              display:'flex', alignItems:'center', gap:7, padding:'8px 18px',
-              background:C.gold, color:'#1a1a4e', borderRadius:8, textDecoration:'none',
-              fontSize:14, fontWeight:700, boxShadow:'0 2px 8px rgba(243,175,0,0.35)', transition:'all 0.15s',
-            }}
-              onMouseEnter={e=>{ e.currentTarget.style.background='#ffc107'; e.currentTarget.style.transform='translateY(-1px)' }}
-              onMouseLeave={e=>{ e.currentTarget.style.background=C.gold; e.currentTarget.style.transform='translateY(0)' }}
-            >
-              <span style={{ fontSize:15 }}>✍️</span> Content Scheduler
-            </Link>
-
-            {/* Bell */}
             <button style={{ width:38, height:38, borderRadius:9, border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.08)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, position:'relative' }}>
               🔔<div style={{ position:'absolute', top:7, right:7, width:7, height:7, borderRadius:'50%', background:C.gold, border:'1.5px solid #1a1a4e' }}/>
             </button>
-
-            {/* Profile */}
             <div style={{ position:'relative' }}>
               <button onClick={()=>setShowMenu(!showMenu)} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px 5px 5px', border:'1px solid rgba(255,255,255,0.15)', borderRadius:10, background:'rgba(255,255,255,0.08)', cursor:'pointer' }}>
                 <div style={{ width:30, height:30, borderRadius:'50%', background:C.gold, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'#1a1a4e' }}>
@@ -201,7 +171,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <div style={{ fontSize:12, color:C.text3, marginTop:2 }}>{session?.user?.email}</div>
                   </div>
                   {[{label:'Account Settings',icon:'⚙',href:'/settings'},{label:'Billing',icon:'💳',href:'/billing'},{label:'Help & Support',icon:'❓',href:'/help'}].map(item=>(
-                    <Link key={item.href} href={item.href} onClick={()=>setShowMenu(false)} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 18px', textDecoration:'none', color:C.text, fontSize:14, fontWeight:500, transition:'background 0.1s' }}
+                    <Link key={item.href} href={item.href} onClick={()=>setShowMenu(false)} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 18px', textDecoration:'none', color:C.text, fontSize:14, transition:'background 0.1s' }}
                       onMouseEnter={e=>(e.currentTarget.style.background=C.surface)}
                       onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
                     ><span style={{ fontSize:16 }}>{item.icon}</span>{item.label}</Link>
@@ -216,7 +186,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
-
         <div style={{ flex:1, background:C.white }}>{children}</div>
       </div>
     </div>
