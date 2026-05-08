@@ -126,7 +126,13 @@ Then the main action in the next step.
 - active_plugins[].slug: check for "elementor", "contact-form-7", "wpforms", "woocommerce", "wordpress-seo", "rank-math-seo"
 - has_contact_form_7, has_wpforms, has_woocommerce, has_yoast: boolean shortcuts
 - pages[].has_form, pages[].form_type: per-page form detection
-- pages[].id: integer to use in update_page actions`
+- pages[].id: integer to use in update_page actions
+
+━━━ CRITICAL: PAGES MUST BE LOADED BEFORE UPDATING ━━━
+ALWAYS check: do pages[] have real entries with valid integer id values?
+If pages[] is empty or missing, say: "I need to load your site first — give me a moment." Then use scan_site action.
+NEVER emit update_page with a missing, undefined, or null pageId.
+Homepage is usually the page with the lowest id or slug "home" or status "publish" and not "privacy-policy".`
 
 export async function POST(req: NextRequest) {
   const start = Date.now()

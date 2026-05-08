@@ -117,11 +117,22 @@ Return ONLY this exact format:
     if (requireApproval && adminEmail) {
       if (!process.env.RESEND_API_KEY) {
         console.warn('[content/generate] RESEND_API_KEY not set — skipping email')
+        await logActivity({ siteUrl, category: 'content', action: 'email_skipped', status: 'failed',
+          summary: 'Approval email NOT sent — RESEND_API_KEY missing in Vercel env vars',
+          detail: { adminEmail, fix: 'Add RESEND_API_KEY to Vercel → Settings → Environment Variables' }
+        }).catch(() => {})
       } else {
-        const approveUrl = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=approve`
-        const rejectUrl  = `${process.env.NEXTAUTH_URL}/api/content/approve?token=${approvalToken}&action=reject`
+        // Use production URL — never localhost
+        const baseUrl = (process.env.NEXTAUTH_URL || '').includes('localhost')
+          ? 'https://ignyous.ai'
+          : (process.env.NEXTAUTH_URL || 'https://ignyous.ai')
+        const approveUrl = `${baseUrl}/api/content/approve?token=${approvalToken}&action=approve`
+        const rejectUrl  = `${baseUrl}/api/content/approve?token=${approvalToken}&action=reject`
 
-        await fetch('https://api.resend.com/emails', {
+        console.log('[email] Sending approval email to:', adminEmail, 'via Resend')
+        console.log('[email] NEXTAUTH_URL:', process.env.NEXTAUTH_URL, '→ using baseUrl:', baseUrl)
+
+        const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({

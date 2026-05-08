@@ -408,7 +408,10 @@ function DashboardInner() {
     try {
       switch (action.type) {
         case 'update_page': {
-          // Try POST first (ignyous bridge), fall back with helpful error
+          if (!action.pageId) {
+            result = { type: 'update_page', success: false, message: 'Failed: page ID unknown — pages may not have loaded yet. Try refreshing or ask again once the site info loads.' }
+            break
+          }
           const r = await bridge(`pages/${action.pageId}`, 'POST', { title: action.title, content: action.content, status: action.status || 'publish' })
           const targetPage = pages.find(p => p.id === action.pageId)
           const pageUrl = targetPage?.link
