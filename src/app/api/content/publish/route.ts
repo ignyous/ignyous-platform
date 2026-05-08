@@ -40,6 +40,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Site credentials not found — reconnect the site' }, { status: 400 })
     }
 
+    // Snapshot before publishing
+    try {
+      const base = site.url.replace(/\/$/, '')
+      await fetch(`${base}/wp-json/ignyous/v1/snapshot`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${site.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: `Before post: "${post.title}"` }),
+      })
+    } catch {}
+
     // Push to WordPress via bridge
     const { ok, data } = await bridgeCall(site.url, site.apiKey, {
       title:              post.title,

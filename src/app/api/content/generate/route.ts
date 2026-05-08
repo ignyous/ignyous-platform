@@ -99,8 +99,8 @@ Return ONLY this exact format:
         topics:       Array.isArray(topics) ? topics : [topics],
         imageUrl,
         imageAlt,
-        status:       requireApproval ? 'pending_approval' : 'scheduled',
-        approvalToken: requireApproval ? approvalToken : null,
+        status:       (frequency === 'once' || requireApproval) ? 'pending_approval' : 'scheduled',
+        approvalToken: (frequency === 'once' || requireApproval) ? approvalToken : null,
         frequency:    frequency || 'once',
         scheduledFor: (() => {
           const now = new Date()
@@ -113,41 +113,6 @@ Return ONLY this exact format:
       }
     })
 
-
-    // ── Publish immediately for one-time posts with no approval ─────
-    let immediatePublishUrl = ''
-    if (frequency === 'once' && !requireApproval) {
-      try {
-        const site = await prisma.site.findFirst({ where: { url: siteUrl } })
-        if (site?.apiKey && site?.url) {
-          const base    = site.url.replace(/\/$/, '')
-          const headers: Record<string,string> = { 'Authorization': `Bearer ${site.apiKey}`, 'Content-Type': 'application/json' }
-          const wpBody  = JSON.stringify({
-            title: post.title, content: post.content, excerpt: post.excerpt || '',
-            status: 'publish', featured_image_url: imageUrl || undefined,
-            seo_title: post.seoTitle || post.title,
-            seo_description: post.seoDescription || post.excerpt || '',
-          })
-          let published = false
-          for (const method of ['POST', 'PUT', 'PATCH']) {
-            try {
-              const r = await fetch(`${base}/wp-json/ignyous/v1/posts`, { method, headers, body: wpBody })
-              if (r.status === 404 || r.status === 405) continue
-              const d = await r.json().catch(() => ({}))
-              if (r.ok && (d.success || d.id)) {
-                immediatePublishUrl = d.data?.post?.link || d.link || ''
-                await prisma.scheduledPost.update({
-                  where: { id: scheduled.id },
-                  data:  { status: 'published', publishedAt: new Date(), publishedUrl: immediatePublishUrl },
-                })
-                published = true; break
-              }
-            } catch {}
-          }
-          if (!published) console.warn('[content/generate] Immediate publish failed — use Publish Now button in dashboard')
-        }
-      } catch (e: any) { console.warn('[content/generate] Immediate publish error:', (e as any).message) }
-    }
 
     // Send approval email if required
     if (requireApproval && adminEmail) {

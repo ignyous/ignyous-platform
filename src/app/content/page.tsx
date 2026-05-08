@@ -102,7 +102,7 @@ function ContentInner() {
       if (data.success) {
         setPreview(data.post)
         setPosts(prev => [data.post, ...prev])
-        if (!requireApproval && frequency !== 'once') setTab('scheduled')
+        // stay on generate tab so preview remains visible
       } else {
         alert('Error: ' + (data.error || 'Unknown error'))
       }
@@ -339,8 +339,10 @@ function ContentInner() {
                     </div>
                     {preview.status === 'pending_approval' && (
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => approvePost(preview.id, 'approve')} style={{ ...BTN('gold'), flex: 1, justifyContent: 'center', display: 'flex' }}>✓ Approve & Schedule</button>
-                        <button onClick={() => approvePost(preview.id, 'reject')} style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✗ Reject</button>
+                        <button onClick={() => approvePost(preview.id, 'approve')} style={{ ...BTN('gold'), flex: 1, justifyContent: 'center', display: 'flex' }}>
+                          {preview.frequency === 'once' ? '🚀 Publish Post' : '✓ Approve & Schedule'}
+                        </button>
+                        <button onClick={() => approvePost(preview.id, 'reject')} style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✕ Cancel Post</button>
                       </div>
                     )}
                     {(preview.status === 'approved' || preview.status === 'scheduled') && preview.frequency !== 'once' && (
