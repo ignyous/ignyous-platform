@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     try {
       const r = await axios({
         method: test.method, url: test.url, headers,
-        data: test.method !== 'GET' ? { title: '__ignyous_test__', content: 'test' } : undefined,
+        data: test.method !== 'GET' ? { title: '__ignyous_test__', content: 'test', status: 'draft' } : undefined,
         timeout: 8000, validateStatus: () => true,
       })
       results[test.name] = {
@@ -45,6 +45,23 @@ export async function GET(req: NextRequest) {
     } catch (e: any) {
       results[test.name] = { status: 'network_error', ok: false, snippet: e.message }
     }
+  }
+
+
+  // Clean up any test posts/pages created during diagnostic
+  if (results['posts_POST']?.ok) {
+    try {
+      const testPostId = results['posts_POST']?.snippet?.match(/"id":(\d+)/)?.[1]
+      if (testPostId && apiKey) {
+        await axios({ method: 'DELETE', url: `${base}/wp-json/ignyous/v1/posts/${testPostId}`, headers, timeout: 5000, validateStatus: () => true })
+      }
+    } catch {}
+  }
+  if (results['pages_id_PUT']?.ok || results['pages_id_PATCH']?.ok || results['pages_id_POST']?.ok) {
+    // Restore page 2 title (we changed it to __ignyous_test__)
+    try {
+      await axios({ method: 'POST', url: `${base}/wp-json/ignyous/v1/pages/2`, headers, data: { title: 'Sample Page' }, timeout: 5000, validateStatus: () => true })
+    } catch {}
   }
 
   let ignyousRoutes: string[] = []

@@ -39,8 +39,117 @@ export async function GET(req: NextRequest) {
   const action = searchParams.get('action')
 
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 })
-  const post = await prisma.scheduledPost.findUnique({ where: { approvalToken: token } })
-  if (!post) return NextResponse.json({ error: 'Post not found or already processed', status: 404 })
+
+  // Look up by active token OR by _used suffix (already processed)
+  let post = await prisma.scheduledPost.findFirst({
+    where: { OR: [
+      { approvalToken: token },
+      { approvalToken: token + '_used' },
+    ]}
+  })
+
+  // Already processed — show friendly page instead of error
+  if (post && post.approvalToken === token + '_used') {
+    const alreadyPublished = post.status === 'published'
+    return new NextResponse(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Already Processed</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:#F7F7FD;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:white;border-radius:16px;padding:48px;max-width:440px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+h2{color:#1a1a4e}p{color:#666;line-height:1.6}
+a{display:inline-block;margin-top:20px;background:#1a1a4e;color:white;padding:12px 28px;border-radius:9px;text-decoration:none;font-weight:bold}
+</style></head><body><div class="card">
+  <div style="font-size:60px">${alreadyPublished ? '✅' : '👍'}</div>
+  <h2>Already ${alreadyPublished ? 'Published' : 'Processed'}</h2>
+  <p>"${post.title}" was already ${alreadyPublished ? 'published to your site' : `marked as ${post.status}`}. Nothing to do!</p>
+  ${post.publishedUrl ? `<a href="${post.publishedUrl}" target="_blank">View Live Post ↗</a>` : ''}
+  <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/content">View Dashboard</a>
+</div></body></html>`, { headers: { 'Content-Type': 'text/html' } })
+  }
+
+  if (!post) {
+    return new NextResponse(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Not Found</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:#FEF2F2;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:white;border-radius:16px;padding:48px;max-width:440px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+h2{color:#B91C1C}p{color:#666}a{display:inline-block;margin-top:20px;background:#1a1a4e;color:white;padding:12px 28px;border-radius:9px;text-decoration:none;font-weight:bold}
+</style></head><body><div class="card">
+  <div style="font-size:60px">❓</div>
+  <h2>Link Expired</h2>
+  <p>This approval link has expired or was already used. Check your dashboard for post status.</p>
+  <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/content">View Dashboard</a>
+</div></body></html>`, { headers: { 'Content-Type': 'text/html' } })
+  }
+
+  if (action === 'approve') {
+    let published = false, publishedUrl = '', publishError = ''
+    try {
+      const site = await prisma.site.findFirst({ where: { id: post.siteId } }).catch(() => null)
+      if (site?.apiKey && site?.url) {
+        await takeSnapshot(site.url, site.apiKey, `Before publishing: "${post.title}"`)
+        const { ok, data } = await bridgeCall(site.url, site.apiKey, 'posts', {
+          title: post.title, content: post.content, excerpt: post.excerpt || '',
+          status: 'publish', featured_image_url: post.imageUrl || undefined,
+        })
+        if (ok && (data.success || data.id)) {
+          published = true; publishedUrl = data.data?.post?.link || data.link || ''
+        } else { publishError = data?.error || data?.message || 'Bridge call failed' }
+      } else { publishError = 'Site credentials not found' }
+    } catch (e: any) { publishError = e.message }
+
+    // Mark token as _used so we can still find the post if link clicked again
+    await prisma.scheduledPost.update({
+      where: { id: post.id },
+      data: {
+        status:        published ? 'published' : 'approved',
+        approvalToken: token + '_used',       // keep findable, mark as done
+        publishedAt:   published ? new Date() : undefined,
+        publishedUrl:  published ? publishedUrl : undefined,
+      }
+    })
+
+    await logActivity({
+      siteUrl: post.siteId, category: 'content',
+      action:  published ? 'publish_post' : 'approve_post',
+      status:  published ? 'success' : 'pending',
+      summary: published ? `Published via email: "${post.title}"` : `Approved via email (publish pending): "${post.title}"`,
+      detail:  { postId: post.id, publishedUrl, publishError },
+    }).catch(() => {})
+
+    return new NextResponse(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${published ? 'Post Published' : 'Post Approved'}</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:${published?'#F0FAF5':'#EFF6FF'};min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:white;border-radius:16px;padding:48px;max-width:460px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+h2{color:${published?'#1E7B4B':'#1B5FA8'};margin:16px 0 8px}p{color:#666;line-height:1.6}
+a{display:inline-block;margin-top:16px;background:#1a1a4e;color:white;padding:13px 32px;border-radius:9px;text-decoration:none;font-weight:bold;font-size:15px;margin:8px 6px}
+.url{background:#f5f5f5;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;margin:12px 0}
+</style></head><body><div class="card">
+  <div style="font-size:64px">${published ? '🚀' : '✅'}</div>
+  <h2>${published ? 'Post Published!' : 'Post Approved!'}</h2>
+  <p>${published ? `"${post.title}" is now live on your site.` : `"${post.title}" approved. Open dashboard to publish manually.`}</p>
+  ${published && publishedUrl ? `<div class="url">${publishedUrl}</div>` : ''}
+  ${!published && publishError ? `<p style="color:#B91C1C;font-size:13px">Note: ${publishError}</p>` : ''}
+  ${published && publishedUrl ? `<a href="${publishedUrl}" target="_blank">View Live Post ↗</a>` : ''}
+  <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/content">Dashboard</a>
+</div></body></html>`, { headers: { 'Content-Type': 'text/html' } })
+  }
+
+  if (action === 'reject') {
+    await prisma.scheduledPost.update({ where: { id: post.id }, data: { status: 'rejected', approvalToken: token + '_used' } })
+    return new NextResponse(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Post Rejected</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:#FEF2F2;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:white;border-radius:16px;padding:48px;max-width:420px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+h2{color:#B91C1C}p{color:#666}a{display:inline-block;margin-top:20px;background:#1a1a4e;color:white;padding:13px 32px;border-radius:9px;text-decoration:none;font-weight:bold}
+</style></head><body><div class="card">
+  <div style="font-size:64px">❌</div>
+  <h2>Post Rejected</h2>
+  <p>"${post.title}" has been rejected and won't be published.</p>
+  <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/content">Back to Dashboard</a>
+</div></body></html>`, { headers: { 'Content-Type': 'text/html' } })
+  }
+
+  return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+}
 
   if (action === 'approve') {
     // Try to publish to WordPress immediately
@@ -53,11 +162,13 @@ export async function GET(req: NextRequest) {
       if (site?.apiKey && site?.url) {
         await takeSnapshot(site.url, site.apiKey, `Before publishing: "${post.title}"`)
         const { ok, data } = await bridgeCall(site.url, site.apiKey, 'posts', {
-          title:    post.title,
-          content:  post.content,
-          excerpt:  post.excerpt || '',
-          status:   'publish',
+          title:             post.title,
+          content:           post.content,
+          excerpt:           post.excerpt || '',
+          status:            'publish',
           featured_image_url: post.imageUrl || undefined,
+          seo_title:         (post as any).seoTitle        || post.title,
+          seo_description:   (post as any).seoDescription  || post.excerpt || '',
         })
         if (ok && (data.success || data.id)) {
           published    = true

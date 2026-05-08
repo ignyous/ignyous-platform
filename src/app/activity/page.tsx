@@ -49,6 +49,7 @@ function ActivityInner() {
   const [logs, setLogs]               = useState<any[]>([])
   const [total, setTotal]             = useState(0)
   const [loading, setLoading]         = useState(true)
+  const [refreshing, setRefreshing]   = useState(false)
   const [filterSite, setFilterSite]   = useState(initSite)
   const [filterCat, setFilterCat]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -59,7 +60,8 @@ function ActivityInner() {
   const LIMIT = 50
 
   const load = useCallback(async (reset = false) => {
-    setLoading(true)
+    if (reset) setRefreshing(true)
+    else setLoading(true)
     try {
       const offset = reset ? 0 : page * LIMIT
       const url = `/api/activity?limit=${LIMIT}&offset=${offset}${filterSite ? `&site=${encodeURIComponent(filterSite)}` : ''}${filterCat ? `&category=${filterCat}` : ''}`
@@ -68,7 +70,7 @@ function ActivityInner() {
       setLogs(data.logs || [])
       setTotal(data.total || 0)
       if (reset) setPage(0)
-    } catch {} finally { setLoading(false) }
+    } catch {} finally { setLoading(false); setRefreshing(false) }
   }, [page, filterSite, filterCat])
 
   useEffect(() => { load(true) }, [filterSite, filterCat])
@@ -117,8 +119,11 @@ function ActivityInner() {
           }}>
             {autoRefresh ? '⏵ Live' : '⏸ Paused'}
           </button>
-          <button onClick={() => load(true)} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            ↺ Refresh
+          <button onClick={() => load(true)} disabled={refreshing} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: 'white', fontSize: 13, fontWeight: 600, cursor: refreshing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {refreshing
+              ? <><div style={{ width: 13, height: 13, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}/> Refreshing…</>
+              : <>↺ Refresh</>
+            }
           </button>
         </div>
       </div>
