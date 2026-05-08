@@ -64,6 +64,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-thumb{background:rgba(26,26,78,.15);border-radius:4px}
+        button{transition:all 0.15s ease!important;}
+        button:not(:disabled):hover{filter:brightness(0.88);transform:translateY(-1px);}
+        button:not(:disabled):active{transform:scale(0.96)!important;filter:brightness(0.8)!important;}
+        a[href]{transition:opacity 0.15s ease;}
+        a[href]:hover{opacity:0.8;}
       `}</style>
 
       {/* SIDEBAR */}

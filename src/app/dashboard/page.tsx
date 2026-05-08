@@ -417,7 +417,12 @@ function DashboardInner() {
           const pageUrl = targetPage?.link
           const pageTitle = action.title || targetPage?.title || 'Page'
           result = { type: 'update_page', success: r.success, message: r.success ? `"${pageTitle}" updated successfully` : `Failed: ${r.error || r.message}`, url: pageUrl }
-          if (r.success && pageUrl) { setPreviewUrl(pageUrl); setIframeKey(k => k + 1) }
+          if (r.success && pageUrl) {
+            setPreviewUrl(pageUrl)
+            // Immediate key bump + delayed re-bump to catch WP cache flush
+            setIframeKey(k => k + 1)
+            setTimeout(() => setIframeKey(k => k + 1), 3000)
+          }
           break
         }
         case 'create_page': {

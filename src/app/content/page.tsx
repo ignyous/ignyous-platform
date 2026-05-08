@@ -87,10 +87,21 @@ function ContentInner() {
     } catch {} finally { setLoadingCats(false) }
   }
 
-  async function loadPosts() {
-    const res  = await fetch('/api/content/generate')
-    const data = await res.json()
-    if (data.posts) setPosts(data.posts)
+  async function loadPosts(showFeedback = false) {
+    if (showFeedback) setGenerating(true)
+    try {
+      const res  = await fetch('/api/content/generate')
+      if (!res.ok) { showToast('Failed to load posts — please sign in again', 'error'); return }
+      const data = await res.json()
+      if (data.posts) {
+        setPosts(data.posts)
+        if (showFeedback) showToast('✓ Schedule refreshed')
+      }
+    } catch (e: any) {
+      if (showFeedback) showToast('Refresh failed: ' + e.message, 'error')
+    } finally {
+      if (showFeedback) setGenerating(false)
+    }
   }
 
   async function generate() {
@@ -454,7 +465,7 @@ function ContentInner() {
                   </button>
                 ))}
               </div>
-              <button onClick={loadPosts} style={{ ...BTN('ghost'), fontSize: 13, padding: '6px 14px', marginLeft: 'auto' }}>↺ Refresh</button>
+              <button onClick={() => loadPosts(true)} style={{ ...BTN('ghost'), fontSize: 13, padding: '6px 14px', marginLeft: 'auto' }}>↺ Refresh</button>
             </div>
             {filteredPosts.length === 0 ? (
               <div style={{ textAlign: 'center' as const, padding: '80px', color: C.text3 }}>
