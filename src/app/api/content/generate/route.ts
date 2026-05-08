@@ -122,10 +122,8 @@ Return ONLY this exact format:
           detail: { adminEmail, fix: 'Add RESEND_API_KEY to Vercel → Settings → Environment Variables' }
         }).catch(() => {})
       } else {
-        // Use production URL — never localhost
-        const baseUrl = (process.env.NEXTAUTH_URL || '').includes('localhost')
-          ? 'https://ignyous.ai'
-          : (process.env.NEXTAUTH_URL || 'https://ignyous.ai')
+        // Use NEXTAUTH_URL as-is — localhost is fine for local dev
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
         const approveUrl = `${baseUrl}/api/content/approve?token=${approvalToken}&action=approve`
         const rejectUrl  = `${baseUrl}/api/content/approve?token=${approvalToken}&action=reject`
 
