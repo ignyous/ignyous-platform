@@ -227,6 +227,7 @@ function DashboardInner() {
   const [iframeKey, setIframeKey]       = useState(0)
   const [previewMode, setPreviewMode]   = useState<'desktop'|'mobile'>('desktop')
   const [variationPreview, setVariationPreview] = useState<{label: string; fields: Record<string,string>} | null>(null)
+  const [keyError, setKeyError]               = useState(false)
   const [pendingAction, setPendingAction]       = useState<{action: any; msg: Message} | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
@@ -237,11 +238,15 @@ function DashboardInner() {
   }, [messages])
 
   async function bridge(endpoint: string, method = 'GET', body?: any) {
-    const res = await fetch('/api/wordpress', {
+    const res  = await fetch('/api/wordpress', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint, method, body }),
     })
-    return res.json()
+    const data = await res.json()
+    // 401 = key mismatch between DB and plugin
+    if (res.status === 401 || data?.error?.includes('not allowed')) setKeyError(true)
+    else setKeyError(false)
+    return data
   }
 
   async function loadAll() {
@@ -540,7 +545,32 @@ function DashboardInner() {
       
       {showThemes && <ThemeBrowser onSelect={onThemeSelect} onClose={() => setShowThemes(false)} currentTheme={siteInfo?.theme?.name}/>}
 
-      {/* Site header strip */}
+      {/* Key mismatch warning */}
+      {keyError && (
+        <div style={{ background: '#FEF2F2', borderBottom: `1px solid #FECACA`, padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.red, flex: 1 }}>
+            ⚠️ API key mismatch — the key in ignyous doesn't match your plugin. Paste your plugin's key below to sync:
+          </span>
+          <input
+            placeholder="Paste plugin API key (igk_...)"
+            style={{ padding: '6px 12px', border: `1.5px solid #FECACA`, borderRadius: 8, fontSize: 13, fontFamily: 'monospace', width: 320 }}
+            onKeyDown={async e => {
+              if (e.key === 'Enter') {
+                const newKey = (e.target as HTMLInputElement).value.trim()
+                if (!newKey) return
+                await fetch('/api/sites', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url: siteUrl, apiKey: newKey }),
+                })
+                setApiKey(newKey)
+                setKeyError(false)
+                loadAll()
+              }
+            }}
+          />
+          <span style={{ fontSize: 12, color: C.red }}>Press Enter to save</span>
+        </div>
+      )}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentDim, border: `1px solid ${C.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19 }}>🌐</div>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { logActivity, getActivityLogs } from '@/lib/activityLogger'
+import { getActivityLogs, logActivity } from '@/lib/activityLogger'
 
 // GET /api/activity — fetch logs (open for now, admin-only later)
 export async function GET(req: NextRequest) {
@@ -17,21 +16,20 @@ export async function GET(req: NextRequest) {
 // POST /api/activity — called from client-side to log an event
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession()
-    const body    = await req.json()
-
+    const body = await req.json()
+    // Don't require session — log whatever comes in (caller already authenticated)
     await logActivity({
-      userId:    session?.user?.email ?? undefined,
-      siteUrl:   body.siteUrl,
-      siteName:  body.siteName,
+      userId:    body.userId    || undefined,
+      siteUrl:   body.siteUrl   || undefined,
+      siteName:  body.siteName  || undefined,
       category:  body.category  || 'system',
       action:    body.action    || 'unknown',
       status:    body.status    || 'success',
       summary:   body.summary   || '',
-      detail:    body.detail,
-      ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
-      userAgent: req.headers.get('user-agent') ?? undefined,
-      durationMs: body.durationMs,
+      detail:    body.detail    || undefined,
+      ipAddress: req.headers.get('x-forwarded-for') || undefined,
+      userAgent: req.headers.get('user-agent')       || undefined,
+      durationMs: body.durationMs || undefined,
     })
     return NextResponse.json({ success: true })
   } catch (err: any) {

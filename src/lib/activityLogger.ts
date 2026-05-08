@@ -1,6 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+// Use a singleton to avoid connection pool exhaustion
+const globalForPrisma = globalThis as unknown as { prismaLogger: PrismaClient }
+const prisma = globalForPrisma.prismaLogger ?? new PrismaClient()
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaLogger = prisma
 
 export interface LogEvent {
   userId?:    string
@@ -26,16 +29,20 @@ export async function logActivity(event: LogEvent): Promise<void> {
         category:   event.category,
         action:     event.action,
         status:     event.status    ?? 'success',
-        summary:    event.summary,
+        summary:    event.summary.slice(0, 500),   // cap length
         detail:     event.detail    ?? undefined,
         ipAddress:  event.ipAddress ?? null,
         userAgent:  event.userAgent ?? null,
         durationMs: event.durationMs ?? null,
       }
     })
-  } catch (err) {
-    // Never let logging crash the main request
-    console.error('[activity-log] Failed to write:', err)
+  } catch (err: any) {
+    // Table might not exist yet — log to console but never crash caller
+    if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+      console.warn('[activity-log] ActivityLog table missing — run: npx prisma db push')
+    } else {
+      console.error('[activity-log] Failed to write:', err?.message ?? err)
+    }
   }
 }
 
@@ -46,19 +53,26 @@ export async function getActivityLogs(opts: {
   category?: string
   userId?:   string
 }) {
-  const where: any = {}
-  if (opts.siteUrl)  where.siteUrl  = { contains: opts.siteUrl }
-  if (opts.category) where.category = opts.category
-  if (opts.userId)   where.userId   = opts.userId
+  try {
+    const where: any = {}
+    if (opts.siteUrl)  where.siteUrl  = { contains: opts.siteUrl }
+    if (opts.category) where.category = opts.category
+    if (opts.userId)   where.userId   = opts.userId
 
-  const [logs, total] = await Promise.all([
-    prisma.activityLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take:    opts.limit  ?? 100,
-      skip:    opts.offset ?? 0,
-    }),
-    prisma.activityLog.count({ where }),
-  ])
-  return { logs, total }
+    const [logs, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take:    opts.limit  ?? 100,
+        skip:    opts.offset ?? 0,
+      }),
+      prisma.activityLog.count({ where }),
+    ])
+    return { logs, total }
+  } catch (err: any) {
+    if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+      console.warn('[activity-log] ActivityLog table missing — run: npx prisma db push')
+    }
+    return { logs: [], total: 0 }
+  }
 }

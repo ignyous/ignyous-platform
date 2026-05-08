@@ -33,26 +33,43 @@ Site: ${siteUrl}
 
 Requirements:
 - Title: Compelling, SEO-friendly (under 70 chars)
-- Content: 400-600 words, well-structured with headings
+- Content: 400-600 words, well-structured with h2 headings and paragraphs
 - Include a clear call-to-action at the end
-- Write in Gutenberg block format
+- Write content as clean HTML (p, h2, h3, ul, li tags only)
+- No backticks, no JSON, no code blocks in the content
 
-Return as JSON only:
-{
-  "title": "...",
-  "excerpt": "...(2 sentences max)",
-  "content": "...(full Gutenberg HTML blocks)",
-  "suggestedImageQuery": "...(3-4 words for stock photo search)",
-  "tags": ["tag1","tag2","tag3"],
-  "seoTitle": "...",
-  "seoDescription": "..."
-}`
+Return ONLY this exact format:
+<POST>
+<TITLE>your title here</TITLE>
+<EXCERPT>your excerpt here (1-2 sentences)</EXCERPT>
+<CONTENT>your html content here</CONTENT>
+<IMAGE_QUERY>3-4 word stock photo search query</IMAGE_QUERY>
+<TAGS>tag1,tag2,tag3</TAGS>
+<SEO_TITLE>seo title here</SEO_TITLE>
+<SEO_DESC>meta description here</SEO_DESC>
+</POST>`
       }]
     })
 
-    const raw  = response.content[0].type === 'text' ? response.content[0].text : ''
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const post  = JSON.parse(clean)
+    const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+
+    // Parse XML-style response — avoids all JSON escaping issues with HTML content
+    function extractTag(tag: string): string {
+      const m = raw.match(new RegExp(`<${tag}>([\\s\\S]*?)<\/${tag}>`))
+      return m ? m[1].trim() : ''
+    }
+
+    const post = {
+      title:               extractTag('TITLE')       || topicsList + ' — Tips & Insights',
+      excerpt:             extractTag('EXCERPT')     || '',
+      content:             extractTag('CONTENT')     || `<p>An article about ${topicsList}.</p>`,
+      suggestedImageQuery: extractTag('IMAGE_QUERY') || topicsList,
+      tags:                extractTag('TAGS').split(',').map((t: string) => t.trim()).filter(Boolean),
+      seoTitle:            extractTag('SEO_TITLE')   || '',
+      seoDescription:      extractTag('SEO_DESC')    || '',
+    }
+
+    if (!post.title || !post.content) throw new Error('AI response missing required fields: ' + raw.slice(0, 200))
 
     // Fetch image from Unsplash if requested
     let imageUrl = null, imageAlt = null
