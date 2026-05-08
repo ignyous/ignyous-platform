@@ -135,13 +135,6 @@ h2{color:#B91C1C}p{color:#666}a{display:inline-block;margin-top:24px;background:
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
 }
-          <a href="${process.env.NEXTAUTH_URL}/content" style="display:inline-block;margin-top:20px;background:#1a1a4e;color:white;padding:12px 28px;border-radius:8px;text-decoration:none">Back to Dashboard</a>
-        </div>
-      </body></html>`, { headers: { 'Content-Type': 'text/html' } })
-  }
-
-  return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
-}
 
 // ── POST: approve/reject/edit from dashboard ──────────────────────
 export async function POST(req: NextRequest) {
