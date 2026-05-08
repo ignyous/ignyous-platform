@@ -24,10 +24,9 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession()
     if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { postId } = await req.json()
+    const { postId, siteUrl: fallbackSiteUrl, apiKey: fallbackApiKey } = await req.json()
     if (!postId) return NextResponse.json({ error: 'postId required' }, { status: 400 })
 
-    // Load post + site credentials
     const post = await prisma.scheduledPost.findUnique({ where: { id: postId } })
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
 
@@ -35,23 +34,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already published', publishedUrl: post.publishedUrl }, { status: 400 })
     }
 
-    const site = await prisma.site.findFirst({ where: { url: post.siteId } })
-    if (!site?.apiKey || !site?.url) {
+    // Try DB lookup with trailing-slash tolerance, fall back to request-supplied creds
+    const site = await prisma.site.findFirst({
+      where: { OR: [{ url: post.siteId }, { url: (post.siteId||'').replace(/\/$/, '') }, { url: (post.siteId||'') + '/' }] }
+    }).catch(() => null)
+    const resolvedUrl    = site?.url    || fallbackSiteUrl || ''
+    const resolvedApiKey = site?.apiKey || fallbackApiKey  || ''
+    if (!resolvedUrl || !resolvedApiKey) {
       return NextResponse.json({ error: 'Site credentials not found — reconnect the site' }, { status: 400 })
     }
+    // Build a site-like object for the rest of the function
+    const siteResolved = { url: resolvedUrl, apiKey: resolvedApiKey }
 
     // Snapshot before publishing
     try {
-      const base = site.url.replace(/\/$/, '')
+      const base = siteResolved.url.replace(/\/$/, '')
       await fetch(`${base}/wp-json/ignyous/v1/snapshot`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${site.apiKey}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${siteResolved.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ label: `Before post: "${post.title}"` }),
       })
     } catch {}
 
     // Push to WordPress via bridge
-    const { ok, data } = await bridgeCall(site.url, site.apiKey, {
+    const { ok, data } = await bridgeCall(siteResolved.url, siteResolved.apiKey, {
       title:              post.title,
       content:            post.content,
       excerpt:            post.excerpt || '',
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (!ok) {
       const errMsg = data?.error || data?.message || 'Bridge call failed'
       await logActivity({
-        siteUrl: site.url, category: 'content', action: 'publish_post', status: 'failed',
+        siteUrl: siteResolved.url, category: 'content', action: 'publish_post', status: 'failed',
         summary: `Failed to publish "${post.title}": ${errMsg}`,
         detail:  { postId, error: errMsg, bridgeResponse: data },
       }).catch(() => {})
@@ -79,8 +85,8 @@ export async function POST(req: NextRequest) {
     })
 
     await logActivity({
-      siteUrl: site.url, category: 'content', action: 'publish_post', status: 'success',
-      summary: `Published "${post.title}" to ${site.url}`,
+      siteUrl: siteResolved.url, category: 'content', action: 'publish_post', status: 'success',
+      summary: `Published "${post.title}" to ${siteResolved.url}`,
       detail:  { postId, publishedUrl },
     }).catch(() => {})
 

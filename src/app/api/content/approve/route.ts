@@ -153,7 +153,8 @@ h2{color:#B91C1C}p{color:#666}a{display:inline-block;margin-top:20px;background:
 
 // ── POST: approve/reject/edit from dashboard ──────────────────────
 export async function POST(req: NextRequest) {
-  const { postId, action, title, content } = await req.json()
+  // Accept fallback siteUrl + apiKey from frontend in case DB lookup fails
+  const { postId, action, title, content, siteUrl: fallbackSiteUrl, apiKey: fallbackApiKey } = await req.json()
 
   if (action === 'edit') {
     const post = await prisma.scheduledPost.update({
@@ -167,60 +168,62 @@ export async function POST(req: NextRequest) {
     const post = await prisma.scheduledPost.findUnique({ where: { id: postId } })
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
 
-    // Try to publish to WordPress via bridge
+    // Look up site credentials — try by URL match first, then fall back to request-supplied creds
+    let siteUrl = ''
+    let apiKey  = ''
     try {
-      const site = await prisma.site.findFirst({ where: { id: post.siteId } }).catch(() => null)
-      const siteUrl = site?.url || ''
-      const apiKey  = site?.apiKey || ''
+      const site = await prisma.site.findFirst({
+        where: { OR: [{ url: post.siteId }, { url: (post.siteId || '').replace(/\/$/, '') }, { url: (post.siteId || '') + '/' }] }
+      }).catch(() => null)
+      siteUrl = site?.url || fallbackSiteUrl || ''
+      apiKey  = site?.apiKey || fallbackApiKey || ''
+    } catch { siteUrl = fallbackSiteUrl || ''; apiKey = fallbackApiKey || '' }
 
-      if (siteUrl && apiKey) {
-        // 1. Take snapshot BEFORE publishing
-        await takeSnapshot(siteUrl, apiKey, `Before post: "${post.title}"`)
-
-        // 2. Try to publish post via bridge
-        const { ok, data } = await bridgeCall(siteUrl, apiKey, 'posts', {
-          title:     post.title,
-          content:   post.content,
-          excerpt:   post.excerpt || '',
-          status:    'publish',
-          featured_image_url: post.imageUrl || undefined,
-        })
-
-        if (ok && (data.success || data.id)) {
-          const publishedUrl = data.data?.post?.link || data.link || ''
-          await prisma.scheduledPost.update({
-            where: { id: postId },
-            data:  { status: 'published', publishedUrl, publishedAt: new Date(), approvalToken: null }
-          })
-          await logActivity({
-          siteUrl:  siteUrl, category: 'content', action: 'publish_post', status: 'success',
-          summary:  `Published post to WordPress: "${post.title}"`,
-          detail:   { postId, publishedUrl, title: post.title },
-        }).catch(() => {})
-        return NextResponse.json({ success: true, published: true, url: publishedUrl })
-        }
-
-        // Bridge call failed — log the error but mark as approved so user knows
-        console.error('[approve] WP publish failed:', data)
-        await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'approved', approvalToken: null } })
-        await logActivity({
-          siteUrl: siteUrl, category: 'content', action: 'publish_post', status: 'failed',
-          summary: `Post approved but WP publish failed: "${post.title}"`,
-          detail:  { postId, title: post.title },
-        }).catch(() => {})
-        return NextResponse.json({
-          success: true,
-          published: false,
-          warning: `Post approved but could not auto-publish to WordPress: ${data?.message || 'bridge endpoint not found'}. Please publish manually from WP Admin.`
-        })
-      }
-    } catch (e: any) {
-      console.error('[approve] Exception:', e)
+    if (!siteUrl || !apiKey) {
+      await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'approved', approvalToken: null } })
+      return NextResponse.json({ success: true, published: false, warning: 'Site credentials not found. Reconnect your site and try again.' })
     }
 
-    // No site found — just mark approved
-    await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'approved', approvalToken: null } })
-    return NextResponse.json({ success: true, published: false })
+    try {
+      // 1. Snapshot before publishing
+      await takeSnapshot(siteUrl, apiKey, `Before post: "${post.title}"`)
+
+      // 2. Publish via bridge
+      const { ok, data } = await bridgeCall(siteUrl, apiKey, 'posts', {
+        title:              post.title,
+        content:            post.content,
+        excerpt:            post.excerpt || '',
+        status:             'publish',
+        featured_image_url: post.imageUrl || undefined,
+      })
+
+      if (ok && (data.success || data.id || data.data?.post?.id)) {
+        const publishedUrl = data.data?.post?.link || data.link || ''
+        await prisma.scheduledPost.update({
+          where: { id: postId },
+          data:  { status: 'published', publishedUrl, publishedAt: new Date(), approvalToken: null }
+        })
+        await logActivity({
+          siteUrl, category: 'content', action: 'publish_post', status: 'success',
+          summary: `Published post to WordPress: "${post.title}"`,
+          detail:  { postId, publishedUrl, title: post.title },
+        }).catch(() => {})
+        return NextResponse.json({ success: true, published: true, url: publishedUrl })
+      }
+
+      // Bridge returned but wasn't success
+      const errMsg = data?.message || data?.error || JSON.stringify(data).slice(0, 120)
+      await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'approved', approvalToken: null } })
+      await logActivity({
+        siteUrl, category: 'content', action: 'publish_post', status: 'failed',
+        summary: `WP publish failed for "${post.title}": ${errMsg}`,
+        detail:  { postId, bridgeOk: ok, bridgeData: data },
+      }).catch(() => {})
+      return NextResponse.json({ success: true, published: false, warning: `Bridge error: ${errMsg}` })
+
+    } catch (e: any) {
+      return NextResponse.json({ success: true, published: false, warning: `Exception: ${e.message}` })
+    }
   }
 
   if (action === 'reject') {

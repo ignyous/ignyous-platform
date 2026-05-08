@@ -134,7 +134,8 @@ function ContentInner() {
     try {
       const res  = await fetch('/api/content/approve', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, action }),
+        // Pass siteUrl + apiKey as fallback credentials in case DB site lookup fails
+        body: JSON.stringify({ postId, action, siteUrl, apiKey }),
       })
       const data = await res.json()
       if (action === 'approve') {
@@ -145,7 +146,7 @@ function ContentInner() {
         } else {
           setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'approved' } : p))
           if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: 'approved' }))
-          showToast(data.warning ? '⚠️ ' + data.warning : '✓ Post approved', data.warning ? 'error' : 'success')
+          showToast('⚠️ ' + (data.warning || 'Could not publish — check Activity Log'), 'error')
         }
       } else {
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'rejected' } : p))
@@ -169,7 +170,7 @@ function ContentInner() {
     try {
       const res  = await fetch('/api/content/publish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId }),
+        body: JSON.stringify({ postId, siteUrl, apiKey }),
       })
       const data = await res.json()
       if (!res.ok) { showToast('Publish failed: ' + (data.error || 'Unknown error'), 'error'); return }
