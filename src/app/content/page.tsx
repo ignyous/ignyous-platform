@@ -418,8 +418,18 @@ function ContentInner() {
                                 🕐 Scheduled: {new Date(post.scheduledFor).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' })} at {new Date(post.scheduledFor).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
                               </span>
                             )}
+                            {post.status === 'published' && (
+                              <span style={{ fontSize: 12, fontWeight: 600, color: C.green, background: C.greenBg, padding: '2px 10px', borderRadius: 20, border: `1px solid ${C.greenBorder}` }}>
+                                ✅ Posted {post.publishedAt ? `on ${new Date(post.publishedAt).toLocaleDateString([], { month:'short', day:'numeric' })} at ${new Date(post.publishedAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` : 'successfully'}
+                              </span>
+                            )}
+                            {post.status === 'approved' && (
+                              <span style={{ fontSize: 12, fontWeight: 600, color: C.yellow, background: C.yellowBg, padding: '2px 10px', borderRadius: 20, border: `1px solid ${C.yellowBorder}` }}>
+                                ⚠️ Approved but not yet published to WP — check Activity Log
+                              </span>
+                            )}
                             {post.status === 'published' && post.publishedUrl && (
-                              <a href={post.publishedUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>✅ View Live Post ↗</a>
+                              <a href={post.publishedUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>View Live Post ↗</a>
                             )}
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>

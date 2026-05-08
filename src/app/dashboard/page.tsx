@@ -543,6 +543,8 @@ function DashboardInner() {
           <a href={`/snapshots?site=${encodeURIComponent(siteUrl)}`} style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>🗂 Backups</a>
           {/* Activity */}
           <a href={`/activity?site=${encodeURIComponent(siteUrl)}`} style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>📋 Activity</a>
+          {/* Test bridge — opens in new tab showing diagnostics */}
+          <a href={`/api/debug/bridge?site=${encodeURIComponent(cleanUrl)}&key=${encodeURIComponent(apiKey)}`} target="_blank" rel="noreferrer" title="Test WP plugin connection" style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text3, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>🔧</a>
           <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid #1a1a4e`, borderRadius: 8, background: '#1a1a4e', color: 'white', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>WP Admin ↗</a>
           <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>View Site ↗</a>
         </div>
