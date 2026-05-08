@@ -16,7 +16,7 @@ interface SiteInfo {
   plugins:   Plugin[]
   content:   { pages: number; posts: number; media_count?: number }
 }
-interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string }
+interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string; snapshotId?: string }
 interface Message { role: 'user'|'assistant'; content: string; action?: any; actionResult?: ActionResult; options?: Array<{label: string; action: string}>; ts: Date }
 
 // ─── Memory ───────────────────────────────────────────────────────
@@ -74,19 +74,28 @@ const hasPlugin = (plugins: Plugin[], ...terms: string[]) =>
   ))
 
 // ─── QUICK ACTION CARDS (like image 2) ───────────────────────────
+// SEO action is special - gets its own big card at the top
+const SEO_ACTION = {
+  icon: '🔍',
+  label: 'Boost My SEO & Rankings',
+  desc: 'Full audit: titles, descriptions, indexing, sitemap, analytics. Get found on Google.',
+  prompt: `I want to improve my SEO. Before doing anything, check: 
+1. Do I have Yoast SEO or Rank Math installed? 
+2. Is my site indexable (check robots.txt)? 
+3. Do I have a sitemap? 
+4. Is Google Analytics connected?
+Then ask me: "Do you want me to use your existing content to apply SEO best practices across your site?" with options to proceed or customize what gets optimized. Show me a before score first.`,
+}
+
 const ACTIONS = [
-  { icon: '🛒', label: 'Sell Products',     desc: 'Add an online store or product listings',    prompt: 'I want to sell products or services on my site. Walk me through adding a store.' },
-  { icon: '📬', label: 'Generate Leads',    desc: 'Contact forms, quote requests, call-to-actions', prompt: 'Add a contact form with SMS alerts and a lead capture strategy to my site.' },
-  { icon: '🛠️', label: 'Offer Services',   desc: 'Showcase what you do with service pages',    prompt: 'Create professional service pages that explain what I offer and include call-to-actions.' },
-  { icon: '📅', label: 'Promote Events',    desc: 'List events, shows, classes or workshops',  prompt: 'Add an events section to my site so visitors can see upcoming events and register.' },
-  { icon: '🔍', label: 'Fix My SEO',        desc: 'Rank higher on Google and get found',        prompt: 'Audit my site SEO completely. Tell me every issue and fix them one by one.' },
-  { icon: '⭐', label: 'Build Trust',       desc: 'Reviews, testimonials, credentials',        prompt: 'Add a testimonials section and Google reviews to build credibility with visitors.' },
-  { icon: '🎨', label: 'Change Design',     desc: 'New theme, colors, fonts and layout',       prompt: 'OPEN_THEME_BROWSER' },
-  { icon: '⚡', label: 'Speed Up Site',    desc: 'Faster load times, better performance',     prompt: 'My site is slow. Identify every performance issue and fix them.' },
-  { icon: '📝', label: 'Rewrite Content',   desc: 'Professional copy that converts visitors',  prompt: 'Rewrite all my page content to be more professional, clear, and SEO-optimized.' },
-  { icon: '📊', label: 'Add Analytics',     desc: 'Track visitors, traffic and conversions',   prompt: 'Set up Google Analytics and Google Search Console on my site.' },
-  { icon: '🔒', label: 'Secure My Site',   desc: 'SSL, backups, protection from hackers',     prompt: 'Check my site security, enable HTTPS, and set up automatic backups.' },
-  { icon: '💬', label: 'Add Live Chat',    desc: 'Talk to visitors in real-time',             prompt: 'Add a live chat widget to my site so visitors can reach me instantly.' },
+  { icon: '📬', label: 'Generate Leads',    desc: 'Contact forms, quote requests, CTAs',          prompt: 'Add a contact form with SMS alerts and a lead capture strategy to my site.' },
+  { icon: '🛒', label: 'Sell Products',     desc: 'Add an online store',                          prompt: 'I want to sell products or services on my site. Walk me through adding a store.' },
+  { icon: '🛠️', label: 'Offer Services',   desc: 'Service pages with CTAs',                     prompt: 'Create professional service pages that explain what I offer and include call-to-actions.' },
+  { icon: '🎨', label: 'Change Design',     desc: 'New theme, colors & layout',                  prompt: 'OPEN_THEME_BROWSER' },
+  { icon: '📝', label: 'Rewrite Content',   desc: 'Professional copy that converts',             prompt: 'Rewrite all my page content to be more professional, clear, and SEO-optimized.' },
+  { icon: '⚡', label: 'Speed Up Site',    desc: 'Faster load times',                           prompt: 'My site is slow. Identify every performance issue and fix them.' },
+  { icon: '📊', label: 'Add Analytics',     desc: 'Track visitors & conversions',                prompt: 'Set up Google Analytics and Google Search Console on my site.' },
+  { icon: '🔒', label: 'Secure My Site',   desc: 'SSL, backups, protection',                    prompt: 'Check my site security, enable HTTPS, and set up automatic backups.' },
 ]
 
 const SUGGESTIONS = [
@@ -100,9 +109,9 @@ const SUGGESTIONS = [
 ]
 
 // ─── ACTION FEEDBACK COMPONENT ───────────────────────────────────
-const ActionFeedback = ({ result }: { result: ActionResult }) => (
+const ActionFeedback = ({ result, onRollback }: { result: ActionResult; onRollback?: () => void }) => (
   <div style={{ marginTop: 8, padding: '11px 14px', borderRadius: 10, background: result.success ? C.greenBg : C.redBg, border: `1px solid ${result.success ? C.greenBorder : C.redBorder}` }}>
-    <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url ? 7 : 0 }}>
+    <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? C.green : C.red, marginBottom: result.url || (result.success && onRollback) ? 7 : 0 }}>
       {result.success ? '✓' : '✗'} {result.message}
     </div>
     {result.url && (
@@ -110,6 +119,19 @@ const ActionFeedback = ({ result }: { result: ActionResult }) => (
         <code style={{ fontSize: 13, color: C.text2, background: 'rgba(0,0,0,0.06)', padding: '2px 7px', borderRadius: 4, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{result.url}</code>
         <a href={result.url} target="_blank" rel="noreferrer" style={{ padding: '5px 12px', background: C.green, borderRadius: 7, color: 'white', fontSize: 13, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>View Page ↗</a>
       </div>
+    )}
+    {result.success && onRollback && (
+      <button onClick={onRollback} style={{
+        marginTop: 8, padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 7,
+        background: 'white', color: C.text2, fontSize: 12, cursor: 'pointer',
+        fontFamily: 'Poppins, sans-serif', display: 'flex', alignItems: 'center', gap: 6,
+        transition: 'all 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text2 }}
+      >
+        ↩ Undo this change
+      </button>
     )}
   </div>
 )
@@ -319,6 +341,18 @@ function DashboardInner() {
   // ── Execute action ─────────────────────────────────────────────
   async function executeAction(action: any, msg: Message) {
     let result: ActionResult = { type: action.type, success: false, message: 'Action failed' }
+
+    // Auto-snapshot before destructive actions
+    let snapshotId = ''
+    if (['update_page','create_page','update_site_options','install_plugin','install_theme'].includes(action.type)) {
+      try {
+        const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
+        if (snapRes.success) {
+          snapshotId = snapRes.data?.snapshot_id || ''
+          setSnapshots(prev => [{ id: snapshotId, label: `Before: ${action.title || action.slug || action.type}`, created_at: new Date().toISOString() }, ...prev].slice(0, 20))
+        }
+      } catch {}
+    }
     try {
       switch (action.type) {
         case 'update_page': {
@@ -388,6 +422,7 @@ function DashboardInner() {
           result = { type: action.type, success: true, message: 'Done!' }
       }
     } catch (e: any) { result = { type: action.type, success: false, message: `Error: ${e.message}` } }
+    if (snapshotId) result.snapshotId = snapshotId
     setMessages(prev => prev.map(m => m === msg ? { ...m, actionResult: result } : m))
   }
 
@@ -510,7 +545,7 @@ function DashboardInner() {
                       Working on it…
                     </div>
                   )}
-                  {msg.actionResult && <ActionFeedback result={msg.actionResult}/>}
+                  {msg.actionResult && <ActionFeedback result={msg.actionResult} onRollback={msg.actionResult.snapshotId ? () => restoreSnapshot(msg.actionResult!.snapshotId!, msg.actionResult!.message) : undefined}/>}
 
                   {/* Clickable options from AI */}
                   {msg.options && msg.options.length > 0 && !msg.actionResult && (
@@ -598,6 +633,33 @@ function DashboardInner() {
 
         {/* ════ QUICK ACTIONS ════ */}
         <div style={{ padding: '12px 12px 16px' }}>
+
+          {/* SEO HERO CARD — first and biggest */}
+          <button onClick={() => send(SEO_ACTION.prompt)} style={{
+            width: '100%', padding: '16px 18px', marginBottom: 12,
+            background: 'linear-gradient(135deg, #1A202C 0%, #2D3748 100%)',
+            border: 'none', borderRadius: 14, cursor: 'pointer', textAlign: 'left' as const,
+            fontFamily: 'Poppins, sans-serif', transition: 'all 0.2s', position: 'relative', overflow: 'hidden',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(232,101,26,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>🔍</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 3 }}>{SEO_ACTION.label}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>{SEO_ACTION.desc}</div>
+              </div>
+              <div style={{ color: C.accent, fontSize: 14, fontWeight: 600, flexShrink: 0 }}>Run Audit →</div>
+            </div>
+            {scanReport?.scores?.seo != null && (
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: scanReport.scores.seo >= 70 ? 'rgba(30,123,75,0.3)' : 'rgba(232,101,26,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white' }}>{scanReport.scores.seo}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Current SEO score · {scanReport.scores.seo >= 70 ? 'Good' : scanReport.scores.seo >= 45 ? 'Needs work' : 'Critical'}</div>
+              </div>
+            )}
+          </button>
+
           <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 10, paddingLeft: 4 }}>Quick Actions</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {ACTIONS.slice(0, 8).map(action => (
