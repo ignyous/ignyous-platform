@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { logActivity } from '@/lib/activityLogger'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -127,7 +129,9 @@ Then the main action in the next step.
 - pages[].id: integer to use in update_page actions`
 
 export async function POST(req: NextRequest) {
+  const start = Date.now()
   try {
+    const session = await getServerSession()
     const { messages, siteContext } = await req.json()
     if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
 
@@ -143,6 +147,25 @@ export async function POST(req: NextRequest) {
     if (optionsMatch?.[1]) { try { options = JSON.parse(optionsMatch[1]) } catch {} }
 
     const text = raw.replace(/```action[\s\S]*?```/g, '').replace(/```options[\s\S]*?```/g, '').trim()
+
+    // Log the AI interaction
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content || ''
+    await logActivity({
+      userId:    session?.user?.email ?? undefined,
+      siteUrl:   siteContext?.site_url,
+      siteName:  siteContext?.site_name,
+      category:  action ? 'ai_action' : 'system',
+      action:    action?.type || 'ai_chat',
+      status:    'success',
+      summary:   action
+        ? `AI ran "${action.type}"${action.title ? ` on "${action.title}"` : ''}`
+        : `Chat: "${String(lastUserMsg).slice(0, 80)}${String(lastUserMsg).length > 80 ? '…' : ''}"`,
+      detail:    { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
+      ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
+      userAgent: req.headers.get('user-agent') ?? undefined,
+      durationMs: Date.now() - start,
+    })
+
     return NextResponse.json({ text, action, options })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

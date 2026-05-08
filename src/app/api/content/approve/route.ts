@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { logActivity } from '@/lib/activityLogger'
 
 const prisma = new PrismaClient()
 
@@ -111,12 +112,22 @@ export async function POST(req: NextRequest) {
             where: { id: postId },
             data:  { status: 'published', publishedUrl, publishedAt: new Date(), approvalToken: null }
           })
-          return NextResponse.json({ success: true, published: true, url: publishedUrl })
+          await logActivity({
+          siteUrl:  siteUrl, category: 'content', action: 'publish_post', status: 'success',
+          summary:  `Published post to WordPress: "${post.title}"`,
+          detail:   { postId, publishedUrl, title: post.title },
+        }).catch(() => {})
+        return NextResponse.json({ success: true, published: true, url: publishedUrl })
         }
 
         // Bridge call failed — log the error but mark as approved so user knows
         console.error('[approve] WP publish failed:', data)
         await prisma.scheduledPost.update({ where: { id: postId }, data: { status: 'approved', approvalToken: null } })
+        await logActivity({
+          siteUrl: siteUrl, category: 'content', action: 'publish_post', status: 'failed',
+          summary: `Post approved but WP publish failed: "${post.title}"`,
+          detail:  { postId, title: post.title },
+        }).catch(() => {})
         return NextResponse.json({
           success: true,
           published: false,

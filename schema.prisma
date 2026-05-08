@@ -82,7 +82,27 @@ model Site {
   @@unique([userId, url])
 }
 
-// ─── Content Scheduler ────────────────────────────────────────────
+// ─── Activity Log ─────────────────────────────────────────────────
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  siteUrl    String?
+  siteName   String?
+  category   String   // ai_action | content | snapshot | plugin | page | settings | auth | system
+  action     String   // e.g. update_page, create_post, take_snapshot, install_plugin, login
+  status     String   @default("success") // success | failed | pending
+  summary    String   // human-readable one-liner
+  detail     Json?    // full action payload / result
+  ipAddress  String?
+  userAgent  String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([siteUrl])
+  @@index([category])
+}
 model ScheduledPost {
   id            String   @id @default(cuid())
   siteId        String

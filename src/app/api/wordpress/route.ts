@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import axios, { AxiosError } from 'axios'
+import { getServerSession } from 'next-auth'
+import { logActivity } from '@/lib/activityLogger'
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,6 +33,26 @@ export async function POST(req: NextRequest) {
     for (const m of methodsToTry) {
       try {
         const response = await axios({ method: m, url: ignyousUrl, headers, data: body || undefined, timeout: 60000 })
+        // Log successful bridge call
+        if (isWrite) {
+          const session = await getServerSession()
+          const cat = cleanEndpoint.startsWith('snapshot') ? 'snapshot'
+                    : cleanEndpoint.startsWith('pages')    ? 'page'
+                    : cleanEndpoint.startsWith('posts')    ? 'content'
+                    : cleanEndpoint.startsWith('plugins')  ? 'plugin'
+                    : cleanEndpoint.startsWith('themes')   ? 'plugin'
+                    : cleanEndpoint.startsWith('settings') ? 'settings'
+                    : 'system'
+          await logActivity({
+            userId:   session?.user?.email ?? undefined,
+            siteUrl:  siteUrl,
+            category: cat as any,
+            action:   `${m.toLowerCase()}_${cleanEndpoint.replace(/\/\d+/, '/:id')}`,
+            status:   'success',
+            summary:  `Bridge: ${m} /${cleanEndpoint}${body?.title ? ` — "${body.title}"` : ''}`,
+            detail:   { endpoint: cleanEndpoint, method: m, bodyKeys: body ? Object.keys(body) : [] },
+          }).catch(() => {})
+        }
         return NextResponse.json(response.data)
       } catch (err) {
         const axErr = err as AxiosError

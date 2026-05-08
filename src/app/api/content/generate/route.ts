@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { logActivity } from '@/lib/activityLogger'
 import Anthropic from '@anthropic-ai/sdk'
 import { PrismaClient } from '@prisma/client'
 import { getServerSession } from 'next-auth'
@@ -128,6 +129,15 @@ Return as JSON only:
       }
     }
 
+    await logActivity({
+      userId:   session?.user?.email ?? undefined,
+      siteUrl:  siteUrl,
+      category: 'content',
+      action:   'generate_post',
+      status:   'success',
+      summary:  `Generated post: "${post.title}" (${frequency}, ${requireApproval ? 'needs approval' : 'auto-approved'})`,
+      detail:   { title: post.title, frequency, topics, requireApproval, scheduledFor: scheduled.scheduledFor },
+    }).catch(() => {})
     return NextResponse.json({ success: true, post: { ...scheduled, generatedContent: post } })
   } catch (err: any) {
     console.error('[content/generate]', err)
