@@ -61,7 +61,11 @@ function ContentInner() {
   useEffect(() => { loadPosts() }, [])
   useEffect(() => { if (siteUrl && apiKey) fetchCategories() }, [siteUrl, apiKey])
 
-  async function fetchCategories() {
+  function setFrequencyAndApproval(f: string) {
+    setFrequency(f)
+    if (f === 'once') setRequireApproval(false)
+    else setRequireApproval(true)
+  }
     setLoadingCats(true)
     try {
       const res  = await fetch('/api/wordpress', {
@@ -183,7 +187,7 @@ function ContentInner() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 14 }}>📅 Post Frequency</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   {FREQUENCIES.map(f => (
-                    <button key={f.id} onClick={() => setFrequency(f.id)} style={{
+                    <button key={f.id} onClick={() => setFrequencyAndApproval(f.id)} style={{
                       padding: '12px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left' as const,
                       border: `2px solid ${frequency===f.id ? C.primary : C.border}`,
                       background: frequency===f.id ? C.primaryDim : C.white,
@@ -255,7 +259,9 @@ function ContentInner() {
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 14 }}>
                   {[
                     { label: '🖼️ Include images', desc: 'Auto-fetch relevant stock photo', val: includeImage, set: setIncludeImage },
-                    { label: '✅ Require my approval', desc: 'Review before posting to site', val: requireApproval, set: setRequireApproval },
+                    ...( frequency !== 'once' ? [
+                      { label: '✅ Require my approval', desc: 'Review before posting to site', val: requireApproval, set: setRequireApproval },
+                    ] : []),
                   ].map(opt => (
                     <div key={opt.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10 }}>
                       <div>
@@ -270,7 +276,7 @@ function ContentInner() {
                       </div>
                     </div>
                   ))}
-                  {requireApproval && (
+                  {requireApproval && frequency !== 'once' && (
                     <div>
                       <label style={{ fontSize: 13, fontWeight: 600, color: C.text2, display: 'block', marginBottom: 6 }}>Email approval notifications to</label>
                       <input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="you@example.com"
@@ -289,7 +295,7 @@ function ContentInner() {
                 {generating ? (
                   <><div style={{ width: 18, height: 18, border: '2.5px solid rgba(26,26,78,0.3)', borderTopColor: '#1a1a4e', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/> Generating…</>
                 ) : (
-                  <><span style={{ fontSize: 18 }}>✦</span> {frequency==='once' ? 'Generate Post Now' : `Start ${frequency.charAt(0).toUpperCase()+frequency.slice(1)} Schedule`}</>
+                  <><span style={{ fontSize: 18 }}>✦</span> {frequency==='once' ? 'Generate & Preview Post' : `Start ${frequency.charAt(0).toUpperCase()+frequency.slice(1)} Schedule`}</>
                 )}
               </button>
             </div>

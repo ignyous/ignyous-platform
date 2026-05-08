@@ -99,8 +99,6 @@ Return ONLY this exact format:
         topics:       Array.isArray(topics) ? topics : [topics],
         imageUrl,
         imageAlt,
-        seoTitle:     post.seoTitle       || '',
-        seoDescription: post.seoDescription || '',
         status:       requireApproval ? 'pending_approval' : 'scheduled',
         approvalToken: requireApproval ? approvalToken : null,
         frequency:    frequency || 'once',
