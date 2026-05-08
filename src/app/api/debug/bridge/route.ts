@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         data: test.method !== 'GET' ? { title: '__test__', content: 'test' } : undefined,
         timeout: 8000, validateStatus: () => true,
       })
-      results[test.name] = { status: r.status, ok: r.status !== 404 && r.status !== 405, snippet: JSON.stringify(r.data).slice(0, 120) }
+      results[test.name] = { status: r.status, ok: r.status >= 200 && r.status < 300, snippet: JSON.stringify(r.data).slice(0, 120) }
     } catch (e: any) {
       results[test.name] = { status: 'error', ok: false, snippet: e.message }
     }
