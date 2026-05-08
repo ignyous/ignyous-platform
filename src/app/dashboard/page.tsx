@@ -751,6 +751,7 @@ function DashboardInner() {
         </div>
 
       </div>{/* end main layout */}
+    </div>
   )
 }
 
