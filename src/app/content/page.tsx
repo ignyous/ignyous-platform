@@ -129,6 +129,21 @@ function ContentInner() {
     await approvePost(postId, 'reject')
   }
 
+  async function publishNow(postId: string) {
+    setGenerating(true)
+    try {
+      const res  = await fetch('/api/content/publish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert('Publish failed: ' + (data.error || 'Unknown error')); return }
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'published', publishedUrl: data.publishedUrl } : p))
+      if (preview?.id === postId) setPreview((p: any) => ({ ...p, status: 'published', publishedUrl: data.publishedUrl }))
+    } catch (e: any) { alert('Publish error: ' + e.message) }
+    finally { setGenerating(false) }
+  }
+
   async function saveEdit(postId: string, title: string, content: string) {
     await fetch('/api/content/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -328,8 +343,13 @@ function ContentInner() {
                         <button onClick={() => approvePost(preview.id, 'reject')} style={{ ...BTN('danger'), flex: 1, justifyContent: 'center', display: 'flex' }}>✗ Reject</button>
                       </div>
                     )}
-                    {preview.status === 'approved' && (
-                      <div style={{ padding: 12, background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 10, fontSize: 13, fontWeight: 600, color: C.green, textAlign: 'center' as const }}>✓ Approved and scheduled to publish</div>
+                    {(preview.status === 'approved' || preview.status === 'scheduled') && (
+                      <button onClick={() => publishNow(preview.id)} disabled={generating} style={{ ...BTN('gold'), width: '100%', justifyContent: 'center', display: 'flex' }}>
+                        {generating ? '⏳ Publishing…' : '🚀 Publish Now to WordPress'}
+                      </button>
+                    )}
+                    {preview.status === 'published' && preview.publishedUrl && (
+                      <a href={preview.publishedUrl} target='_blank' rel='noreferrer' style={{ display: 'block', textAlign: 'center', padding: 12, background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.green, textDecoration: 'none' }}>✅ Published — View Live Post ↗</a>
                     )}
                   </div>
                 </div>
@@ -449,6 +469,11 @@ function ContentInner() {
                                 <button onClick={() => approvePost(post.id, 'approve')} style={{ ...BTN('gold'), fontSize: 12, padding: '5px 12px' }}>✓ Approve</button>
                                 <button onClick={() => approvePost(post.id, 'reject')} style={{ ...BTN('danger'), fontSize: 12, padding: '5px 12px' }}>✗ Reject</button>
                               </>
+                            )}
+                            {(post.status === 'scheduled' || post.status === 'approved') && (
+                              <button onClick={() => publishNow(post.id)} disabled={generating} style={{ ...BTN('gold'), fontSize: 12, padding: '5px 12px' }}>
+                                🚀 Publish Now
+                              </button>
                             )}
                             {/* Edit & Cancel — shown for non-published posts */}
                             {post.status !== 'published' && post.status !== 'rejected' && (
