@@ -355,6 +355,8 @@ function DashboardInner() {
   const [pendingAction, setPendingAction]       = useState<{action: any; msg: Message} | null>(null)
   const [livePreviewHtml, setLivePreviewHtml]   = useState<string | null>(null)
   const [livePreviewLoading, setLivePreviewLoading] = useState(false)
+  const [pendingImageData, setPendingImageData] = useState<{data:string;name:string}|null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -628,6 +630,77 @@ function DashboardInner() {
             })
             const seoData = await seoRes.json()
             result = { type: 'update_seo', success: seoData.success, message: `AI optimized SEO for ${seoData.updated || 0} pages` }
+          }
+          break
+        }
+
+        case 'read_structure': {
+          const r = await fetch(`/api/element?siteUrl=${encodeURIComponent(cleanUrl)}&apiKey=${encodeURIComponent(apiKey)}&pageId=${action.pageId}`)
+          const data = await r.json()
+          result = { type: 'read_structure', success: data.success ?? true, message: data.data ? `Page has ${data.data.section_count} section(s) — builder: ${data.data.builder}` : 'Could not read structure', data }
+          // Inject structure into next AI message context
+          if (data.success && data.data) {
+            setMessages(prev => [...prev, {
+              role: 'assistant' as const,
+              content: `📐 Page structure loaded: ${data.data.section_count} sections (${data.data.builder}). Here are the sections:\n` +
+                (data.data.sections || []).slice(0, 10).map((s: any, i: number) =>
+                  `${i+1}. [${s.id}] ${s.type} — "${s.label}" ${s.settings?.background_color ? `bg:${s.settings.background_color}` : ''}`
+                ).join('\n'),
+              ts: new Date(),
+            }])
+          }
+          break
+        }
+
+        case 'upload_image': {
+          if (pendingImageData) {
+            const r = await fetch('/api/element', { method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ action: 'upload_image', siteUrl: cleanUrl, apiKey, imageData: pendingImageData.data, imageName: pendingImageData.name }) })
+            const data = await r.json()
+            result = { type: 'upload_image', success: data.success ?? false, message: data.success ? `Image uploaded: ${data.data?.url}` : 'Upload failed', url: data.data?.url }
+            if (data.success) setPendingImageData(null)
+          } else {
+            result = { type: 'upload_image', success: false, message: 'No image attached — please attach an image first' }
+          }
+          break
+        }
+
+        case 'update_element': {
+          const targetPage = pages.find(p => p.id === action.pageId)
+          const elementAction = action.findByDescription ? 'find_and_update' : 'update_element'
+          const r = await fetch('/api/element', { method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+              action: elementAction, siteUrl: cleanUrl, apiKey,
+              pageId: action.pageId,
+              elementId: action.elementId,
+              description: action.findByDescription || action.description,
+              updates: action.updates,
+            })
+          })
+          const data = await r.json()
+          result = { type: 'update_element', success: data.success ?? false,
+            message: data.success ? `Updated ${action.findByDescription || action.elementId || 'element'}` : (data.message || 'Update failed'),
+            url: targetPage?.link }
+          if (data.success && targetPage?.link) {
+            setPreviewUrl(targetPage.link); setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000)
+          }
+          break
+        }
+
+        case 'reorder_sections': {
+          const targetPage = pages.find(p => p.id === action.pageId)
+          const r = await fetch('/api/element', { method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+              action: action.newOrder ? 'reorder' : 'move_section',
+              siteUrl: cleanUrl, apiKey, pageId: action.pageId,
+              newOrder: action.newOrder,
+              fromIndex: action.moveFrom, toIndex: action.moveTo,
+            })
+          })
+          const data = await r.json()
+          result = { type: 'reorder_sections', success: data.success ?? false, message: data.message || 'Reorder failed', url: targetPage?.link }
+          if (data.success && targetPage?.link) {
+            setPreviewUrl(targetPage.link); setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000)
           }
           break
         }
@@ -917,13 +990,34 @@ function DashboardInner() {
               onFocusCapture={e => e.currentTarget.style.borderColor = '#1a1a4e'}
               onBlurCapture={e => e.currentTarget.style.borderColor = '#C8C8E8'}
             >
-              <textarea ref={textareaRef} value={input}
+              {pendingImageData && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#e8f5e9', borderRadius: 8, fontSize: 13, color: '#1E7B4B', marginBottom: 4 }}>
+              🖼 <strong>{pendingImageData.name}</strong> ready to upload
+              <button onClick={() => setPendingImageData(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: 16 }}>×</button>
+            </div>
+          )}
+          <textarea ref={textareaRef} value={input}
                 onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,120)+'px' }}
                 onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); send() } }}
                 placeholder={`Tell ignyous what you want to do with ${siteInfo?.site?.name||'your site'}…`}
                 rows={2} style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 15, fontFamily: 'Poppins, sans-serif', color: C.text, resize: 'none', lineHeight: 1.5, padding: '8px 0' }}
               />
-              <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 40, height: 40, borderRadius: 10, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:'#f3af00', cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* Hidden file input for image uploads */}
+          <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e => {
+            const file = e.target.files?.[0]; if (!file) return
+            const reader = new FileReader()
+            reader.onload = evt => {
+              const data = (evt.target?.result as string) || ''
+              setPendingImageData({ data, name: file.name })
+              setInput(prev => prev || `Upload this image to my site`)
+            }
+            reader.readAsDataURL(file)
+          }} />
+          {/* Image upload button */}
+          <button onClick={() => fileInputRef.current?.click()} title="Attach image" style={{ alignSelf: 'flex-end', width: 40, height: 40, borderRadius: 10, border: `1px solid ${C.border}`, flexShrink: 0, marginBottom: 2, background: pendingImageData ? '#e8f5e9' : C.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+            {pendingImageData ? '🖼' : '📎'}
+          </button>
+          <button onClick={() => send()} disabled={sending||!input.trim()} style={{ alignSelf: 'flex-end', width: 40, height: 40, borderRadius: 10, border: 'none', flexShrink: 0, marginBottom: 2, background: sending||!input.trim()?C.border:'#f3af00', cursor: sending||!input.trim()?'not-allowed':'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="17" height="17" viewBox="0 0 20 20" fill="#1a1a4e"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>
               </button>
             </div>

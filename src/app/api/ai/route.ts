@@ -121,7 +121,7 @@ On "auto_generate" → use site_name, description, pages to write a title, then 
 { "type": "install_plugin", "slug": "elementor", "name": "Elementor" }
 \`\`\`
 
-Types: update_page, create_page, update_site_options, update_seo, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
+Types: update_page, create_page, update_site_options, update_seo, update_element, reorder_sections, upload_image, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
 
 ━━━ BUILDER-AWARE CONTENT GENERATION (CRITICAL) ━━━
 ALWAYS check the `builder` field in LIVE SITE CONTEXT before writing ANY page content.
@@ -177,6 +177,90 @@ Before any destructive action (theme change, bulk content rewrite), include a sn
 { "type": "take_snapshot", "label": "Before theme change to Hello Elementor" }
 \`\`\`
 Then the main action in the next step.
+
+━━━ ELEMENT EDITING (surgical changes to specific sections/elements) ━━━
+
+ALWAYS read page structure first, then target the specific element.
+
+STEP 1 — Read page structure to see sections and their element IDs:
+```action
+{ "type": "read_structure", "pageId": 2 }
+```
+The response gives you a list like: [{id: "a1b2c3", type: "section", label: "Hero Section", settings: {background_color: "#1a1a4e", ...}}, ...]
+
+STEP 2 — Update a specific element by ID:
+```action
+{
+  "type": "update_element",
+  "pageId": 2,
+  "elementId": "a1b2c3",
+  "description": "the hero section",
+  "updates": {
+    "background_color": "#ffffff",
+    "background_image_url": "https://example.com/image.jpg",
+    "padding": "80px"
+  }
+}
+```
+
+OR use natural language targeting (no need to read structure first):
+```action
+{
+  "type": "update_element",
+  "pageId": 2,
+  "findByDescription": "the header section",
+  "updates": { "background_color": "#ffffff" }
+}
+```
+
+Available update keys:
+- background_color: "#hex" — section/column/widget background colour
+- background_image_url: "https://..." — section background image (user must upload first)
+- padding: "40px" or { top, right, bottom, left } — spacing
+- title: "New heading text" — heading widget text
+- text: "New paragraph text" — text/paragraph content
+- image_url: "https://..." — image widget source
+- link: "https://..." — button or link URL
+- text_color: "#hex" — text colour
+
+REORDER SECTIONS — move sections up/down:
+```action
+{
+  "type": "reorder_sections",
+  "pageId": 2,
+  "moveFrom": 3,
+  "moveTo": 1
+}
+```
+or specify new order by IDs:
+```action
+{
+  "type": "reorder_sections",
+  "pageId": 2,
+  "newOrder": ["section_id_1", "section_id_3", "section_id_2"]
+}
+```
+
+IMAGE UPLOAD — when user uploads an image, use this FIRST:
+```action
+{ "type": "upload_image", "imageName": "hero-bg.jpg" }
+```
+The response gives you a URL to use in background_image_url or image_url.
+
+EXAMPLE FLOWS:
+"Change the header background to white" →
+  1. update_element with findByDescription:"header section", updates:{background_color:"#ffffff"}
+
+"Swap the hero background image" (user uploaded) →
+  1. upload_image action
+  2. update_element with updates:{background_image_url: "<returned URL>"}
+
+"Move the contact form section up two rows" →
+  1. read_structure to see section positions
+  2. reorder_sections moveFrom to correct index
+
+"Change the 'Get Started' button colour to gold" →
+  1. update_element with findByDescription:"get started button", updates:{background_color:"#f3af00"}
 
 ━━━ SEO ACTIONS ━━━
 To update SEO metadata for a page (title, meta description, focus keyword, Open Graph):
