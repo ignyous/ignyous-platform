@@ -229,6 +229,8 @@ function DashboardInner() {
   const [variationPreview, setVariationPreview] = useState<{label: string; fields: Record<string,string>} | null>(null)
   const [keyError, setKeyError]               = useState(false)
   const [pendingAction, setPendingAction]       = useState<{action: any; msg: Message} | null>(null)
+  const [livePreviewHtml, setLivePreviewHtml]   = useState<string | null>(null)
+  const [livePreviewLoading, setLivePreviewLoading] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef                     = useRef<HTMLTextAreaElement>(null)
 
@@ -360,6 +362,25 @@ function DashboardInner() {
         // For page content changes — stage as preview first, don't auto-execute
         else if (['update_page','create_page'].includes(a.type) && (a.content || a.title)) {
           setPendingAction({ action: a, msg: aiMsg })
+          // Fetch real WP preview in background
+          const targetPageForPreview = pages.find((p: any) => p.id === a.pageId)
+          const pageUrlForPreview = targetPageForPreview?.link || cleanUrl
+          if (pageUrlForPreview) {
+            setLivePreviewLoading(true)
+            setLivePreviewHtml(null)
+            fetch('/api/proxy/page-preview', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pageUrl: pageUrlForPreview,
+                injectHtml: a.content || '',
+                pageTitle: a.title || targetPageForPreview?.title || 'Page update',
+              }),
+            }).then(r => r.text()).then(html => {
+              setLivePreviewHtml(html)
+              setLivePreviewLoading(false)
+            }).catch(() => setLivePreviewLoading(false))
+          }
         }
         else { executeAction(a, aiMsg) }
       }
@@ -377,6 +398,7 @@ function DashboardInner() {
     const { action, msg } = pendingAction
     setPendingAction(null)
     setVariationPreview(null)
+    setLivePreviewHtml(null)
     await executeAction(action, msg)
   }
 
@@ -385,6 +407,7 @@ function DashboardInner() {
     const { msg } = pendingAction
     setPendingAction(null)
     setVariationPreview(null)
+    setLivePreviewHtml(null)
     setMessages(prev => prev.map(m => m === msg
       ? { ...m, actionResult: { type: m.action?.type || '', success: false, message: '✗ Change discarded — no modifications made' } }
       : m
@@ -883,11 +906,28 @@ function DashboardInner() {
                     ✗ Discard
                   </button>
                 </div>
-                {/* Draft iframe */}
-                <div style={{ flex: 1, padding: 16, background: '#e8e4df', display: 'flex', justifyContent: 'center', overflow: 'auto' }}>
-                  <div style={{ width: previewMode==='mobile'?390:'100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
-                    <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', minHeight: 600, border: 'none', display: 'block' }} title="Draft preview" sandbox="allow-same-origin"/>
-                  </div>
+                {/* Draft iframe — real WP preview if available, else generic */}
+                <div style={{ flex: 1, background: '#e8e4df', overflow: 'hidden', position: 'relative' as const }}>
+                  {livePreviewLoading && (
+                    <div style={{ position: 'absolute' as const, inset: 0, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', background: '#e8e4df', zIndex: 10, gap: 14 }}>
+                      <div style={{ width: 36, height: 36, border: '3px solid rgba(26,26,78,0.15)', borderTopColor: '#1a1a4e', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a4e' }}>Loading real site preview…</div>
+                    </div>
+                  )}
+                  {!livePreviewLoading && livePreviewHtml ? (
+                    <iframe
+                      srcDoc={livePreviewHtml}
+                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                      title="Live draft preview"
+                      sandbox="allow-same-origin allow-scripts"
+                    />
+                  ) : !livePreviewLoading ? (
+                    <div style={{ padding: 16, height: '100%', display: 'flex', justifyContent: 'center', overflow: 'auto' }}>
+                      <div style={{ width: previewMode==='mobile'?390:'100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+                        <iframe srcDoc={previewHtml} style={{ width: '100%', height: '100%', minHeight: 600, border: 'none', display: 'block' }} title="Draft preview" sandbox="allow-same-origin"/>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )
