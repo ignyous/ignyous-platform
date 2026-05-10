@@ -13,9 +13,10 @@ export default function SettingsPage() {
   const [name, setName]     = useState('')
   const [email, setEmail]   = useState('')
   const [phone, setPhone]   = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]           = useState(false)
+  const [saved, setSaved]             = useState(false)
+  const [loading, setLoading]         = useState(true)
+  const [dashboardMode, setDashboardMode] = useState<'easy'|'advanced'>('advanced')
 
   useEffect(() => {
     fetch('/api/user').then(r => r.json()).then(data => {
@@ -23,6 +24,7 @@ export default function SettingsPage() {
         setName(data.user.name || '')
         setEmail(data.user.email || '')
         setPhone(data.user.phone || '')
+        setDashboardMode((data.user.dashboardMode as 'easy'|'advanced') || 'advanced')
       }
       setLoading(false)
     })
@@ -33,7 +35,7 @@ export default function SettingsPage() {
     await fetch('/api/user', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, phone }),
+      body: JSON.stringify({ name, phone, dashboardMode }),
     })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -101,6 +103,29 @@ export default function SettingsPage() {
 
         {/* Save */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Dashboard Mode */}
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, marginBottom: 20 }}>
+            <div style={{ fontSize: 17, fontWeight: 600, color: C.text, marginBottom: 6 }}>Dashboard Mode</div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 18 }}>Choose how you interact with your site.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {([
+                { key: 'easy',     icon: '✨', title: 'Easy Mode',        desc: 'Large chat window + quick actions. Best for most users.' },
+                { key: 'advanced', icon: '⚡', title: 'Advanced Editing', desc: 'Full dashboard with live preview, plugins, and all tools.' },
+              ] as const).map(opt => (
+                <button key={opt.key} onClick={() => setDashboardMode(opt.key)} style={{
+                  padding: '18px 20px', border: `2px solid ${dashboardMode === opt.key ? C.accent : C.border}`,
+                  borderRadius: 12, background: dashboardMode === opt.key ? '#FFF7ED' : C.white,
+                  cursor: 'pointer', textAlign: 'left' as const, transition: 'all 0.15s',
+                }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>{opt.icon}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>{opt.title}</div>
+                  <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5 }}>{opt.desc}</div>
+                  {dashboardMode === opt.key && <div style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: C.accent }}>✓ Current</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button onClick={save} disabled={saving} style={{
             padding: '14px 32px', background: saving ? '#ccc' : C.accent, border: 'none', borderRadius: 12,
             color: 'white', fontSize: 16, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer',

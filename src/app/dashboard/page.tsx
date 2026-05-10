@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 import ThemeBrowser from '@/components/ThemeBrowser'
+import ModePicker from '@/components/ModePicker'
+import EasyModeDashboard from '@/components/EasyModeDashboard'
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Plugin  { name: string; slug: string; active: boolean; version: string; update: string | null }
@@ -170,8 +172,24 @@ function DashboardInner() {
   const urlSite  = params.get('site') || ''
   const urlKey   = params.get('key')  || ''
 
-  const [siteUrl, setSiteUrl] = useState(urlSite)
-  const [apiKey,  setApiKey]  = useState(urlKey)
+  const [siteUrl, setSiteUrl]       = useState(urlSite)
+  const [apiKey,  setApiKey]        = useState(urlKey)
+  const [dashboardMode, setDashboardMode] = useState<'easy'|'advanced'|null>(null)
+
+  // Load dashboardMode on mount
+  useEffect(() => {
+    fetch('/api/user').then(r => r.json()).then(d => {
+      setDashboardMode(d.user?.dashboardMode ?? null)
+    }).catch(() => setDashboardMode('advanced'))
+  }, [])
+
+  async function saveMode(mode: 'easy' | 'advanced') {
+    setDashboardMode(mode)
+    await fetch('/api/user', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dashboardMode: mode }),
+    })
+  }
 
   // Load apiKey from DB — single source of truth, no localStorage needed
   useEffect(() => {
@@ -535,6 +553,16 @@ function DashboardInner() {
     const builderName = theme.builder || (Array.isArray(theme.builders) ? theme.builders[0] : 'WordPress')
     send(`Install and activate the ${theme.name} theme (slug: ${theme.slug}) on my site. It works with ${builderName}.`)
   }
+
+  // ── MODE PICKER (first sign-in: dashboardMode is null) ─────────────
+  if (dashboardMode === null) return (
+    <ModePicker onSelect={saveMode} />
+  )
+
+  // ── EASY MODE ────────────────────────────────────────────────────
+  if (dashboardMode === 'easy') return (
+    <EasyModeDashboard siteUrl={siteUrl} apiKey={apiKey} />
+  )
 
   if (loading) return (
     <div style={{ padding: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, gap: 16 }}>

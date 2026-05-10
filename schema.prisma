@@ -18,6 +18,7 @@ model User {
   name          String?
   image         String?
   phone         String?   @unique // for Twilio SMS commands
+  dashboardMode  String?   @default("advanced") // "easy" | "advanced"
   password      String?   // null for OAuth-only users (bcrypt hashed)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

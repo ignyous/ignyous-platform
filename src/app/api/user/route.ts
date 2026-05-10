@@ -9,7 +9,7 @@ export async function GET() {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  return NextResponse.json({ user: { id: user?.id, name: user?.name, email: user?.email, phone: user?.phone, image: user?.image } })
+  return NextResponse.json({ user: { id: user?.id, name: user?.name, email: user?.email, phone: user?.phone, image: user?.image, dashboardMode: user?.dashboardMode ?? null } })
 }
 
 // PATCH — update user profile (phone, name)
@@ -17,10 +17,11 @@ export async function PATCH(req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   
-  const { phone, name } = await req.json()
+  const { phone, name, dashboardMode } = await req.json()
   const data: any = {}
   if (phone !== undefined) data.phone = phone.replace(/[^\d+]/g, '')
-  if (name !== undefined)  data.name = name
+  if (name  !== undefined) data.name  = name
+  if (dashboardMode !== undefined) data.dashboardMode = dashboardMode
 
   const user = await prisma.user.update({
     where: { email: session.user.email },
