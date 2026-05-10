@@ -562,21 +562,21 @@ function DashboardInner() {
           const targetPage = pages.find(p => p.id === action.pageId)
           const pageUrl    = targetPage?.link
           const pageTitle  = action.title || targetPage?.title || 'Page'
-          const builder    = (siteInfo as any)?.builder || ''
-          const isElementor = typeof builder === 'string'
-            ? builder.toLowerCase().includes('elementor')
-            : Array.isArray(builder) && builder.some((b: any) => b?.id?.includes('elementor') || b?.name?.toLowerCase().includes('elementor'))
 
           let r: any
-          if (isElementor && action.content_type === 'elementor_html') {
-            // For Elementor: append as HTML widget section via bridge elementor endpoint
-            r = await bridge(`pages/${action.pageId}/elementor`, 'POST', {
-              html: action.content, label: pageTitle,
+          if (action.section && action.pageId) {
+            // Builder-native section insertion — uses BuilderAdapter
+            const builderRes = await fetch('/api/builder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                siteUrl: cleanUrl, apiKey,
+                pageId: action.pageId,
+                builder: (siteInfo as any)?.builder || '',
+                section: action.section,
+              }),
             })
-            if (!r.success) {
-              // Fallback: write to post_content as raw HTML (shown as Elementor HTML widget if bridge supports)
-              r = await bridge(`pages/${action.pageId}`, 'POST', { title: action.title, content: action.content, status: action.status || 'publish' })
-            }
+            r = await builderRes.json()
           } else {
             r = await bridge(`pages/${action.pageId}`, 'POST', { title: action.title, content: action.content, status: action.status || 'publish' })
           }

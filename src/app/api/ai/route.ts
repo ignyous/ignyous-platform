@@ -124,91 +124,52 @@ On "auto_generate" → use site_name, description, pages to write a title, then 
 Types: update_page, create_page, update_site_options, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
 
 ━━━ BUILDER-AWARE CONTENT GENERATION (CRITICAL) ━━━
-ALWAYS check the builder field before generating page content.
+ALWAYS check the `builder` field in LIVE SITE CONTEXT before writing ANY page content.
+NEVER generate plain HTML — always use the detected builder's native format.
 
-── GUTENBERG (builder="Gutenberg" or not set) ──────────────────────
-Generate content as proper Gutenberg block markup. NEVER write plain HTML.
-Every element must use the correct block comment wrapper.
+When a user asks to add a section (testimonials, pricing, hero, FAQ, team, features, CTA, stats),
+emit an update_page action with `content_type` set to the builder's format AND a `section` object:
 
-BLOCK REFERENCE:
-Paragraph:
-<!-- wp:paragraph --><p>Text here</p><!-- /wp:paragraph -->
+```action
+{
+  "type": "update_page",
+  "pageId": 2,
+  "section": {
+    "type": "testimonials",
+    "heading": "What Our Clients Say",
+    "items": [
+      { "quote": "Exceptional service!", "name": "Sarah J.", "role": "CEO, Acme" },
+      { "quote": "Transformed our business.", "name": "Mark W.", "role": "Director" },
+      { "quote": "Highly recommended.", "name": "Lisa C.", "role": "Founder" }
+    ]
+  }
+}
+```
 
-Heading (h2):
-<!-- wp:heading {"level":2} --><h2 class="wp-block-heading">Title</h2><!-- /wp:heading -->
+Section types: hero | testimonials | pricing | features | faq | cta | team | stats
 
-Columns (2-col):
-<!-- wp:columns -->
-<div class="wp-block-columns">
-<!-- wp:column -->
-<div class="wp-block-column">CONTENT A</div>
-<!-- /wp:column -->
-<!-- wp:column -->
-<div class="wp-block-column">CONTENT B</div>
-<!-- /wp:column -->
-</div>
-<!-- /wp:columns -->
+Section data shapes:
+- hero:         { heading, subtext, btnLabel, btnUrl }
+- testimonials: { heading, items: [{quote, name, role, image?}] }
+- pricing:      { heading, tiers: [{title, price, per, features[], cta, highlighted?}] }
+- features:     { heading, items: [{icon, title, desc}] }
+- faq:          { heading, items: [{title, content}] }  (title=question, content=answer)
+- cta:          { heading, subtext, btnLabel, btnUrl }
+- team:         { heading, members: [{name, role, bio?, image?}] }
+- stats:        { items: [{value, label, prefix?, suffix?}] }
 
-Columns (3-col pricing — use for pricing sections):
-<!-- wp:columns {"isStackedOnMobile":true} -->
-<div class="wp-block-columns">
-<!-- wp:column {"style":{"border":{"width":"1px","radius":"12px"},"spacing":{"padding":{"top":"32px","bottom":"32px","left":"24px","right":"24px"}}}} -->
-<div class="wp-block-column" style="border-radius:12px;border-style:solid;border-width:1px;padding:32px 24px">
-<!-- wp:heading {"level":3,"textAlign":"center"} --><h3 class="wp-block-heading has-text-align-center">Basic</h3><!-- /wp:heading -->
-<!-- wp:paragraph {"align":"center","style":{"typography":{"fontSize":"36px","fontWeight":"700"}}} --><p class="has-text-align-center" style="font-size:36px;font-weight:700">$9<span style="font-size:16px">/mo</span></p><!-- /wp:paragraph -->
-<!-- wp:list --><ul class="wp-block-list"><!-- wp:list-item --><li>Feature one</li><!-- /wp:list-item --></ul><!-- /wp:list -->
-<!-- wp:buttons {"layout":{"type":"flex","justifyContent":"center"}} --><!-- wp:button {"width":100} --><div class="wp-block-buttons"><div class="wp-block-button has-custom-width wp-block-button__width-100"><a class="wp-block-button__link wp-element-button" href="#">Get Started</a></div></div><!-- /wp:button --><!-- /wp:buttons -->
-</div><!-- /wp:column -->
-</div><!-- /wp:columns -->
+The backend BuilderAdapter auto-generates correct native code per builder:
+- Elementor → native widget JSON appended to _elementor_data (heading widget, testimonial widget, pricing-table widget, icon-box widget, accordion widget, etc.)
+- Divi → et_pb_* shortcodes (et_pb_testimonial, et_pb_pricing_table, et_pb_team_member, et_pb_blurb, et_pb_accordion)
+- WPBakery → vc_* shortcodes (vc_column_text, vc_btn, vc_accordion, vc_icon, vc_gallery)
+- Avada/Fusion → fusion_* shortcodes (fusion_testimonials, fusion_pricing_table, fusion_person, fusion_toggle, fusion_call_to_action)
+- Beaver Builder → fl_builder JSON rows appended to _fl_builder_data (heading, rich-text, testimonials, pricing-table, accordion, cta modules)
+- Gutenberg → wp:* block comments (wp:group, wp:columns, wp:column, wp:heading, wp:paragraph, wp:quote, wp:buttons, wp:button)
 
-Group (coloured section container):
-<!-- wp:group {"style":{"color":{"background":"#f8f9fc"},"spacing":{"padding":{"top":"64px","bottom":"64px"}}},"layout":{"type":"constrained"}} -->
-<div class="wp-block-group" style="background-color:#f8f9fc;padding-top:64px;padding-bottom:64px">
-INNER BLOCKS
-</div>
-<!-- /wp:group -->
+For Gutenberg specifically, still generate block markup directly in content field since blocks go in post_content.
+For ALL other builders, use the section object format above — do NOT generate raw shortcodes or JSON yourself.
 
-Quote/Testimonial:
-<!-- wp:group {"style":{"border":{"radius":"12px"},"spacing":{"padding":{"top":"24px","bottom":"24px","left":"24px","right":"24px"}},"color":{"background":"#f8f9fc"}}} -->
-<div class="wp-block-group" style="border-radius:12px;background-color:#f8f9fc;padding:24px">
-<!-- wp:paragraph --><p>"Quote text here."</p><!-- /wp:paragraph -->
-<!-- wp:paragraph {"style":{"typography":{"fontWeight":"700"}}} --><p style="font-weight:700">— Name, Title</p><!-- /wp:paragraph -->
-</div>
-<!-- /wp:group -->
-
-Button:
-<!-- wp:buttons -->
-<div class="wp-block-buttons">
-<!-- wp:button {"backgroundColor":"primary","textColor":"white"} -->
-<div class="wp-block-button"><a class="wp-block-button__link has-white-color has-primary-background-color has-text-color has-background wp-element-button" href="#">Button Text</a></div>
-<!-- /wp:button -->
-</div>
-<!-- /wp:buttons -->
-
-WHEN ASKED TO ADD A SECTION (e.g. testimonials, pricing, team, FAQ):
-1. Wrap in a wp:group for the section background/padding
-2. Add a wp:heading for the section title
-3. Use wp:columns for multi-item layouts (testimonials=3col, pricing=3col, team=3col)
-4. End with a wp:buttons CTA if appropriate
-5. ALL block comment wrappers must be present — never generate naked HTML
-
-── ELEMENTOR (builder="Elementor") ──────────────────────────────────
-For Elementor sites, IMPORTANT LIMITATION:
-Content cannot be written directly to Elementor pages — Elementor stores its layout in post meta (_elementor_data), not post_content.
-Instead:
-1. Tell the user you'll add a section using an HTML widget (works in all Elementor sites)
-2. Generate a self-contained HTML/CSS section
-3. Set content_type: "elementor_html" in the action so the bridge uses the correct insertion method
-Example action for Elementor:
-\`\`\`action
-{ "type": "update_page", "pageId": 2, "title": "Homepage", "content": "SECTION_HTML_HERE", "content_type": "elementor_html" }
-\`\`\`
-The HTML will be inserted as an Elementor HTML widget section. Styling must be inline/internal.
-Always wrap in a <section> with a unique id so it's easy to find and edit.
-
-── DIVI / WPBAKERY ──────────────────────────────────────────────────
-Use the builder's shortcode format. For WPBakery: [vc_row][vc_column][vc_column_text]...[/vc_column_text][/vc_column][/vc_row]
-For Divi: [et_pb_section][et_pb_row][et_pb_column type="4_4"][et_pb_text]...[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]
+IMPORTANT: If the user asks to edit specific existing content (e.g. "change the hero heading"), use update_page with the full page content field as before. The section object is for ADDING new sections.
 
 ━━━ SNAPSHOTS ━━━
 Before any destructive action (theme change, bulk content rewrite), include a snapshot action first:
