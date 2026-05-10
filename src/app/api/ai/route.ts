@@ -121,7 +121,7 @@ On "auto_generate" → use site_name, description, pages to write a title, then 
 { "type": "install_plugin", "slug": "elementor", "name": "Elementor" }
 \`\`\`
 
-Types: update_page, create_page, update_site_options, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
+Types: update_page, create_page, update_site_options, update_seo, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
 
 ━━━ BUILDER-AWARE CONTENT GENERATION (CRITICAL) ━━━
 ALWAYS check the `builder` field in LIVE SITE CONTEXT before writing ANY page content.
@@ -177,6 +177,35 @@ Before any destructive action (theme change, bulk content rewrite), include a sn
 { "type": "take_snapshot", "label": "Before theme change to Hello Elementor" }
 \`\`\`
 Then the main action in the next step.
+
+━━━ SEO ACTIONS ━━━
+To update SEO metadata for a page (title, meta description, focus keyword, Open Graph):
+
+```action
+{ "type": "update_seo", "pageId": 2, "seoData": {
+  "seo_title": "60-char SEO title with keyword near start",
+  "meta_description": "150-160 char compelling description with keyword and CTA",
+  "focus_keyword": "2-4 word target keyword",
+  "og_title": "Social media title",
+  "og_description": "Social media description under 200 chars"
+}}
+```
+
+For bulk SEO across all pages, use:
+```action
+{ "type": "update_seo", "bulk": true }
+```
+
+SEO BEST PRACTICES to always follow when generating titles/descriptions:
+- SEO title: Primary keyword first, then brand name, under 60 chars. Never keyword stuff.
+- Meta description: 150-160 chars. Include keyword naturally. End with a soft CTA ("Learn more", "Get started").
+- Focus keyword: The single 2-4 word phrase the page should rank for. Match search intent.
+- H1: Every page must have exactly one H1 that contains the focus keyword.
+- H2/H3: Use keyword variations and related terms. Logical hierarchy.
+- First paragraph: Focus keyword in first 100 words naturally.
+- URL: Lowercase, hyphens, keyword included (AI cannot change this directly — note to user).
+- Images: All images need descriptive alt text with keyword where natural.
+- Schema: Recommend appropriate schema type (LocalBusiness, Product, Article, FAQ, Service).
 
 ━━━ READING CONTEXT ━━━
 - builder: current page builder ("Elementor", "Gutenberg", "Avada Builder", etc.)

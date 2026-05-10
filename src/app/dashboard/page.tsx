@@ -543,7 +543,7 @@ function DashboardInner() {
 
     // Auto-snapshot before destructive actions
     let snapshotId = ''
-    if (['update_page','create_page','update_site_options','install_plugin','install_theme'].includes(action.type)) {
+    if (['update_page','create_page','update_site_options','update_seo','install_plugin','install_theme'].includes(action.type)) {
       try {
         const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
         if (snapRes.success) {
@@ -603,6 +603,35 @@ function DashboardInner() {
           }
           break
         }
+        case 'update_seo': {
+          const targetPage = pages.find(p => p.id === action.pageId)
+          if (action.bulk) {
+            // Bulk SEO — call SEO API
+            const seoRes = await fetch('/api/seo', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'bulk_generate', siteUrl: cleanUrl, apiKey, pages, siteContext: { site_name: siteInfo?.site?.name, site_url: cleanUrl, description: siteInfo?.site?.description } }),
+            })
+            const seoData = await seoRes.json()
+            result = { type: 'update_seo', success: seoData.success, message: `SEO optimized for ${seoData.updated || 0} pages` }
+          } else if (action.pageId) {
+            const seoRes = await fetch('/api/seo', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'update', siteUrl: cleanUrl, apiKey, pageId: action.pageId, seoData: action.seoData }),
+            })
+            const seoData = await seoRes.json()
+            result = { type: 'update_seo', success: seoData.success, message: seoData.success ? `SEO updated for "${targetPage?.title || 'page'}"` : `SEO update failed: ${seoData.message}` }
+          } else {
+            // AI-generate for all pages
+            const seoRes = await fetch('/api/seo', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'bulk_generate', siteUrl: cleanUrl, apiKey, pages, siteContext: { site_name: siteInfo?.site?.name, site_url: cleanUrl } }),
+            })
+            const seoData = await seoRes.json()
+            result = { type: 'update_seo', success: seoData.success, message: `AI optimized SEO for ${seoData.updated || 0} pages` }
+          }
+          break
+        }
+
         case 'update_site_options': {
           const r = await bridge('site/settings', 'PATCH', { blogname: action.blogname, blogdescription: action.blogdescription, ...action.options })
           result = { type: 'update_site_options', success: r.success, message: r.success ? 'Site settings updated' : `Failed: ${r.error}` }
