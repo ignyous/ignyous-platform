@@ -90,16 +90,122 @@ const SEO_ACTION = {
 Then ask me: "Do you want me to use your existing content to apply SEO best practices across your site?" with options to proceed or customize what gets optimized. Show me a before score first.`,
 }
 
-const ACTIONS = [
-  { icon: '📬', label: 'Generate Leads',    desc: 'Contact forms, quote requests, CTAs',          prompt: 'Add a contact form with SMS alerts and a lead capture strategy to my site.' },
-  { icon: '🛒', label: 'Sell Products',     desc: 'Add an online store',                          prompt: 'I want to sell products or services on my site. Walk me through adding a store.' },
-  { icon: '🛠️', label: 'Offer Services',   desc: 'Service pages with CTAs',                     prompt: 'Create professional service pages that explain what I offer and include call-to-actions.' },
-  { icon: '🎨', label: 'Change Design',     desc: 'New theme, colors & layout',                  prompt: 'OPEN_THEME_BROWSER' },
-  { icon: '📝', label: 'Rewrite Content',   desc: 'Professional copy that converts',             prompt: 'Rewrite all my page content to be more professional, clear, and SEO-optimized.' },
-  { icon: '⚡', label: 'Speed Up Site',    desc: 'Faster load times',                           prompt: 'My site is slow. Identify every performance issue and fix them.' },
-  { icon: '📊', label: 'Add Analytics',     desc: 'Track visitors & conversions',                prompt: 'Set up Google Analytics and Google Search Console on my site.' },
-  { icon: '🔒', label: 'Secure My Site',   desc: 'SSL, backups, protection',                    prompt: 'Check my site security, enable HTTPS, and set up automatic backups.' },
-]
+// ─── CONTEXTUAL QUICK ACTIONS ────────────────────────────────────
+// Tailored to each site based on installed plugins & theme
+
+type QuickAction = { icon: string; label: string; desc: string; prompt: string }
+
+function getContextualActions(siteInfo: SiteInfo | null, hasPlugin: (...slugs: string[]) => boolean): QuickAction[] {
+  const actions: QuickAction[] = []
+  const plugins  = siteInfo?.plugins || []
+  const hasWoo   = hasPlugin('woocommerce')
+  const hasEvents= hasPlugin('events-calendar','the-events','event-calendar')
+  const hasForms = hasPlugin('contact-form','wpforms','gravity','cf7','ninja-forms')
+  const hasYoast = hasPlugin('yoast','rank-math','rankmath')
+  const hasAmelia= hasPlugin('amelia')
+  const hasML    = hasPlugin('mailchimp','mailpoet','newsletter','klaviyo')
+  const hasSlider= hasPlugin('slider-revolution','revslider','smart-slider','meta-slider')
+  const hasGal   = hasPlugin('envira-gallery','modula','nextgen-gallery','final-tiles')
+  const hasLMS   = hasPlugin('learndash','tutor-lms','lifterLMS','learnpress')
+  const hasMbr   = hasPlugin('memberpress','restrict-content','paid-memberships')
+  const hasSocial= hasPlugin('instagram-feed','smash-balloon','social-snap','revive-social')
+  const hasBkng  = hasPlugin('bookly','simply-schedule','booking-wp-plugin')
+  const builder  = (siteInfo as any)?.builder || ''
+
+  // ── WooCommerce: store-specific actions ──────────────────────────
+  if (hasWoo) {
+    actions.push(
+      { icon: '🏷️', label: 'Run a Sale',          desc: 'Set discounts on products',           prompt: 'I want to run a sale. Help me set up a discount on my products — either a percentage off specific items or sitewide.' },
+      { icon: '📦', label: 'Add a Product',        desc: 'Create a new product listing',        prompt: 'Help me add a new product to my store. Walk me through title, description, price, image, and category.' },
+      { icon: '💳', label: 'Review Cart & Checkout', desc: 'Optimize the buying experience',   prompt: 'Audit my WooCommerce cart and checkout pages. Check for friction points, upsell opportunities, and abandoned cart recovery.' },
+      { icon: '📊', label: 'Sales Dashboard',      desc: 'Check store performance',             prompt: 'Give me a summary of my WooCommerce store: product count, any configuration issues, and recommendations to increase sales.' },
+      { icon: '🚚', label: 'Configure Shipping',   desc: 'Set up shipping zones & rates',       prompt: 'Help me configure shipping zones, flat rates, free shipping thresholds, and local pickup for my WooCommerce store.' },
+      { icon: '🎁', label: 'Add Coupon Code',       desc: 'Create a discount coupon',           prompt: 'Create a WooCommerce coupon code with a percentage or fixed discount, expiry date, and usage limits.' }
+    )
+  }
+
+  // ── Events Calendar ──────────────────────────────────────────────
+  if (hasEvents) {
+    actions.push(
+      { icon: '📅', label: 'Create an Event',      desc: 'Add a new event to the calendar',    prompt: 'Help me create a new event with title, date, time, location, and description. Add it to my events calendar.' },
+      { icon: '🎟️', label: 'Promote an Event',     desc: 'Feature event on homepage',          prompt: 'I want to feature an upcoming event prominently on my homepage. Help me add a compelling event section with CTA.' },
+      { icon: '📆', label: 'Review Events Setup',  desc: 'Audit calendar configuration',        prompt: 'Review my Events Calendar setup. Check registration, ticketing, and suggest improvements for better attendance.' }
+    )
+  }
+
+  // ── Booking plugins ──────────────────────────────────────────────
+  if (hasAmelia || hasBkng) {
+    actions.push(
+      { icon: '📋', label: 'Review Booking Setup', desc: 'Check services & availability',       prompt: 'Review my booking system. Check services, staff, availability, and confirmation emails. Suggest improvements.' },
+      { icon: '🔗', label: 'Add Book Now CTA',     desc: 'Add booking buttons to pages',        prompt: 'Add a prominent "Book Now" call-to-action to my homepage and service pages, linked to my booking system.' }
+    )
+  }
+
+  // ── Email marketing ──────────────────────────────────────────────
+  if (hasML) {
+    actions.push(
+      { icon: '📧', label: 'Grow My List',         desc: 'Add opt-in forms & lead magnets',     prompt: 'Help me grow my email list. Add opt-in forms, a lead magnet offer, and pop-up to capture subscriber emails.' },
+      { icon: '✉️', label: 'Set Up Email Flow',    desc: 'Welcome sequence for new subscribers', prompt: 'Help me set up a welcome email sequence for new subscribers. Suggest content for the first 3 emails.' }
+    )
+  }
+
+  // ── LMS ──────────────────────────────────────────────────────────
+  if (hasLMS) {
+    actions.push(
+      { icon: '🎓', label: 'Add a Course',          desc: 'Create a new course listing',        prompt: 'Help me create a new course with curriculum, pricing, and enrollment page. Walk me through the full setup.' },
+      { icon: '📈', label: 'Promote My Courses',    desc: 'Feature courses on homepage',         prompt: 'Help me feature my courses prominently on the homepage with a grid or hero section that drives enrollments.' }
+    )
+  }
+
+  // ── Membership ───────────────────────────────────────────────────
+  if (hasMbr) {
+    actions.push(
+      { icon: '🔐', label: 'Set Up Membership',    desc: 'Configure levels & access',           prompt: 'Review my membership setup. Check levels, pricing, and restricted content. Suggest ways to increase sign-ups.' }
+    )
+  }
+
+  // ── Gallery plugins ──────────────────────────────────────────────
+  if (hasGal) {
+    actions.push(
+      { icon: '🖼️', label: 'Update Gallery',       desc: 'Refresh photo gallery layout',        prompt: 'Help me update my gallery. Suggest a better layout and check if images are optimised for fast loading.' }
+    )
+  }
+
+  // ── Social feed plugins ──────────────────────────────────────────
+  if (hasSocial) {
+    actions.push(
+      { icon: '📱', label: 'Update Social Feeds',  desc: 'Refresh Instagram/Facebook display',  prompt: 'Review my social media feed setup. Make sure it is showing current posts and positioned well on the site.' }
+    )
+  }
+
+  // ── Forms ────────────────────────────────────────────────────────
+  if (hasForms) {
+    actions.push(
+      { icon: '📬', label: 'Check Form Alerts',    desc: 'Make sure you get notified',          prompt: 'Check my contact forms are sending email and SMS notifications correctly. Test and fix any issues.' }
+    )
+  } else {
+    actions.push(
+      { icon: '📬', label: 'Add Contact Form',     desc: 'Capture leads from visitors',         prompt: 'Add a contact form with SMS alerts and a lead capture strategy to my site.' }
+    )
+  }
+
+  // ── Universal actions (always shown, smart ordering) ─────────────
+  if (!hasWoo) {
+    actions.push({ icon: '🛒', label: 'Add Online Store',   desc: 'Sell products or services',   prompt: 'I want to sell products or services on my site. Walk me through adding a WooCommerce store.' })
+  }
+  actions.push(
+    { icon: '🎨', label: 'Change Design',      desc: 'New theme, colors & layout',          prompt: 'OPEN_THEME_BROWSER' },
+    { icon: '📝', label: 'Rewrite Content',    desc: 'Professional copy that converts',      prompt: 'Rewrite all my page content to be more professional, clear, and SEO-optimized.' },
+    { icon: '⚡', label: 'Speed Up Site',     desc: 'Faster load times',                   prompt: 'My site is slow. Identify every performance issue and fix them.' },
+    { icon: '📊', label: 'Add Analytics',      desc: 'Track visitors & conversions',         prompt: 'Set up Google Analytics and Google Search Console on my site.' },
+    { icon: '🔒', label: 'Secure My Site',    desc: 'SSL, backups, protection',             prompt: 'Check my site security, enable HTTPS, and set up automatic backups.' },
+    { icon: '🛠️', label: 'Add Service Pages',  desc: 'Pages that explain what you offer',   prompt: 'Create professional service pages that explain what I offer and include call-to-actions.' }
+  )
+
+  // Deduplicate and cap at 8 (contextual ones first since they're inserted first)
+  const seen = new Set<string>()
+  return actions.filter(a => { if (seen.has(a.label)) return false; seen.add(a.label); return true }).slice(0, 8)
+}
 
 const SUGGESTIONS = [
   '✦ Auto-suggest content for my homepage',
@@ -560,9 +666,11 @@ function DashboardInner() {
   )
 
   // ── EASY MODE ────────────────────────────────────────────────────
-  if (dashboardMode === 'easy') return (
-    <EasyModeDashboard siteUrl={siteUrl} apiKey={apiKey} />
-  )
+  if (dashboardMode === 'easy') {
+    // Pass plugin slugs for contextual quick actions — use what we have, or empty array
+    const slugs = (siteInfo?.plugins || []).map((p: any) => p.slug || '')
+    return <EasyModeDashboard siteUrl={siteUrl} apiKey={apiKey} pluginSlugs={slugs} />
+  }
 
   if (loading) return (
     <div style={{ padding: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, gap: 16 }}>
@@ -596,6 +704,8 @@ function DashboardInner() {
   const hasYoast      = hasPlugin(plugins, 'yoast','rank-math','rankmath')
   const hasRocket     = hasPlugin(plugins, 'wp-rocket','w3-total','litespeed','autoptimize')
   const updates       = plugins.filter(p => p.update).length
+  // Contextual actions tailored to this site's installed plugins
+  const contextualActions = getContextualActions(siteInfo, (...slugs) => hasPlugin(plugins, ...slugs))
   const issues        = detectIssues(siteInfo, scanReport, pages)
   const visibleIssues = issues.filter(i => !dismissedIssues.includes(i.title))
 
@@ -833,7 +943,7 @@ function DashboardInner() {
 
           <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 10, paddingLeft: 4 }}>Quick Actions</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {ACTIONS.slice(0, 8).map(action => (
+            {contextualActions.map(action => (
               <button key={action.label}
                 onClick={() => action.prompt==='OPEN_THEME_BROWSER' ? setShowThemes(true) : send(action.prompt)}
                 style={{

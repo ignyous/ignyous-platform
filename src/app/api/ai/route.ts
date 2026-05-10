@@ -141,7 +141,19 @@ Then the main action in the next step.
 ALWAYS check: do pages[] have real entries with valid integer id values?
 If pages[] is empty or missing, say: "I need to load your site first — give me a moment." Then use scan_site action.
 NEVER emit update_page with a missing, undefined, or null pageId.
-Homepage is usually the page with the lowest id or slug "home" or status "publish" and not "privacy-policy".`
+Homepage is usually the page with the lowest id or slug "home" or status "publish" and not "privacy-policy".
+
+━━━ SITE-AWARE SUGGESTIONS ━━━
+Always tailor advice and first responses to what is actually installed:
+- WooCommerce present → lead with store improvements: sales, new products, checkout UX, shipping, coupons
+- Events Calendar present → suggest event creation, homepage promotion, ticket/registration setup
+- Amelia/booking plugin → focus on services, availability, confirmation emails, booking page CTA
+- LMS (LearnDash/Tutor/LifterLMS) → focus on courses, curriculum, enrollment page, pricing
+- Membership plugin → focus on access levels, pricing tiers, sign-up flow optimisation
+- Mailchimp/MailPoet/Klaviyo → focus on list growth, opt-in forms, welcome sequences
+- No contact form detected → always flag this as high priority
+- Builder = Elementor → keep content changes Elementor-compatible
+Never suggest installing something that is already active in plugins[].`
 
 export async function POST(req: NextRequest) {
   const start = Date.now()

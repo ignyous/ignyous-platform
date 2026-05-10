@@ -2,20 +2,55 @@
 import { useState, useEffect, useRef } from 'react'
 import AppLayout from '@/components/AppLayout'
 
-const EASY_ACTIONS = [
-  { icon: '📝', label: 'Rewrite my homepage', prompt: 'Rewrite my homepage content to be more professional and compelling.' },
-  { icon: '📬', label: 'Add a contact form', prompt: 'Add a contact form to my site so visitors can reach me.' },
-  { icon: '🔍', label: 'Improve my SEO', prompt: 'Check my SEO and improve it so I show up better on Google.' },
-  { icon: '🎨', label: 'Refresh my design', prompt: 'My site design feels outdated. Suggest and apply a fresh modern look.' },
-  { icon: '💰', label: 'Add pricing section', prompt: 'Add a pricing section to my homepage with 3 tiers.' },
-  { icon: '⚡', label: 'Speed up my site', prompt: 'My site is slow. Find and fix every performance issue.' },
-  { icon: '🛒', label: 'Set up a store', prompt: 'I want to sell products or services online. Help me set up a store.' },
-  { icon: '🔒', label: 'Secure my site', prompt: 'Check my site security and make sure HTTPS is enabled.' },
-]
+type EasyAction = { icon: string; label: string; prompt: string }
+
+function getEasyActions(plugins: string[]): EasyAction[] {
+  const has = (...slugs: string[]) => slugs.some(s => plugins.some(p => p.includes(s)))
+  const actions: EasyAction[] = []
+
+  if (has('woocommerce')) {
+    actions.push(
+      { icon: '🏷️', label: 'Run a sale',         prompt: 'I want to run a sale on my products. Help me set up discounts.' },
+      { icon: '📦', label: 'Add a product',        prompt: 'Help me add a new product to my WooCommerce store.' },
+      { icon: '💳', label: 'Improve checkout',     prompt: 'Review and improve my WooCommerce checkout experience.' }
+    )
+  }
+  if (has('events-calendar','the-events','event-calendar')) {
+    actions.push(
+      { icon: '📅', label: 'Create an event',      prompt: 'Help me create and publish a new event on my site.' },
+      { icon: '🎟️', label: 'Promote an event',     prompt: 'Feature an upcoming event prominently on my homepage.' }
+    )
+  }
+  if (has('amelia','bookly','simply-schedule','booking-wp')) {
+    actions.push({ icon: '📋', label: 'Update booking settings', prompt: 'Review my booking system and check services and availability.' })
+  }
+  if (has('mailchimp','mailpoet','newsletter','klaviyo')) {
+    actions.push({ icon: '📧', label: 'Grow my email list', prompt: 'Add opt-in forms and a lead magnet to grow my email list.' })
+  }
+  if (has('learndash','tutor-lms','lifterLMS','learnpress')) {
+    actions.push({ icon: '🎓', label: 'Add a course', prompt: 'Help me create and publish a new online course.' })
+  }
+
+  // Universal fallbacks
+  actions.push(
+    { icon: '📝', label: 'Rewrite my homepage',  prompt: 'Rewrite my homepage content to be more professional and compelling.' },
+    { icon: '🔍', label: 'Improve my SEO',        prompt: 'Check my SEO and improve it so I show up better on Google.' },
+    { icon: '🎨', label: 'Refresh my design',     prompt: 'My site design feels outdated. Suggest and apply a fresh modern look.' },
+    { icon: '💰', label: 'Add pricing section',   prompt: 'Add a pricing section to my homepage with 3 tiers.' },
+    { icon: '⚡', label: 'Speed up my site',     prompt: 'My site is slow. Find and fix every performance issue.' },
+    { icon: '🔒', label: 'Secure my site',        prompt: 'Check my site security and make sure HTTPS is enabled.' }
+  )
+  if (!has('woocommerce')) {
+    actions.push({ icon: '🛒', label: 'Set up a store', prompt: 'I want to sell products or services online. Help me set up a store.' })
+  }
+
+  const seen = new Set<string>()
+  return actions.filter(a => { if (seen.has(a.label)) return false; seen.add(a.label); return true }).slice(0, 8)
+}
 
 interface Message { role: 'user' | 'assistant'; content: string; options?: { label: string }[]; ts: Date }
 
-export default function EasyModeDashboard({ siteUrl, apiKey }: { siteUrl: string; apiKey: string }) {
+export default function EasyModeDashboard({ siteUrl, apiKey, pluginSlugs = [] }: { siteUrl: string; apiKey: string; pluginSlugs?: string[] }) {
   const [messages, setMessages]   = useState<Message[]>([])
   const [input, setInput]         = useState('')
   const [sending, setSending]     = useState(false)
@@ -153,7 +188,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey }: { siteUrl: string
           <div style={{ maxWidth: 760, margin: '0 auto' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Quick Actions</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 14 }}>
-              {EASY_ACTIONS.map(a => (
+              {getEasyActions(pluginSlugs).map(a => (
                 <button key={a.label} onClick={() => send(a.prompt)} style={{
                   padding: '7px 14px', border: '1.5px solid #E5E7EB', borderRadius: 20,
                   background: '#F9FAFB', color: '#374151', fontSize: 13, fontWeight: 500,
