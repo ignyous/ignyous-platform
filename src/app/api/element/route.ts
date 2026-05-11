@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import Anthropic from '@anthropic-ai/sdk'
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 async function bridge(siteUrl: string, apiKey: string, endpoint: string, method = 'GET', body?: any) {
   const base    = siteUrl.replace(/\/$/, '')
@@ -57,13 +60,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(r)
   }
 
-  // ── Find element by description + update ────────────────────────
+  // ── Find element by description (Claude-powered matching) ────────
   if (action === 'find_and_update' && description) {
-    // First read structure, then let the bridge find by description
-    const r = await bridge(siteUrl, apiKey, `pages/${pageId}/element/find`, 'POST', {
-      description, updates,
-    })
-    return NextResponse.json(r)
+    // Step 1: read full page structure from bridge
+    const structureRes = await bridge(siteUrl, apiKey, `pages/${pageId}/structure`)
+    const sections = structureRes?.data?.sections || []
+    const builder  = structureRes?.data?.builder  || 'unknown'
+    let   targetId: string | null = null
+
+    // Step 2: ask Claude to pick the best matching element
+    if (sections.length > 0) {
+      try {
+        const summary = sections.slice(0, 40).map((s: any, i: number) =>
+          `[index:${i}] id="${s.id}" type="${s.type}" label="${s.label}" ` +
+          `bg_color="${s.settings?.background_color || 'none'}" ` +
+          `bg_image="${s.settings?.background_image ? 'yes' : 'no'}" ` +
+          `text="${(s.settings?.title || s.settings?.text || '').slice(0, 80).replace(/\n/g,' ')}"`
+        ).join('\n')
+
+        const resp = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514', max_tokens: 60,
+          messages: [{ role: 'user', content:
+            `Builder: ${builder}. Page elements:\n${summary}\n\n` +
+            `User wants to edit: "${description}"\n\n` +
+            `Rules:\n` +
+            `- "header", "hero", "banner", "top" → usually index 0 (the first section)\n` +
+            `- "footer", "bottom" → usually the last section\n` +
+            `- "contact", "form" → section containing contact or form text\n` +
+            `- Match label text, type, position, and content clues\n\n` +
+            `Reply with ONLY the element id value (the string after id=), nothing else. If no match, reply: none`
+          }],
+        })
+        const raw = resp.content[0].type === 'text' ? resp.content[0].text.trim().replace(/^["']|["']$/g, '') : ''
+        if (raw && raw !== 'none' && sections.some((s: any) => s.id === raw)) targetId = raw
+      } catch {}
+    }
+
+    // Step 3: update by matched ID or fall back to bridge keyword matching
+    if (targetId) {
+      const r = await bridge(siteUrl, apiKey, `pages/${pageId}/element/${targetId}`, 'PATCH', { updates })
+      return NextResponse.json({ ...r, matchedId: targetId, matchMethod: 'claude-ai' })
+    }
+    const r = await bridge(siteUrl, apiKey, `pages/${pageId}/element/find`, 'POST', { description, updates })
+    return NextResponse.json({ ...r, matchMethod: 'keyword-fallback' })
   }
 
   // ── Reorder sections ────────────────────────────────────────────

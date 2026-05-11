@@ -545,7 +545,7 @@ function DashboardInner() {
 
     // Auto-snapshot before destructive actions
     let snapshotId = ''
-    if (['update_page','create_page','update_site_options','update_seo','install_plugin','install_theme'].includes(action.type)) {
+    if (['update_page','create_page','update_site_options','update_seo','update_element','plugin_action','install_plugin','install_theme'].includes(action.type)) {
       try {
         const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
         if (snapRes.success) {
@@ -702,6 +702,22 @@ function DashboardInner() {
           if (data.success && targetPage?.link) {
             setPreviewUrl(targetPage.link); setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000)
           }
+          break
+        }
+
+        case 'clear_cache': {
+          const r = await fetch('/api/cache', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const data = await r.json()
+          result = { type: 'clear_cache', success: data.success ?? false, message: data.message || (data.success ? 'Cache cleared' : 'Cache clear failed') }
+          break
+        }
+
+        case 'plugin_action': {
+          const r = await fetch('/api/plugins', { method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: action.action, plugin: action.plugin, siteUrl: cleanUrl, apiKey, data: action.data })
+          })
+          const data = await r.json()
+          result = { type: 'plugin_action', success: data.success ?? false, message: data.message || JSON.stringify(data.data || '').slice(0,120) }
           break
         }
 

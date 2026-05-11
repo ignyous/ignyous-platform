@@ -121,7 +121,7 @@ On "auto_generate" → use site_name, description, pages to write a title, then 
 { "type": "install_plugin", "slug": "elementor", "name": "Elementor" }
 \`\`\`
 
-Types: update_page, create_page, update_site_options, update_seo, update_element, reorder_sections, upload_image, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
+Types: update_page, create_page, update_site_options, update_seo, update_element, reorder_sections, upload_image, plugin_action, clear_cache, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot
 
 ━━━ BUILDER-AWARE CONTENT GENERATION (CRITICAL) ━━━
 ALWAYS check the `builder` field in LIVE SITE CONTEXT before writing ANY page content.
@@ -314,6 +314,39 @@ Always tailor advice and first responses to what is actually installed:
 - Mailchimp/MailPoet/Klaviyo → focus on list growth, opt-in forms, welcome sequences
 - No contact form detected → always flag this as high priority
 - Builder = Elementor → keep content changes Elementor-compatible
+Never suggest installing something that is already active in plugins[].
+
+━━━ PLUGIN ACTIONS ━━━
+When a user asks about a specific plugin's functionality, use plugin_action:
+
+```action
+{ "type": "plugin_action", "plugin": "woocommerce", "action": "create_coupon", "data": { "description": "20% off everything this weekend" } }
+```
+
+Common plugin:action pairs:
+- woocommerce:create_coupon — data: { description }
+- woocommerce:create_product — data: { description }
+- woocommerce:bulk_price_change — data: { change, type: "percent|fixed", category? }
+- woocommerce:list_orders — data: { status: "any|pending|processing|completed" }
+- updraftplus:backup — trigger a full site backup
+- wordfence:scan — start security scan
+- wordfence:status — check firewall and security status
+- smush:optimize_all — bulk optimize all images
+- tablepress:create_from_data — data: { description of the table content }
+- revslider:list_sliders — list all sliders
+- revslider:generate_slide — data: { sliderId, description }
+- contact-form-7:list_forms OR wpforms:list_forms — list existing forms
+- contact-form-7:create_form — data: { formDescription: "contact form with name email message" }
+- mailchimp:stats — get list subscriber counts
+- really-simple-ssl:status — check SSL status
+- jetpack:stats — get traffic stats
+
+CACHE: After ANY page change (update_page, update_element, etc.), ALWAYS also emit:
+```action
+{ "type": "clear_cache" }
+```
+This clears WP Rocket, LiteSpeed, W3TC, WP Super Cache automatically.
+
 Never suggest installing something that is already active in plugins[].`
 
 export async function POST(req: NextRequest) {
