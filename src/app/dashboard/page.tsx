@@ -355,6 +355,7 @@ function DashboardInner() {
   const [pendingAction, setPendingAction]       = useState<{action: any; msg: Message} | null>(null)
   const [livePreviewHtml, setLivePreviewHtml]   = useState<string | null>(null)
   const [livePreviewLoading, setLivePreviewLoading] = useState(false)
+  const [rightTab, setRightTab]             = useState<'preview'|'design'>('preview')
   const [pendingImageData, setPendingImageData] = useState<{data:string;name:string}|null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
@@ -545,7 +546,7 @@ function DashboardInner() {
 
     // Auto-snapshot before destructive actions
     let snapshotId = ''
-    if (['update_page','create_page','update_site_options','update_seo','update_element','plugin_action','install_plugin','install_theme'].includes(action.type)) {
+    if (['update_page','create_page','update_site_options','update_seo','update_element','update_global_style','plugin_action','install_plugin','install_theme'].includes(action.type)) {
       try {
         const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
         if (snapRes.success) {
@@ -846,9 +847,17 @@ function DashboardInner() {
 
   // ── EASY MODE ────────────────────────────────────────────────────
   if (dashboardMode === 'easy') {
-    // Pass plugin slugs for contextual quick actions — use what we have, or empty array
     const slugs = (siteInfo?.plugins || []).map((p: any) => p.slug || '')
-    return <EasyModeDashboard siteUrl={siteUrl} apiKey={apiKey} pluginSlugs={slugs} />
+    return <EasyModeDashboard
+      siteUrl={siteUrl}
+      apiKey={apiKey}
+      pluginSlugs={slugs}
+      userName={session?.user?.name || session?.user?.email || ''}
+      onSwitchMode={async () => {
+        await fetch('/api/user', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dashboardMode:'advanced' }) })
+        setDashboardMode('advanced')
+      }}
+    />
   }
 
   if (loading) return (
@@ -1323,7 +1332,11 @@ function DashboardInner() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
               <div style={{ width: previewMode==='mobile' ? 390 : '100%', height: '100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden', position: 'relative' }}>
                 {(previewUrl || cleanUrl) ? (
+                  {rightTab === 'design' ? (
+                  <GlobalDesignPanel siteUrl={cleanUrl} apiKey={apiKey} />
+                ) : (
                   <iframe key={iframeKey} src={previewUrl || cleanUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Live site preview" sandbox="allow-same-origin allow-scripts allow-forms"/>
+                )}
                 ) : (
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, color: C.text3, gap: 12 }}>
                     <div style={{ fontSize: 40 }}>🌐</div>
@@ -1336,7 +1349,14 @@ function DashboardInner() {
 
           {/* Preview status bar */}
           <div style={{ background: C.white, borderTop: `1px solid ${C.border}`, padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: C.text3, flexShrink: 0 }}>
-            <span>{pendingAction ? 'Draft preview — approve or discard before anything goes live' : variationPreview ? `Previewing: ${variationPreview.label} — reply in chat to apply` : 'Live preview — changes appear here automatically'}</span>
+            <span>{pendingAction ? 'Draft preview — approve or discard before anything goes live' : variationPreview ? `Previewing: ${variationPreview.label} — reply in chat to apply` : rightTab === 'design' ? 'Global design settings' : 'Live preview — changes appear here automatically'}</span>
+                  <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+                    {(['preview','design'] as const).map(t => (
+                      <button key={t} onClick={() => setRightTab(t)} style={{ padding:'4px 12px', border:`1px solid ${t===rightTab?C.accent:C.border}`, borderRadius:6, background:t===rightTab?C.accentDim:C.white, color:t===rightTab?C.accent:C.text2, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                        {t === 'preview' ? '🖥 Preview' : '🎨 Design'}
+                      </button>
+                    ))}
+                  </div>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: pendingAction ? C.yellow : variationPreview ? C.gold : C.green }}/>
               {pendingAction ? 'Pending Approval' : variationPreview ? 'Preview Mode' : 'Connected'}

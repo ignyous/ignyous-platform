@@ -147,27 +147,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* MAIN */}
       <div style={{ flex:1, display:'flex', flexDirection:'column' as const, minWidth:0 }}>
         {/* Topbar — no Content Scheduler here, it lives in the site strip */}
-        <div style={{ height:60, background:C.primary, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', position:'sticky', top:0, zIndex:50, boxShadow:'0 2px 16px rgba(26,26,78,0.25)' }}>
-          <div style={{ fontSize:15, fontWeight:500, color:'rgba(255,255,255,0.65)', display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{ height:60, background:'#ffffff', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', position:'sticky', top:0, zIndex:50, borderBottom:`1px solid ${C.border}`, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:15, fontWeight:500, color:C.text2, display:'flex', alignItems:'center', gap:8 }}>
             {currentSite ? <>
-              <span style={{ color:'rgba(255,255,255,0.35)' }}>Sites</span>
-              <span style={{ color:'rgba(255,255,255,0.2)' }}>/</span>
-              <span style={{ fontWeight:700, color:'white' }}>{currentSite.name || siteSlug(currentSite.url)}</span>
-            </> : <span style={{ fontWeight:700, color:'white' }}>Dashboard</span>}
+              <span style={{ color:C.text3 }}>Sites</span>
+              <span style={{ color:C.text3 }}>/</span>
+              <span style={{ fontWeight:700, color:C.text }}>{currentSite.name || siteSlug(currentSite.url)}</span>
+            </> : <span style={{ fontWeight:700, color:C.text }}>Dashboard</span>}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <button style={{ width:38, height:38, borderRadius:9, border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.08)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, position:'relative' }}>
-              🔔<div style={{ position:'absolute', top:7, right:7, width:7, height:7, borderRadius:'50%', background:C.gold, border:'1.5px solid #1a1a4e' }}/>
+            <button style={{ width:38, height:38, borderRadius:9, border:`1px solid ${C.border}`, background:C.surface, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, position:'relative' }}>
+              🔔<div style={{ position:'absolute', top:7, right:7, width:7, height:7, borderRadius:'50%', background:C.gold, border:`1.5px solid white` }}/>
             </button>
             <div style={{ position:'relative' }}>
-              <button onClick={()=>setShowMenu(!showMenu)} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px 5px 5px', border:'1px solid rgba(255,255,255,0.15)', borderRadius:10, background:'rgba(255,255,255,0.08)', cursor:'pointer' }}>
-                <div style={{ width:30, height:30, borderRadius:'50%', background:C.gold, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'#1a1a4e' }}>
+              <button onClick={()=>setShowMenu(!showMenu)} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px 5px 5px', border:`1px solid ${C.border}`, borderRadius:10, background:C.surface, cursor:'pointer' }}>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:C.primary, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'white' }}>
                   {(session?.user?.name||session?.user?.email||'U')[0].toUpperCase()}
                 </div>
-                <span style={{ fontSize:14, fontWeight:600, color:'white', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
+                <span style={{ fontSize:14, fontWeight:600, color:C.text, maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>
                   {session?.user?.name||session?.user?.email?.split('@')[0]}
                 </span>
-                <svg width="12" height="12" viewBox="0 0 20 20" fill="rgba(255,255,255,0.5)"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+                <svg width="12" height="12" viewBox="0 0 20 20" fill={C.text3}><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
               </button>
               {showMenu && (
                 <div style={{ position:'absolute', top:'100%', right:0, marginTop:8, background:C.white, border:`1px solid ${C.border}`, borderRadius:14, boxShadow:'0 8px 32px rgba(26,26,78,0.15)', minWidth:200, zIndex:100, overflow:'hidden' }}>

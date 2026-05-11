@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/AppLayout'
 
 const C = {
@@ -91,6 +92,10 @@ export default function SettingsPage() {
     ])
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+    // If mode changed, navigate into the new mode immediately
+    if (dashboardMode !== initialMode) {
+      setTimeout(() => router.push('/dashboard'), 800)
+    }
   }
 
   async function previewReport() {
