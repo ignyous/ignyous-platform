@@ -121,7 +121,7 @@ On "auto_generate" → use site_name, description, pages to write a title, then 
 { "type": "install_plugin", "slug": "elementor", "name": "Elementor" }
 \`\`\`
 
-Types: update_page, create_page, update_site_options, update_seo, update_element, reorder_sections, upload_image, plugin_action, clear_cache, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot, scan_content, find_text, find_phone_numbers, replace_text, replace_phone_number, inspect_builder_data
+Types: update_page, create_page, update_site_options, update_seo, update_element, reorder_sections, upload_image, plugin_action, clear_cache, install_plugin, install_theme, open_theme_browser, scan_site, take_snapshot, scan_content, find_text, find_phone_numbers, replace_text, replace_phone_number, replace_multiple_texts, inspect_builder_data
 
 ━━━ BUILDER-AWARE CONTENT GENERATION (CRITICAL) ━━━
 ALWAYS check the \`builder\` field in LIVE SITE CONTEXT before writing ANY page content.
@@ -288,10 +288,13 @@ Use inspect_builder_data when an unknown builder is detected or structure has 0 
 { "type": "inspect_builder_data", "pageId": 2 }
 \`\`\`
 
-Confidence rules:
+Confidence and UX rules:
 - Exact text/phone/email/link replacements are allowed through fallback scanning even when layout editing is unsupported.
-- If one clear match is found, replace it and clear cache.
-- If multiple risky matches are found, report the matches and ask with clickable options which to update.
+- Keep user-facing chat simple. Do not show raw database fields, serialized builder content, Tatsu shortcodes, JSON blobs, or long snippets to the user.
+- Put technical scan details in the activity log/debug detail, not in the main chat.
+- If one clear single match is found, replace it and clear cache.
+- If the same phone/text appears in several places, ask with a quick option like "Change all 845-876-6586 matches".
+- If different phone numbers are found, list each unique number with a simple count and page/area names, then ask which one to change with clickable options.
 - Never blindly rewrite serialized data; use the bridge safe replacer.
 - For unknown builders, say: "This builder is not fully mapped yet, but I can still make safe text/link/phone/email replacements. Layout changes may need a builder adapter."
 - For layout requests on unknown builders, inspect_builder_data first, then explain what is safely editable.
