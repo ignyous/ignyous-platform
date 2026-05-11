@@ -547,7 +547,7 @@ function DashboardInner() {
 
     // Auto-snapshot before destructive actions
     let snapshotId = ''
-    if (['update_page','create_page','update_site_options','update_seo','update_element','update_global_style','plugin_action','install_plugin','install_theme'].includes(action.type)) {
+    if (['update_page','create_page','update_site_options','update_seo','update_element','update_global_style','plugin_action','install_plugin','install_theme','replace_text','replace_phone_number'].includes(action.type)) {
       try {
         const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
         if (snapRes.success) {
@@ -704,6 +704,74 @@ function DashboardInner() {
           if (data.success && targetPage?.link) {
             setPreviewUrl(targetPage.link); setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000)
           }
+          break
+        }
+
+        case 'scan_content':
+        case 'find_text':
+        case 'find_phone_numbers': {
+          const mode = action.type === 'find_phone_numbers' ? 'phone' : (action.mode || 'text')
+          const r = await bridge('content/scan', 'POST', { mode, query: action.query || action.text || '', pageId: action.pageId || 0, limit: action.limit || 50 })
+          const matches = r.data?.matches || r.data?.data?.matches || []
+          const lines = matches.slice(0, 8).map((m: any, i: number) => `${i+1}. ${m.title || m.field || m.source}: ${m.match || ''} — ${m.snippet || ''}`).join('\n')
+          result = { type: action.type, success: r.success ?? false, message: matches.length ? `Found ${matches.length} match(es).` : 'No matching content found.', data: matches }
+          setMessages(prev => [...prev, {
+            role: 'assistant' as const,
+            content: matches.length ? `🔎 Content scan found ${matches.length} match(es):\n${lines}` : '🔎 Content scan found no matches.',
+            ts: new Date(),
+          }])
+          break
+        }
+
+        case 'replace_text': {
+          if (!action.old || typeof action.new === 'undefined') {
+            result = { type: 'replace_text', success: false, message: 'Missing old or new text for replacement.' }
+            break
+          }
+          const r = await bridge('content/replace', 'POST', { old: action.old, new: action.new, matchIds: action.matchIds || [], pageId: action.pageId || 0 })
+          const data = r.data || r.data?.data || {}
+          result = { type: 'replace_text', success: r.success ?? false, message: r.success ? `Replaced ${data.replacements || 0} occurrence(s) in ${data.updated_count || 0} location(s).` : (r.message || r.error || 'Replacement failed') }
+          if (r.success) { setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000) }
+          break
+        }
+
+        case 'replace_phone_number': {
+          const newPhone = action.new || action.phone || action.newPhone
+          if (!newPhone) {
+            result = { type: 'replace_phone_number', success: false, message: 'Missing new phone number.' }
+            break
+          }
+          let oldPhone = action.old || action.oldPhone || ''
+          if (!oldPhone) {
+            const scan = await bridge('content/scan', 'POST', { mode: 'phone', query: '', pageId: action.pageId || 0, limit: 50 })
+            const matches = scan.data?.matches || scan.data?.data?.matches || []
+            const phones = Array.from(new Set(matches.map((m: any) => m.match).filter(Boolean))) as string[]
+            if (phones.length === 1) {
+              oldPhone = phones[0]
+            } else if (phones.length > 1) {
+              const lines = matches.slice(0, 8).map((m: any, i: number) => `${i+1}. ${m.match} — ${m.title || m.field}: ${m.snippet || ''}`).join('\n')
+              result = { type: 'replace_phone_number', success: false, message: `Found multiple phone numbers. Pick which one to replace.`, data: matches }
+              setMessages(prev => [...prev, { role: 'assistant' as const, content: `I found multiple phone numbers, so I did not replace blindly:\n${lines}`, ts: new Date() }])
+              break
+            } else {
+              result = { type: 'replace_phone_number', success: false, message: 'No existing phone number found to replace.' }
+              break
+            }
+          }
+          const r = await bridge('content/replace', 'POST', { old: oldPhone, new: newPhone, pageId: action.pageId || 0 })
+          const data = r.data || r.data?.data || {}
+          result = { type: 'replace_phone_number', success: r.success ?? false, message: r.success ? `Phone number updated: ${oldPhone} → ${newPhone}. Replaced ${data.replacements || 0} occurrence(s).` : (r.message || r.error || 'Phone replacement failed') }
+          if (r.success) { setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000) }
+          break
+        }
+
+        case 'inspect_builder_data': {
+          const r = await bridge('builder/inspect', 'POST', { pageId: action.pageId })
+          const data = r.data || r.data?.data || {}
+          const keys = data.meta_keys || []
+          const lines = keys.slice(0, 8).map((k: any) => `- ${k.key} (${k.storage_type}, ${k.length} chars)`).join('\n')
+          result = { type: 'inspect_builder_data', success: r.success ?? false, message: r.success ? `Builder inspected: ${data.builder || 'unknown'}` : (r.message || r.error || 'Inspection failed'), data }
+          setMessages(prev => [...prev, { role: 'assistant' as const, content: r.success ? `🧩 Builder inspection: ${data.builder || 'unknown'}${data.layout_editing_supported ? ' — layout edits supported.' : ' — safe content replacements supported; layout adapter needed.'}\n${lines}` : 'Could not inspect builder data.', ts: new Date() }])
           break
         }
 
