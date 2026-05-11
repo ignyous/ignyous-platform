@@ -64,6 +64,12 @@ export default function CreatePage() {
   const [building, setBuilding]             = useState(false)
   const [provisionId, setProvisionId]       = useState('')
   const [builtUrl, setBuiltUrl]             = useState('')
+  const [wpeUser, setWpeUser]               = useState('')
+  const [wpePass, setWpePass]               = useState('')
+  const [wpeAccountId, setWpeAccountId]     = useState('')
+  const [wpeAccounts, setWpeAccounts]       = useState<any[]>([])
+  const [wpeValidating, setWpeValidating]   = useState(false)
+  const [wpeConnected, setWpeConnected]     = useState(false)
   const descRef = useRef<HTMLTextAreaElement>(null)
 
   // Generate slug from description
@@ -128,7 +134,7 @@ export default function CreatePage() {
     try {
       const res = await fetch('/api/create/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, features, tier, themeSlug: selectedTheme?.slug, builder: selectedTheme?.builder, domainType, siteSlug, customDomain, hosting }),
+        body: JSON.stringify({ description, features, tier, themeSlug: selectedTheme?.slug, builder: selectedTheme?.builder, domainType, siteSlug, customDomain, hosting, wpeUser, wpePass, wpeAccountId }),
       })
 
       const reader = res.body?.getReader()
@@ -163,7 +169,7 @@ export default function CreatePage() {
   }
 
   const canNext = [
-    !!hosting,              // Step 0: hosting picked
+    !!(hosting && wpeConnected), // Step 0: hosting + WP Engine connected
     !!(domainType === 'temp' ? siteSlug : customDomain), // Step 1: domain set
     !!tier,                 // Step 2: tier picked
     description.length >= 20, // Step 3: description
@@ -205,38 +211,69 @@ export default function CreatePage() {
             <h1 style={{ fontSize: 36, fontWeight: 800, textAlign: 'center', marginBottom: 8 }}>Where will your site live?</h1>
             <p style={{ textAlign: 'center', color: C.text2, marginBottom: 40, fontSize: 16 }}>Choose a hosting provider. We'll set everything up automatically.</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {[
-                { id: 'siteground', icon: '🟢', name: 'SiteGround', badge: 'Available', desc: 'High-performance WordPress hosting with daily backups, CDN, and staging environments.', ready: true },
-                { id: 'wpengine',   icon: '⚡', name: 'WP Engine',  badge: 'Coming Soon', desc: 'Managed WordPress platform with advanced caching and developer tools.', ready: false },
-              ].map(h => (
-                <button key={h.id} onClick={() => h.ready && setHosting('siteground')} disabled={!h.ready} style={{
-                  background: hosting === h.id ? C.goldDim : C.bgCard, border: `2px solid ${hosting === h.id ? C.gold : h.ready ? C.border : 'rgba(255,255,255,0.05)'}`,
-                  borderRadius: 16, padding: '28px', textAlign: 'left', cursor: h.ready ? 'pointer' : 'not-allowed', opacity: h.ready ? 1 : 0.4, transition: 'all 0.2s',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <span style={{ fontSize: 28 }}>{h.icon}</span>
-                    <span style={{ fontSize: 20, fontWeight: 800 }}>{h.name}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: h.ready ? C.greenDim : C.bgCard, color: h.ready ? C.green : C.text3, border: `1px solid ${h.ready ? C.green : C.border}` }}>{h.badge}</span>
+              {/* WP Engine — single option, no grid needed */}
+              <button onClick={() => setHosting('siteground')} style={{
+                background: hosting ? C.goldDim : C.bgCard, border: `2px solid ${hosting ? C.gold : C.border}`,
+                borderRadius: 16, padding: '28px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', width: '100%',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                  <span style={{ fontSize: 36 }}>⚡</span>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 800 }}>WP Engine</div>
+                    <div style={{ fontSize: 13, color: C.text3 }}>Managed WordPress Hosting</div>
                   </div>
-                  <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: 0 }}>{h.desc}</p>
-                  {hosting === h.id && <div style={{ marginTop: 14, fontSize: 13, color: C.gold, fontWeight: 700 }}>✓ Selected</div>}
-                </button>
-              ))}
-            </div>
-            {hosting === 'siteground' && (
-              <div style={{ marginTop: 20, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🔑 SiteGround API Access</div>
-                <p style={{ fontSize: 13, color: C.text2, marginBottom: 14 }}>We need your SiteGround cPanel credentials to provision your site automatically. These are stored encrypted and only used for site creation.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {[['cPanel URL', 'https://sg1.siteground.com:2083'], ['Username', 'Your cPanel username'], ['API Token', 'Generate in cPanel → API Tokens']].map(([label, ph]) => (
-                    <div key={label} style={{ gridColumn: label === 'API Token' ? '1 / -1' : 'auto' }}>
-                      <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>{label}</div>
-                      <input placeholder={ph} style={{ width: '100%', padding: '10px 14px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, fontFamily: 'Poppins,sans-serif', boxSizing: 'border-box' as const }} />
-                    </div>
-                  ))}
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: C.greenDim, color: C.green, border: `1px solid ${C.green}` }}>Available</span>
                 </div>
+                <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: '0 0 14px' }}>Enterprise-grade managed WordPress hosting. Each site gets a dedicated `name.wpengine.com` subdomain automatically. Daily backups, CDN, and staging included.</p>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const }}>
+                  {['Global CDN','Daily backups','SSH/SFTP access','One-click staging','24/7 support'].map(f => <span key={f} style={{ fontSize: 12, color: C.text3, background: 'rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 6 }}>{f}</span>)}
+                </div>
+                {hosting && <div style={{ marginTop: 14, fontSize: 13, color: C.gold, fontWeight: 700 }}>✓ Selected</div>}
+              </button>
+            </div>
+
+            {/* WP Engine credentials */}
+            <div style={{ marginTop: 20, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>🔑 WP Engine API Credentials</div>
+              <p style={{ fontSize: 13, color: C.text2, marginBottom: 18, lineHeight: 1.6 }}>
+                Get your API credentials from the <a href="https://my.wpengine.com/api_access" target="_blank" rel="noreferrer" style={{ color: C.gold }}>WP Engine portal → API Access</a>.
+                Create a new API key and paste the username + password here.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                {[
+                  { label: 'API Username', val: wpeUser, set: setWpeUser, ph: 'From WP Engine → API Access' },
+                  { label: 'API Password', val: wpePass, set: setWpePass, ph: 'From WP Engine → API Access', pwd: true },
+                ].map(f => (
+                  <div key={f.label}>
+                    <div style={{ fontSize: 12, color: C.text3, marginBottom: 5 }}>{f.label}</div>
+                    <input type={f.pwd ? 'password' : 'text'} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                      style={{ width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, fontFamily: 'Poppins,sans-serif', boxSizing: 'border-box' as const }} />
+                  </div>
+                ))}
               </div>
-            )}
+              <button onClick={async () => {
+                if (!wpeUser || !wpePass) return
+                setWpeValidating(true)
+                const r = await fetch('/api/create/wpengine', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'validate', username:wpeUser, password:wpePass }) })
+                const d = await r.json()
+                setWpeValidating(false)
+                if (d.success) { setWpeConnected(true); setWpeAccounts(d.accounts); if (d.accounts[0]) setWpeAccountId(d.accounts[0].id); setHosting('siteground') }
+                else alert('Connection failed: ' + (d.error || 'Unknown error'))
+              }} disabled={!wpeUser || !wpePass || wpeValidating} style={{
+                padding: '10px 24px', background: wpeValidating ? C.bgCard : wpeConnected ? C.greenDim : C.gold,
+                border: `1px solid ${wpeConnected ? C.green : 'transparent'}`, borderRadius: 10,
+                color: wpeConnected ? C.green : '#1a1a2e', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>
+                {wpeValidating ? '…Connecting' : wpeConnected ? '✓ Connected' : 'Connect WP Engine'}
+              </button>
+              {wpeConnected && wpeAccounts.length > 1 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 6 }}>Account to provision on:</div>
+                  <select value={wpeAccountId} onChange={e => setWpeAccountId(e.target.value)} style={{ padding: '9px 14px', background: 'rgba(255,255,255,0.08)', border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13 }}>
+                    {wpeAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
           </div>
         )}
 
