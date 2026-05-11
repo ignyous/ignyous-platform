@@ -6,6 +6,7 @@ import AppLayout from '@/components/AppLayout'
 import ThemeBrowser from '@/components/ThemeBrowser'
 import ModePicker from '@/components/ModePicker'
 import EasyModeDashboard from '@/components/EasyModeDashboard'
+import GlobalDesignPanel from '@/components/GlobalDesignPanel'
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Plugin  { name: string; slug: string; active: boolean; version: string; update: string | null }
@@ -852,7 +853,7 @@ function DashboardInner() {
       siteUrl={siteUrl}
       apiKey={apiKey}
       pluginSlugs={slugs}
-      userName={session?.user?.name || session?.user?.email || ''}
+      userName={''}
       onSwitchMode={async () => {
         await fetch('/api/user', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dashboardMode:'advanced' }) })
         setDashboardMode('advanced')
@@ -1332,11 +1333,11 @@ function DashboardInner() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflow: 'auto' }}>
               <div style={{ width: previewMode==='mobile' ? 390 : '100%', height: '100%', minHeight: 500, background: C.white, borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.15)', overflow: 'hidden', position: 'relative' }}>
                 {(previewUrl || cleanUrl) ? (
-                  {rightTab === 'design' ? (
-                  <GlobalDesignPanel siteUrl={cleanUrl} apiKey={apiKey} />
-                ) : (
-                  <iframe key={iframeKey} src={previewUrl || cleanUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Live site preview" sandbox="allow-same-origin allow-scripts allow-forms"/>
-                )}
+                  rightTab === 'design' ? (
+                    <GlobalDesignPanel siteUrl={cleanUrl} apiKey={apiKey} />
+                  ) : (
+                    <iframe key={iframeKey} src={previewUrl || cleanUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Live site preview" sandbox="allow-same-origin allow-scripts allow-forms"/>
+                  )
                 ) : (
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, color: C.text3, gap: 12 }}>
                     <div style={{ fontSize: 40 }}>🌐</div>
