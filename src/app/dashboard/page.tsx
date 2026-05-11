@@ -19,8 +19,9 @@ interface SiteInfo {
   plugins:   Plugin[]
   content:   { pages: number; posts: number; media_count?: number }
 }
-interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string; snapshotId?: string }
-interface Message { role: 'user'|'assistant'; content: string; action?: any; actionResult?: ActionResult; options?: Array<{label: string; action: string}>; ts: Date }
+interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string; snapshotId?: string; detail?: any; data?: any }
+interface ChatOption { label: string; action?: string; directAction?: any; confirmText?: string; variant?: 'primary'|'secondary'|'danger' }
+interface Message { role: 'user'|'assistant'; content: string; action?: any; actionResult?: ActionResult; options?: ChatOption[]; ts: Date }
 
 // ─── Memory ───────────────────────────────────────────────────────
 function getSiteMem(k: string) { try { return JSON.parse(localStorage.getItem(`ignyous_${k}`) || '{}') } catch { return {} } }
@@ -76,6 +77,50 @@ const hasPlugin = (plugins: Plugin[], ...terms: string[]) =>
   plugins.some(p => p.active !== false && terms.some(t =>
     (p.slug||'').toLowerCase().includes(t) || (p.name||'').toLowerCase().includes(t)
   ))
+
+
+function normalizePhoneDigits(phone: string) {
+  const digits = String(phone || '').replace(/\D+/g, '')
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
+
+function shortLocation(m: any) {
+  const title = String(m?.title || '').trim()
+  const field = String(m?.field || m?.option_name || m?.source || 'site content').trim()
+  if (title && !/^site option:/i.test(title)) return title
+  if (field.includes('theme_mod')) return 'Theme settings'
+  if (field.includes('widget')) return 'Widget area'
+  if (field.includes('tatsu')) return 'Page builder content'
+  if (field.includes('post_content')) return 'Page content'
+  if (field.includes('post_excerpt')) return 'Page excerpt'
+  return title || field || 'Site content'
+}
+
+function groupPhoneMatches(matches: any[]) {
+  const map = new Map<string, { phone: string; digits: string; count: number; locations: string[]; risks: string[]; matchIds: string[]; matches: any[] }>()
+  for (const m of matches || []) {
+    const phone = String(m?.match || '').trim()
+    const digits = normalizePhoneDigits(phone)
+    if (!digits) continue
+    const existing = map.get(digits) || { phone, digits, count: 0, locations: [], risks: [], matchIds: [], matches: [] }
+    existing.count += 1
+    existing.matches.push(m)
+    if (m?.id) existing.matchIds.push(String(m.id))
+    const loc = shortLocation(m)
+    if (loc && !existing.locations.includes(loc)) existing.locations.push(loc)
+    const risk = String(m?.risk || '').trim()
+    if (risk && !existing.risks.includes(risk)) existing.risks.push(risk)
+    if (!existing.phone || existing.phone.length < phone.length) existing.phone = phone
+    map.set(digits, existing)
+  }
+  return Array.from(map.values()).sort((a,b) => b.count - a.count)
+}
+
+function formatPhoneGroupLine(g: ReturnType<typeof groupPhoneMatches>[number], i: number) {
+  const places = g.locations.slice(0, 3).join(', ') || 'site content'
+  const extra = g.locations.length > 3 ? ` +${g.locations.length - 3} more` : ''
+  return `${i + 1}. ${g.phone} — ${g.count} match${g.count === 1 ? '' : 'es'} in ${places}${extra}`
+}
 
 // ─── QUICK ACTION CARDS (like image 2) ───────────────────────────
 // SEO action is special - gets its own big card at the top
@@ -379,6 +424,42 @@ function DashboardInner() {
     return data
   }
 
+
+  async function logClientActivity(event: { category?: string; action: string; status?: 'success'|'failed'|'pending'; summary: string; detail?: any; durationMs?: number }) {
+    try {
+      await fetch('/api/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteUrl: cleanUrl,
+          siteName: siteInfo?.site?.name || siteUrl,
+          category: event.category || 'content',
+          action: event.action,
+          status: event.status || 'success',
+          summary: event.summary,
+          detail: event.detail,
+          durationMs: event.durationMs,
+        }),
+      })
+    } catch {}
+  }
+
+  function runQuickOption(opt: ChatOption, sourceMsg: Message) {
+    if (opt.directAction) {
+      const userChoice: Message = { role: 'user', content: opt.label, ts: new Date() }
+      const assistantMsg: Message = {
+        role: 'assistant',
+        content: opt.confirmText || 'Got it — I’ll make that change now.',
+        action: opt.directAction,
+        ts: new Date(),
+      }
+      setMessages(prev => [...prev, userChoice, assistantMsg])
+      executeAction(opt.directAction, assistantMsg)
+      return
+    }
+    send(opt.action || opt.label)
+  }
+
   async function loadAll() {
     setLoading(true)
     try {
@@ -547,7 +628,7 @@ function DashboardInner() {
 
     // Auto-snapshot before destructive actions
     let snapshotId = ''
-    if (['update_page','create_page','update_site_options','update_seo','update_element','update_global_style','plugin_action','install_plugin','install_theme','replace_text','replace_phone_number'].includes(action.type)) {
+    if (['update_page','create_page','update_site_options','update_seo','update_element','update_global_style','plugin_action','install_plugin','install_theme','replace_text','replace_phone_number','replace_multiple_texts'].includes(action.type)) {
       try {
         const snapRes = await bridge('snapshot', 'POST', { label: `Before: ${action.type} — ${action.title || action.slug || action.blogname || 'change'}` })
         if (snapRes.success) {
@@ -711,15 +792,47 @@ function DashboardInner() {
         case 'find_text':
         case 'find_phone_numbers': {
           const mode = action.type === 'find_phone_numbers' ? 'phone' : (action.mode || 'text')
+          const started = Date.now()
           const r = await bridge('content/scan', 'POST', { mode, query: action.query || action.text || '', pageId: action.pageId || 0, limit: action.limit || 50 })
           const matches = r.data?.matches || r.data?.data?.matches || []
-          const lines = matches.slice(0, 8).map((m: any, i: number) => `${i+1}. ${m.title || m.field || m.source}: ${m.match || ''} — ${m.snippet || ''}`).join('\n')
-          result = { type: action.type, success: r.success ?? false, message: matches.length ? `Found ${matches.length} match(es).` : 'No matching content found.', data: matches }
-          setMessages(prev => [...prev, {
-            role: 'assistant' as const,
-            content: matches.length ? `🔎 Content scan found ${matches.length} match(es):\n${lines}` : '🔎 Content scan found no matches.',
-            ts: new Date(),
-          }])
+
+          if (mode === 'phone') {
+            const groups = groupPhoneMatches(matches)
+            const lines = groups.slice(0, 8).map(formatPhoneGroupLine).join('\n')
+            result = {
+              type: action.type,
+              success: r.success ?? false,
+              message: groups.length ? `Found ${groups.length} phone number${groups.length === 1 ? '' : 's'} across ${matches.length} match${matches.length === 1 ? '' : 'es'}.` : 'No phone numbers found.',
+              data: { matches, groups },
+            }
+            await logClientActivity({
+              action: 'phone_scan',
+              status: groups.length ? 'success' : 'failed',
+              summary: groups.length ? `Found ${groups.length} phone number candidate(s) across ${matches.length} raw match(es).` : 'No phone numbers found during scan.',
+              detail: { mode, query: action.query || action.text || '', matches, groups },
+              durationMs: Date.now() - started,
+            })
+            setMessages(prev => [...prev, {
+              role: 'assistant' as const,
+              content: groups.length ? `I found these phone numbers:\n${lines}` : 'I scanned the site and did not find any phone numbers.',
+              ts: new Date(),
+            }])
+          } else {
+            const lines = matches.slice(0, 8).map((m: any, i: number) => `${i+1}. ${m.match || action.query || action.text || 'Match'} — ${shortLocation(m)}`).join('\n')
+            result = { type: action.type, success: r.success ?? false, message: matches.length ? `Found ${matches.length} match(es).` : 'No matching content found.', data: matches }
+            await logClientActivity({
+              action: 'content_scan',
+              status: matches.length ? 'success' : 'failed',
+              summary: matches.length ? `Found ${matches.length} content match(es).` : 'No matching content found.',
+              detail: { mode, query: action.query || action.text || '', matches },
+              durationMs: Date.now() - started,
+            })
+            setMessages(prev => [...prev, {
+              role: 'assistant' as const,
+              content: matches.length ? `I found ${matches.length} match${matches.length === 1 ? '' : 'es'}:\n${lines}` : 'I scanned the site and did not find matching content.',
+              ts: new Date(),
+            }])
+          }
           break
         }
 
@@ -728,10 +841,50 @@ function DashboardInner() {
             result = { type: 'replace_text', success: false, message: 'Missing old or new text for replacement.' }
             break
           }
+          const started = Date.now()
           const r = await bridge('content/replace', 'POST', { old: action.old, new: action.new, matchIds: action.matchIds || [], pageId: action.pageId || 0 })
           const data = r.data || r.data?.data || {}
-          result = { type: 'replace_text', success: r.success ?? false, message: r.success ? `Replaced ${data.replacements || 0} occurrence(s) in ${data.updated_count || 0} location(s).` : (r.message || r.error || 'Replacement failed') }
+          result = { type: 'replace_text', success: r.success ?? false, message: r.success ? `Done — I updated ${data.replacements || 0} match${(data.replacements || 0) === 1 ? '' : 'es'}.` : (r.message || r.error || 'Replacement failed'), detail: { old: action.old, new: action.new, matchIds: action.matchIds || [], response: data } }
+          await logClientActivity({
+            action: 'replace_text',
+            status: r.success ? 'success' : 'failed',
+            summary: r.success ? `Replaced text in ${data.updated_count || 0} location(s).` : `Text replacement failed: ${r.message || r.error || 'unknown error'}`,
+            detail: { old: action.old, new: action.new, matchIds: action.matchIds || [], pageId: action.pageId || 0, response: data },
+            durationMs: Date.now() - started,
+          })
           if (r.success) { setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000) }
+          break
+        }
+
+        case 'replace_multiple_texts': {
+          const replacements = Array.isArray(action.replacements) ? action.replacements : []
+          if (!replacements.length) {
+            result = { type: 'replace_multiple_texts', success: false, message: 'No replacements were provided.' }
+            break
+          }
+          const started = Date.now()
+          const responses: any[] = []
+          let totalReplacements = 0
+          let updatedLocations = 0
+          let failed = false
+          for (const rep of replacements) {
+            if (!rep?.old || typeof rep?.new === 'undefined') continue
+            const r = await bridge('content/replace', 'POST', { old: rep.old, new: rep.new, matchIds: rep.matchIds || [], pageId: rep.pageId || action.pageId || 0 })
+            const data = r.data || r.data?.data || {}
+            responses.push({ old: rep.old, new: rep.new, success: r.success, response: data, error: r.error || r.message })
+            if (!r.success) failed = true
+            totalReplacements += Number(data.replacements || 0)
+            updatedLocations += Number(data.updated_count || 0)
+          }
+          result = { type: 'replace_multiple_texts', success: !failed, message: failed ? 'Some updates could not be completed. Check the activity log for details.' : `Done — I updated ${totalReplacements} match${totalReplacements === 1 ? '' : 'es'}.`, detail: { replacements, responses } }
+          await logClientActivity({
+            action: 'replace_multiple_texts',
+            status: failed ? 'failed' : 'success',
+            summary: failed ? `Multiple text replacement partially failed after ${totalReplacements} replacement(s).` : `Completed ${totalReplacements} replacement(s) across ${updatedLocations} location(s).`,
+            detail: { replacements, responses },
+            durationMs: Date.now() - started,
+          })
+          if (!failed) { setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000) }
           break
         }
 
@@ -743,24 +896,78 @@ function DashboardInner() {
           }
           let oldPhone = action.old || action.oldPhone || ''
           if (!oldPhone) {
-            const scan = await bridge('content/scan', 'POST', { mode: 'phone', query: '', pageId: action.pageId || 0, limit: 50 })
+            const started = Date.now()
+            const scan = await bridge('content/scan', 'POST', { mode: 'phone', query: '', pageId: action.pageId || 0, limit: 100 })
             const matches = scan.data?.matches || scan.data?.data?.matches || []
-            const phones = Array.from(new Set(matches.map((m: any) => m.match).filter(Boolean))) as string[]
-            if (phones.length === 1) {
-              oldPhone = phones[0]
-            } else if (phones.length > 1) {
-              const lines = matches.slice(0, 8).map((m: any, i: number) => `${i+1}. ${m.match} — ${m.title || m.field}: ${m.snippet || ''}`).join('\n')
-              result = { type: 'replace_phone_number', success: false, message: `Found multiple phone numbers. Pick which one to replace.`, data: matches }
-              setMessages(prev => [...prev, { role: 'assistant' as const, content: `I found multiple phone numbers, so I did not replace blindly:\n${lines}`, ts: new Date() }])
+            const groups = groupPhoneMatches(matches)
+
+            if (groups.length === 0) {
+              result = { type: 'replace_phone_number', success: false, message: 'I scanned the site and could not find an existing phone number to replace.', detail: { matches, groups } }
+              await logClientActivity({
+                action: 'replace_phone_number_scan',
+                status: 'failed',
+                summary: `No existing phone number found while trying to update to ${newPhone}.`,
+                detail: { newPhone, matches, groups, scan },
+                durationMs: Date.now() - started,
+              })
               break
+            }
+
+            if (groups.length === 1 && groups[0].count === 1) {
+              oldPhone = groups[0].phone
             } else {
-              result = { type: 'replace_phone_number', success: false, message: 'No existing phone number found to replace.' }
+              const lines = groups.slice(0, 8).map(formatPhoneGroupLine).join('\n')
+              const options: ChatOption[] = groups.slice(0, 8).map(g => ({
+                label: `Change all ${g.phone} matches`,
+                directAction: { type: 'replace_phone_number', old: g.phone, new: newPhone, matchIds: g.matchIds },
+                confirmText: `Got it — I’ll change ${g.phone} to ${newPhone}.`,
+                variant: 'primary',
+              }))
+              if (groups.length > 1) {
+                options.unshift({
+                  label: 'Change every phone number found',
+                  directAction: {
+                    type: 'replace_multiple_texts',
+                    replacements: groups.map(g => ({ old: g.phone, new: newPhone, matchIds: g.matchIds })),
+                  },
+                  confirmText: `Got it — I’ll change every phone number I found to ${newPhone}.`,
+                  variant: 'secondary',
+                })
+              }
+              options.push({ label: 'Cancel — do not change anything', action: 'Cancel this phone number change.', variant: 'danger' })
+
+              const intro = groups.length === 1
+                ? `I found ${groups[0].phone} in ${groups[0].count} places. Should I change all of them to ${newPhone}?`
+                : `I found ${groups.length} different phone numbers. Which should I change to ${newPhone}?`
+
+              result = { type: 'replace_phone_number', success: false, message: groups.length === 1 ? 'Waiting for confirmation before changing multiple matches.' : 'Waiting for user to choose which phone number to change.', data: { matches, groups } }
+              await logClientActivity({
+                action: 'phone_replace_needs_choice',
+                status: 'pending',
+                summary: groups.length === 1 ? `Phone number ${groups[0].phone} found in ${groups[0].count} places; waiting for Change All confirmation.` : `Found ${groups.length} different phone numbers; waiting for user choice.`,
+                detail: { newPhone, matches, groups, scan },
+                durationMs: Date.now() - started,
+              })
+              setMessages(prev => [...prev, {
+                role: 'assistant' as const,
+                content: `${intro}\n${lines}`,
+                options,
+                ts: new Date(),
+              }])
               break
             }
           }
-          const r = await bridge('content/replace', 'POST', { old: oldPhone, new: newPhone, pageId: action.pageId || 0 })
+          const started = Date.now()
+          const r = await bridge('content/replace', 'POST', { old: oldPhone, new: newPhone, matchIds: action.matchIds || [], pageId: action.pageId || 0 })
           const data = r.data || r.data?.data || {}
-          result = { type: 'replace_phone_number', success: r.success ?? false, message: r.success ? `Phone number updated: ${oldPhone} → ${newPhone}. Replaced ${data.replacements || 0} occurrence(s).` : (r.message || r.error || 'Phone replacement failed') }
+          result = { type: 'replace_phone_number', success: r.success ?? false, message: r.success ? `Done — I changed ${oldPhone} to ${newPhone}.` : (r.message || r.error || 'Phone replacement failed'), detail: { oldPhone, newPhone, matchIds: action.matchIds || [], response: data } }
+          await logClientActivity({
+            action: 'replace_phone_number',
+            status: r.success ? 'success' : 'failed',
+            summary: r.success ? `Changed ${oldPhone} to ${newPhone}; ${data.replacements || 0} replacement(s).` : `Phone replacement failed for ${oldPhone} to ${newPhone}.`,
+            detail: { oldPhone, newPhone, matchIds: action.matchIds || [], pageId: action.pageId || 0, response: data },
+            durationMs: Date.now() - started,
+          })
           if (r.success) { setIframeKey(k => k+1); setTimeout(() => setIframeKey(k => k+1), 3000) }
           break
         }
@@ -1085,7 +1292,7 @@ function DashboardInner() {
                                 setVariationPreview({ label: opt.label, fields })
                               }
                             }
-                            send(opt.label)
+                            runQuickOption(opt, msg)
                           }} style={{
                             padding: '9px 14px', borderRadius: 9,
                             border: isVariation ? `1.5px solid #f3af00` : `1.5px solid #1a1a4e`,
