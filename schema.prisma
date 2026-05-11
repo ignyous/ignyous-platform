@@ -92,7 +92,9 @@ model Site {
   uptimeLogs  UptimeLog[]
   teamMembers TeamMember[]
   brokenLinks BrokenLink[]
+  agentRuns   AgentRun[]
 
+  agentConfigs Json?    // { health: { enabled, schedule }, seo: { enabled, threshold }, ... }
   @@unique([userId, url])
 }
 
@@ -182,4 +184,20 @@ model BrokenLink {
   site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId])
+}
+
+// ─── AI Agents ────────────────────────────────────────────────
+model AgentRun {
+  id          String   @id @default(cuid())
+  siteId      String
+  agentType   String   // "health" | "seo" | "content" | "security" | "plugin_updater" | "woocommerce" | "multisite_sync"
+  status      String   // "running" | "completed" | "failed" | "skipped"
+  actionsLog  Json?    // array of { action, result, timestamp }
+  summary     String?
+  triggeredBy String   @default("cron") // "cron" | "manual" | "event"
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, agentType])
 }

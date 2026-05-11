@@ -1,7 +1,20 @@
 {
   "crons": [
-    { "path": "/api/cron/publish", "schedule": "* * * * *" },
-    { "path": "/api/cron/uptime",  "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/reports", "schedule": "0 8 1 * *" }
+    {
+      "path": "/api/cron/publish",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/uptime",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reports",
+      "schedule": "0 8 1 * *"
+    },
+    {
+      "path": "/api/cron/agents",
+      "schedule": "0 * * * *"
+    }
   ]
 }
