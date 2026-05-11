@@ -93,6 +93,7 @@ model Site {
   teamMembers TeamMember[]
   brokenLinks BrokenLink[]
   agentRuns   AgentRun[]
+  provisions  SiteProvision[]
 
   agentConfigs Json?    // { health: { enabled, schedule }, seo: { enabled, threshold }, ... }
   @@unique([userId, url])
@@ -200,4 +201,26 @@ model AgentRun {
   site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([siteId, agentType])
+}
+
+// ─── Site Provisioning ────────────────────────────────────────
+model SiteProvision {
+  id            String    @id @default(cuid())
+  userId        String
+  status        String    @default("pending") // pending|provisioning|building|ready|failed
+  siteSlug      String    @unique
+  tempDomain    String?
+  customDomain  String?
+  hostingTier   String    @default("basic")   // basic|medium|large
+  hostingProvider String  @default("siteground")
+  description   String?
+  features      Json?     // selected features array
+  themeSlug     String?
+  themeName     String?
+  builder       String?   // gutenberg|elementor|avada
+  buildLog      Json?     // array of {step, status, message, timestamp}
+  siteId        String?   // once provisioned, links to Site
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

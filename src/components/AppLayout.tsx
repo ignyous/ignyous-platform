@@ -130,7 +130,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div style={{ borderTop:`1px solid ${C.primaryBorder}`, padding:'8px 0' }}>
-          {[{icon:'🌐',label:'All Sites',href:'/overview'},{icon:'🤖',label:'AI Agents',href:'/agents'},{icon:'🔍',label:'SEO Manager',href:'/seo'},{icon:'📋',label:'Activity Log',href:'/activity'},{icon:'👥',label:'Team',href:'/team'},{icon:'⚙',label:'Settings',href:'/settings'},{icon:'❓',label:'Help',href:'/help'}].map(item=>(
+          {[{icon:'🌐',label:'All Sites',href:'/overview'},{icon:'✨',label:'New Site',href:'/create'},{icon:'🤖',label:'AI Agents',href:'/agents'},{icon:'🔍',label:'SEO Manager',href:'/seo'},{icon:'📋',label:'Activity Log',href:'/activity'},{icon:'👥',label:'Team',href:'/team'},{icon:'⚙',label:'Settings',href:'/settings'},{icon:'❓',label:'Help',href:'/help'}].map(item=>(
             <Link key={item.href} href={item.href} title={collapsed?item.label:''} style={{
               display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
               justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, transition:'color 0.15s',
