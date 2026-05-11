@@ -33,10 +33,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts       Account[]
+  sessions       Session[]
   sites          Site[]
   scheduledPosts ScheduledPost[]
+  provisions     SiteProvision[]
 }
 
 model Account {
@@ -93,7 +94,6 @@ model Site {
   teamMembers TeamMember[]
   brokenLinks BrokenLink[]
   agentRuns   AgentRun[]
-  provisions  SiteProvision[]
 
   agentConfigs Json?    // { health: { enabled, schedule }, seo: { enabled, threshold }, ... }
   @@unique([userId, url])
@@ -212,7 +212,7 @@ model SiteProvision {
   tempDomain    String?
   customDomain  String?
   hostingTier   String    @default("basic")   // basic|medium|large
-  hostingProvider String  @default("siteground")
+  hostingProvider String  @default("wpengine")
   description   String?
   features      Json?     // selected features array
   themeSlug     String?
