@@ -712,6 +712,50 @@ function DashboardInner() {
           break
         }
 
+        case 'events': {
+          // Events calendar actions (create, update, list, delete)
+          const evAction = action.action || 'list'
+          let r: any
+          if (evAction === 'create') {
+            r = await fetch('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'create_from_description', siteUrl:cleanUrl, apiKey, eventDescription:action.data?.description||action.description, siteContext:{site_name:siteInfo?.site?.name} }) })
+          } else if (evAction === 'update') {
+            r = await fetch('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'update', siteUrl:cleanUrl, apiKey, eventId:action.data?.eventId, updateData:action.data }) })
+          } else if (evAction === 'delete') {
+            r = await fetch('/api/events', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'delete', siteUrl:cleanUrl, apiKey, eventId:action.data?.eventId }) })
+          } else {
+            r = await fetch(`/api/events?siteUrl=${encodeURIComponent(cleanUrl)}&apiKey=${encodeURIComponent(apiKey)}&action=upcoming`)
+          }
+          const data = await r.json()
+          result = { type:'events', success:data.success??false, message:data.data?.message||(data.success?'Events loaded':'Events action failed'), data:data.data }
+          break
+        }
+
+        case 'payments': {
+          const subAction = action.action || ''
+          const r = await fetch('/api/payments', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:subAction, siteUrl:cleanUrl, apiKey, data:action.data, description:action.data?.description }) })
+          const data = await r.json()
+          result = { type:'payments', success:data.success??false, message:data.data?.message||JSON.stringify(data.data||'').slice(0,100) }
+          break
+        }
+
+        case 'forms': {
+          const plugin = action.plugin || 'gravity-forms'
+          const formAction = action.action || 'list'
+          let formEndpoint = `/api/forms?siteUrl=${encodeURIComponent(cleanUrl)}&apiKey=${encodeURIComponent(apiKey)}&action=list_forms`
+          let r: any
+          if (formAction === 'create') {
+            r = await fetch('/api/payments', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action: plugin.includes('wpforms') ? 'wpf_create_form' : 'gf_create_form', siteUrl:cleanUrl, apiKey, description:action.data?.description }) })
+          } else if (formAction === 'entries') {
+            const endpoint = plugin.includes('wpforms') ? `/wpf/entries/${action.data?.formId}` : `/gf/entries/${action.data?.formId}`
+            r = await fetch(`/api/bridge?site=${encodeURIComponent(cleanUrl)}&endpoint=${endpoint}`)
+          } else {
+            r = await fetch(formEndpoint)
+          }
+          const data = await r.json()
+          result = { type:'forms', success:data.success??true, message:data.data?.message||'Forms loaded', data:data.data }
+          break
+        }
+
         case 'plugin_action': {
           const r = await fetch('/api/plugins', { method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ action: action.action, plugin: action.plugin, siteUrl: cleanUrl, apiKey, data: action.data })

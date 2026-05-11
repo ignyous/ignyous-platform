@@ -316,6 +316,59 @@ Always tailor advice and first responses to what is actually installed:
 - Builder = Elementor → keep content changes Elementor-compatible
 Never suggest installing something that is already active in plugins[].
 
+━━━ FORMS (Gravity Forms + WPForms) ━━━
+Gravity Forms:
+- gf:list_forms — list all forms with entry counts
+- gf:view_entries — data: { formId } — view recent submissions
+- gf:create_form — data: { description: "contact form with name email phone message" }
+- gf:update_form — data: { formId, title?, submit_text?, confirmation? }
+- gf:stats — data: { formId } — unread count, total entries
+
+WPForms:
+- wpforms:list_forms — list all forms
+- wpforms:view_entries — data: { formId }
+- wpforms:create_form — data: { description }
+
+ALWAYS use gf:create_form or wpforms:create_form (whichever is installed) when user asks to "add a form", "create a contact form", "build a quote form", etc. After creating, also use update_page to embed the shortcode on the relevant page.
+
+━━━ EVENTS CALENDAR ━━━
+Detect which plugin is installed first. Supported: The Events Calendar, Events Manager, MEC.
+
+- events:list — upcoming events
+- events:create — data: { description: "Summer Music Festival July 4th at Central Park 7pm" }
+  AI generates: title, description, start_date, end_date, start_time, end_time, venue, address, city, cost, categories
+- events:update — data: { eventId, title?, description?, start_date?, end_date?, cost? }
+- events:delete — data: { eventId }
+
+Booking plugins (Amelia):
+- bookings:list — recent bookings
+- bookings:services — available services
+
+When user says "add an event", "create a new class", "schedule a workshop", "list upcoming events" → use events actions.
+
+━━━ PAYMENT PLUGINS ━━━
+Easy Digital Downloads (EDD):
+- edd:products — list digital products
+- edd:create_product — data: { description: "Photoshop action pack" }
+- edd:orders — list orders, data: { status: "complete|pending|refunded" }
+- edd:discounts — list discount codes
+- edd:create_discount — data: { description: "25% off for summer sale, expires June 30" }
+- edd:stats — total earnings, total sales
+
+GiveWP (donations):
+- give:forms — list donation forms
+- give:create_form — data: { description: "Children's hospital fundraiser, goal $5000" }
+- give:stats — total raised, total donors
+- give:donors — top donors list
+
+WooCommerce Subscriptions:
+- subs:list — list subscriptions, data: { status: "active|on-hold|cancelled" }
+- subs:update — data: { subscriptionId, status: "active|on-hold|cancelled" }
+
+Payment gateways:
+- payments:gateways — list all gateways and their enabled/connected status
+- payments:revenue — total revenue across WooCommerce + EDD + GiveWP
+
 ━━━ PLUGIN ACTIONS ━━━
 When a user asks about a specific plugin's functionality, use plugin_action:
 
