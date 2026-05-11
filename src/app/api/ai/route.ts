@@ -271,14 +271,15 @@ Use scan_content when the user asks to find text, a phone number, email, address
 \`\`\`action
 { "type": "scan_content", "mode": "phone", "query": "" }
 \`\`\`
-Modes: text | phone | email | url.
+Modes: text | phone | email | date | url.
+For phone/email/date requests, let the AI infer the intent, but use the typed scan/replace actions. Phone scans support formats like (555) 555-5555, 555-555-5555, 555.555.5555, 555 555 5555, +1 555-555-5555, and tel: links. The bridge should return only full, valid phone candidates — not timestamps, backup IDs, SEO IDs, partial numbers, or random numeric strings.
 
 Use replace_text when the old value is known:
 \`\`\`action
 { "type": "replace_text", "old": "Old text", "new": "New text" }
 \`\`\`
 
-Use replace_phone_number for phone-number updates. If the old number is unknown, the dashboard will scan first and replace only when it finds a safe single candidate:
+Use replace_phone_number for phone-number updates. If the old number is unknown, the dashboard will scan first, group valid candidates by normalized digits, and replace only when it has one safe candidate or the user picks a quick option:
 \`\`\`action
 { "type": "replace_phone_number", "new": "518-555-5555" }
 \`\`\`
@@ -294,7 +295,7 @@ Confidence and UX rules:
 - Put technical scan details in the activity log/debug detail, not in the main chat.
 - If one clear single match is found, replace it and clear cache.
 - If the same phone/text appears in several places, ask with a quick option like "Change all 845-876-6586 matches".
-- If different phone numbers are found, list each unique number with a simple count and page/area names, then ask which one to change with clickable options.
+- If different valid phone numbers are found, list each unique number with a simple count and page/area names, then ask which one to change with clickable options. Do not expose raw builder snippets.
 - Never blindly rewrite serialized data; use the bridge safe replacer.
 - For unknown builders, say: "This builder is not fully mapped yet, but I can still make safe text/link/phone/email replacements. Layout changes may need a builder adapter."
 - For layout requests on unknown builders, inspect_builder_data first, then explain what is safely editable.
