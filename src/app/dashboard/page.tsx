@@ -17,7 +17,7 @@ interface SiteInfo {
   theme:     { name: string; version: string; slug: string }
   builder:   Array<{ id: string; name: string }>
   plugins:   Plugin[]
-  content:   { pages: number; posts: number; media_count?: number }
+  content:   { pages: number; active_pages?: number; posts: number; media_count?: number }
 }
 interface ActionResult { type: string; success: boolean; url?: string; title?: string; message: string; snapshotId?: string; detail?: any; data?: any }
 interface ChatOption { label: string; action?: string; directAction?: any; confirmText?: string; variant?: 'primary'|'secondary'|'danger' }
@@ -463,7 +463,7 @@ function DashboardInner() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [infoRes, pagesRes] = await Promise.all([bridge('site'), bridge('pages')])
+      const [infoRes, pagesRes, pluginsRes] = await Promise.all([bridge('site'), bridge('pages'), bridge('plugins')])
 
       // Handle all possible response shapes from the bridge
       let info: SiteInfo | null = null
@@ -476,10 +476,21 @@ function DashboardInner() {
         setSiteInfo(info)
       }
 
+      let loadedPages: Page[] = []
       if (pagesRes.success) {
         const d = pagesRes.data
         const raw = d?.pages || d?.data?.pages || []
+        loadedPages = raw
         setPages(raw)
+      }
+
+      if (pluginsRes.success) {
+        const pd = pluginsRes.data
+        const plugRaw = pd?.plugins || pd?.data?.plugins || []
+        if (info) {
+          info = { ...info, plugins: plugRaw }
+          setSiteInfo(info)
+        }
       }
 
       // Background scan + snapshots
@@ -492,14 +503,15 @@ function DashboardInner() {
 
       const mem      = getSiteMem(siteKey)
       const siteName = info?.site?.name || siteUrl
-      const plugCt   = (info?.plugins || []).filter(p => p.active !== false).length
-      const pageCt   = pagesRes.data?.pages?.length || 0
+      const plugCt   = (info?.plugins || []).filter(p => p.active === true).length
+      const pageCt   = loadedPages.length || info?.content?.pages || 0
+      const activePageCt = loadedPages.filter(p => p.status === 'publish').length || info?.content?.active_pages || 0
 
       setMessages([{
         role: 'assistant', ts: new Date(),
         content: mem.welcomed
-          ? `Welcome back! Connected to **${siteName}** — ${pageCt} pages, ${plugCt} active plugins. What would you like to do today?`
-          : `Hi! I'm now connected to **${siteName}**.\n\nI can see ${pageCt} pages and ${plugCt} active plugins. I'm scanning for issues now.\n\nJust tell me in plain English what you want — I'll handle everything.`,
+          ? `Welcome back! Connected to **${siteName}** — ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total), ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. What would you like to do today?`
+          : `Hi! I'm now connected to **${siteName}**.\n\nI can see ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total) and ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. I'm scanning for issues now.\n\nJust tell me in plain English what you want — I'll handle everything.`,
       }])
       saveSiteMem(siteKey, { welcomed: true, site_name: info?.site?.name, last_visit: Date.now() })
       setPreviewUrl(cleanUrl)
@@ -793,7 +805,7 @@ function DashboardInner() {
         case 'find_phone_numbers': {
           const mode = action.type === 'find_phone_numbers' ? 'phone' : (action.mode || 'text')
           const started = Date.now()
-          const r = await bridge('content/scan', 'POST', { mode, query: action.query || action.text || '', pageId: action.pageId || 0, limit: action.limit || 50 })
+          const r = await bridge('content/scan', 'POST', { mode, query: action.query || action.text || '', pageId: action.pageId || 0, limit: action.limit || (mode === 'phone' ? 200 : 50) })
           const matches = r.data?.matches || r.data?.data?.matches || []
 
           if (mode === 'phone') {
@@ -802,7 +814,7 @@ function DashboardInner() {
             result = {
               type: action.type,
               success: r.success ?? false,
-              message: groups.length ? `Found ${groups.length} phone number${groups.length === 1 ? '' : 's'} across ${matches.length} match${matches.length === 1 ? '' : 'es'}.` : 'No phone numbers found.',
+              message: groups.length ? `Found ${groups.length} valid phone number${groups.length === 1 ? '' : 's'} across ${matches.length} match${matches.length === 1 ? '' : 'es'}.` : 'No phone numbers found.',
               data: { matches, groups },
             }
             await logClientActivity({
@@ -814,7 +826,7 @@ function DashboardInner() {
             })
             setMessages(prev => [...prev, {
               role: 'assistant' as const,
-              content: groups.length ? `I found these phone numbers:\n${lines}` : 'I scanned the site and did not find any phone numbers.',
+              content: groups.length ? `I found these valid phone numbers:\n${lines}` : 'I scanned the site and did not find any phone numbers.',
               ts: new Date(),
             }])
           } else {
@@ -869,7 +881,7 @@ function DashboardInner() {
           let failed = false
           for (const rep of replacements) {
             if (!rep?.old || typeof rep?.new === 'undefined') continue
-            const r = await bridge('content/replace', 'POST', { old: rep.old, new: rep.new, matchIds: rep.matchIds || [], pageId: rep.pageId || action.pageId || 0 })
+            const r = await bridge('content/replace', 'POST', { old: rep.old, oldDigits: rep.oldDigits || rep.digits, new: rep.new, matchIds: rep.matchIds || [], pageId: rep.pageId || action.pageId || 0, mode: rep.mode || action.mode || 'text' })
             const data = r.data || r.data?.data || {}
             responses.push({ old: rep.old, new: rep.new, success: r.success, response: data, error: r.error || r.message })
             if (!r.success) failed = true
@@ -897,7 +909,7 @@ function DashboardInner() {
           let oldPhone = action.old || action.oldPhone || ''
           if (!oldPhone) {
             const started = Date.now()
-            const scan = await bridge('content/scan', 'POST', { mode: 'phone', query: '', pageId: action.pageId || 0, limit: 100 })
+            const scan = await bridge('content/scan', 'POST', { mode: 'phone', query: '', pageId: action.pageId || 0, limit: 200 })
             const matches = scan.data?.matches || scan.data?.data?.matches || []
             const groups = groupPhoneMatches(matches)
 
@@ -919,7 +931,7 @@ function DashboardInner() {
               const lines = groups.slice(0, 8).map(formatPhoneGroupLine).join('\n')
               const options: ChatOption[] = groups.slice(0, 8).map(g => ({
                 label: `Change all ${g.phone} matches`,
-                directAction: { type: 'replace_phone_number', old: g.phone, new: newPhone, matchIds: g.matchIds },
+                directAction: { type: 'replace_phone_number', old: g.phone, oldDigits: g.digits, new: newPhone, matchIds: g.matchIds },
                 confirmText: `Got it — I’ll change ${g.phone} to ${newPhone}.`,
                 variant: 'primary',
               }))
@@ -928,7 +940,7 @@ function DashboardInner() {
                   label: 'Change every phone number found',
                   directAction: {
                     type: 'replace_multiple_texts',
-                    replacements: groups.map(g => ({ old: g.phone, new: newPhone, matchIds: g.matchIds })),
+                    replacements: groups.map(g => ({ old: g.phone, oldDigits: g.digits, new: newPhone, matchIds: g.matchIds, mode: 'phone' })),
                   },
                   confirmText: `Got it — I’ll change every phone number I found to ${newPhone}.`,
                   variant: 'secondary',
@@ -938,7 +950,7 @@ function DashboardInner() {
 
               const intro = groups.length === 1
                 ? `I found ${groups[0].phone} in ${groups[0].count} places. Should I change all of them to ${newPhone}?`
-                : `I found ${groups.length} different phone numbers. Which should I change to ${newPhone}?`
+                : `I found ${groups.length} different valid phone numbers. Which should I change to ${newPhone}?`
 
               result = { type: 'replace_phone_number', success: false, message: groups.length === 1 ? 'Waiting for confirmation before changing multiple matches.' : 'Waiting for user to choose which phone number to change.', data: { matches, groups } }
               await logClientActivity({
@@ -958,7 +970,7 @@ function DashboardInner() {
             }
           }
           const started = Date.now()
-          const r = await bridge('content/replace', 'POST', { old: oldPhone, new: newPhone, matchIds: action.matchIds || [], pageId: action.pageId || 0 })
+          const r = await bridge('content/replace', 'POST', { old: oldPhone, oldDigits: action.oldDigits || action.digits || normalizePhoneDigits(oldPhone), new: newPhone, matchIds: action.matchIds || [], pageId: action.pageId || 0, mode: 'phone' })
           const data = r.data || r.data?.data || {}
           result = { type: 'replace_phone_number', success: r.success ?? false, message: r.success ? `Done — I changed ${oldPhone} to ${newPhone}.` : (r.message || r.error || 'Phone replacement failed'), detail: { oldPhone, newPhone, matchIds: action.matchIds || [], response: data } }
           await logClientActivity({
