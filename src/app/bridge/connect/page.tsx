@@ -120,75 +120,56 @@ export default function ConnectPage() {
     finally { setScanning(false) }
   }
 
-  // ── CHECK PLUGIN + AUTO CONNECT ────────────────────────────────
+  // ── CHECK PLUGIN + CONNECT ─────────────────────────────────────
   async function checkAndConnect() {
-    setPluginStatus('checking'); setPluginMsg(''); setConnectError('')
+    setPluginStatus('checking')
+    setPluginMsg('')
+    setConnectError('')
+
+    const keyToVerify = connectedKey || getStoredKey(siteUrl)
+
+    if (!keyToVerify) {
+      setPluginStatus('not_found')
+      setConnectError('API key missing. Go back one step so ignyous can generate a key, then paste it into the WordPress plugin settings and save.')
+      return
+    }
 
     try {
-      // Step 1: ping
-      const pingRes  = await fetch('/api/wordpress/setup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteUrl, action: 'ping' }),
+      const verifyRes = await fetch('/api/wordpress/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteUrl, apiKey: keyToVerify }),
       })
-      const pingData = await pingRes.json()
 
-      // Already connected — look for stored key
-      if (pingData.already_connected) {
-        const storedKey = getStoredKey(siteUrl)
-        if (storedKey) {
-          setConnectedKey(storedKey)
-          setConnectedSiteName(pingData.site_name || siteUrl)
-          setPluginStatus('found')
-          saveConnection(siteUrl, storedKey)
-          setStep(4)
-          return
-        }
-        // Connected but no stored key — need to reconnect
-        setConnectError('Site is connected but the key is missing. Deactivate and reactivate the plugin to reset.')
-        setPluginStatus('not_found')
-        return
-      }
+      const verifyData = await verifyRes.json()
 
-      if (!pingData.plugin_found) {
-        setPluginStatus('not_found')
-        setPluginMsg(pingData.message || 'Plugin not detected. Complete all 4 steps above, then try again.')
-        return
-      }
-
-      // Plugin found — auto connect
-      setPluginStatus('found')
-      setPluginMsg('Plugin detected! Connecting automatically…')
-      setConnecting(true)
-
-      const connectRes  = await fetch('/api/wordpress/setup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteUrl, action: 'connect', setup_token: pingData.setup_token }),
-      })
-      const connectData = await connectRes.json()
-
-      if (connectData.success && connectData.api_key) {
-        // ✅ Save key to localStorage immediately
-        saveConnection(siteUrl, connectData.api_key)
-        setConnectedKey(connectData.api_key)
+      if (verifyData.success && verifyData.plugin_found) {
+        saveConnection(siteUrl, keyToVerify)
+        setConnectedKey(keyToVerify)
+        setConnectedSiteName(verifyData.site_name || verifyData.site_info?.site_name || siteUrl)
+        setPluginStatus('found')
 
         // Save to database
         fetch('/api/sites', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            url: siteUrl, apiKey: connectData.api_key,
-            name: connectData.site_info?.site_name || pingData.site_name,
-            wpVersion: pingData.wp_version,
+            url: siteUrl,
+            apiKey: keyToVerify,
+            name: verifyData.site_name || verifyData.site_info?.site_name || siteUrl,
+            wpVersion: verifyData.wp_version || verifyData.site_info?.wp_version,
           }),
         }).catch(() => {}) // non-fatal
 
         setStep(4)
-      } else {
-        setConnectError(connectData.message || 'Auto-connect failed. Try deactivating and reactivating the plugin.')
-        setPluginStatus('not_found')
+        return
       }
-    } catch (e: any) {
-      setConnectError(`Connection error: ${e.message}`)
+
       setPluginStatus('not_found')
+      setPluginMsg(verifyData.message || 'Plugin not detected. Make sure it is activated, the API key is saved, and Permalinks are saved.')
+    } catch (e: any) {
+      setPluginStatus('not_found')
+      setConnectError(`Connection error: ${e.message}`)
     } finally {
       setConnecting(false)
     }
