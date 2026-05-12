@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const unique = [...new Map(links.map(l => [l.href, l])).values()].slice(0, 200)
 
   // Check each link
-  const broken: typeof links & { status?: number }[] = []
+  const broken: Array<{ sourceUrl: string; href: string; status?: number | null }> = []
   await Promise.all(unique.map(async link => {
     const { ok, status } = await checkUrl(link.href)
     if (!ok) broken.push({ ...link, status })

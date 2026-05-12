@@ -274,6 +274,7 @@ export default function CreatePage() {
                   </select>
                 </div>
               )}
+            </div>
           </div>
         )}
 

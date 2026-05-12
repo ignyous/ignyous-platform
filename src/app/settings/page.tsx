@@ -36,6 +36,8 @@ export default function SettingsPage() {
   const [saving, setSaving]         = useState(false)
   const [saved, setSaved]           = useState(false)
   const [loading, setLoading]       = useState(true)
+  const router                      = useRouter()
+  const [initialMode, setInitialMode] = useState<'easy'|'advanced'>('advanced')
 
   // Profile
   const [name, setName]             = useState('')
@@ -68,6 +70,7 @@ export default function SettingsPage() {
       if (u.user) {
         setName(u.user.name || ''); setEmail(u.user.email || ''); setPhone(u.user.phone || '')
         setDashboardMode((u.user.dashboardMode as 'easy'|'advanced') || 'advanced')
+        setInitialMode((u.user.dashboardMode as 'easy'|'advanced') || 'advanced')
       }
       setGaPropertyId(i.gaPropertyId || ''); setReportEmail(i.reportEmail || '')
       setReportEnabled(i.reportEnabled || false); setWlCompanyName(i.wlCompanyName || '')

@@ -1,73 +1,51 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
 
-type EasyAction = { icon: string; label: string; prompt: string }
-
-function getEasyActions(plugins: string[]): EasyAction[] {
-  const has = (...slugs: string[]) => slugs.some(s => plugins.some(p => p.includes(s)))
-  const actions: EasyAction[] = []
-
-  if (has('woocommerce')) {
-    actions.push(
-      { icon: '🏷️', label: 'Run a sale',        prompt: 'I want to run a sale on my products. Help me set up discounts.' },
-      { icon: '📦', label: 'Add a product',       prompt: 'Help me add a new product to my WooCommerce store.' },
-      { icon: '💳', label: 'Improve checkout',    prompt: 'Review and improve my WooCommerce checkout experience.' }
-    )
-  }
-  if (has('events-calendar','the-events','event-calendar')) {
-    actions.push(
-      { icon: '📅', label: 'Create an event',     prompt: 'Help me create and publish a new event on my site.' },
-      { icon: '🎟️', label: 'Promote an event',    prompt: 'Feature an upcoming event prominently on my homepage.' }
-    )
-  }
-  if (has('amelia','bookly','simply-schedule')) {
-    actions.push({ icon: '📋', label: 'Update booking', prompt: 'Review my booking system and check services and availability.' })
-  }
-  if (has('mailchimp','mailpoet','newsletter','klaviyo')) {
-    actions.push({ icon: '📧', label: 'Grow my email list', prompt: 'Add opt-in forms and a lead magnet to grow my email list.' })
-  }
-
-  actions.push(
-    { icon: '📝', label: 'Rewrite homepage',    prompt: 'Rewrite my homepage to be more professional and compelling.' },
-    { icon: '🔍', label: 'Improve my SEO',       prompt: 'Check my SEO and improve it so I rank higher on Google.' },
-    { icon: '🎨', label: 'Refresh my design',    prompt: 'My design feels outdated. Suggest and apply a fresh modern look.' },
-    { icon: '💰', label: 'Add pricing section',  prompt: 'Add a pricing section to my homepage with 3 tiers.' },
-    { icon: '⚡', label: 'Speed up my site',    prompt: 'My site is slow. Find and fix every performance issue.' },
-    { icon: '🔒', label: 'Secure my site',       prompt: 'Check my site security and make sure everything is locked down.' },
-  )
-  if (!has('woocommerce')) {
-    actions.push({ icon: '🛒', label: 'Set up a store', prompt: 'I want to sell products online. Help me set up a store.' })
-  }
-
-  const seen = new Set<string>()
-  return actions.filter(a => { if (seen.has(a.label)) return false; seen.add(a.label); return true }).slice(0, 8)
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  options?: Array<{ label: string; value: string }>
+  ts: Date
 }
 
-interface Message { role: 'user' | 'assistant'; content: string; options?: { label: string }[]; ts: Date }
+interface Props {
+  siteUrl: string
+  apiKey: string
+  pluginSlugs?: string[]
+  userName?: string
+  onSwitchMode?: () => void
+}
 
-export default function EasyModeDashboard({
-  siteUrl, apiKey, pluginSlugs = [], userName, onSwitchMode
-}: {
-  siteUrl: string; apiKey: string; pluginSlugs?: string[]
-  userName?: string; onSwitchMode?: () => void
-}) {
+const QUICK_ACTIONS = [
+  { icon: '\u270F\uFE0F', label: 'Rewrite homepage',    prompt: 'Rewrite my homepage to be more professional and compelling.' },
+  { icon: '\uD83D\uDD0D', label: 'Improve SEO',         prompt: 'Check my SEO and improve it so I rank higher on Google.' },
+  { icon: '\uD83C\uDFA8', label: 'Refresh design',      prompt: 'My design feels outdated. Suggest and apply a fresh modern look.' },
+  { icon: '\uD83D\uDCB0', label: 'Add pricing section', prompt: 'Add a pricing section to my homepage with 3 tiers.' },
+  { icon: '\u26A1',       label: 'Speed up site',       prompt: 'My site is slow. Find and fix every performance issue.' },
+  { icon: '\uD83D\uDD12', label: 'Secure site',         prompt: 'Check my site security and make sure everything is locked down.' },
+  { icon: '\uD83D\uDCDE', label: 'Update phone number', prompt: 'I need to update my phone number everywhere on the site.' },
+  { icon: '\uD83D\uDCCB', label: 'Add contact form',    prompt: 'Add a professional contact form to my site.' },
+]
+
+export default function EasyModeDashboard({ siteUrl, apiKey, pluginSlugs = [], userName, onSwitchMode }: Props) {
   const [messages, setMessages]   = useState<Message[]>([])
   const [input, setInput]         = useState('')
   const [sending, setSending]     = useState(false)
   const [siteInfo, setSiteInfo]   = useState<any>(null)
   const bottomRef                 = useRef<HTMLDivElement>(null)
   const inputRef                  = useRef<HTMLTextAreaElement>(null)
-  const cleanUrl = siteUrl.replace(/\/$/, '')
-  const hasMessages = messages.length > 0
-  const actions = getEasyActions(pluginSlugs)
+  const iframeRef                 = useRef<HTMLIFrameElement>(null)
+  const [iframeKey, setIframeKey] = useState(0)
+  const cleanUrl                  = siteUrl.replace(/\/$/, '')
+  const hasMessages               = messages.length > 0
 
   useEffect(() => {
     if (!siteUrl || !apiKey) return
-    fetch(`/api/bridge?site=${encodeURIComponent(cleanUrl)}&key=${encodeURIComponent(apiKey)}&endpoint=site`)
-      .then(r => r.json()).then(d => setSiteInfo(d?.data || null)).catch(() => {})
-    // Auto-focus input
-    setTimeout(() => inputRef.current?.focus(), 100)
+    fetch('/api/scan/profile?siteUrl=' + encodeURIComponent(cleanUrl) + '&apiKey=' + encodeURIComponent(apiKey))
+      .then(r => r.json())
+      .then(d => { if (d.profile) setSiteInfo(d.profile) })
+      .catch(() => {})
+    setTimeout(() => inputRef.current?.focus(), 200)
   }, [siteUrl, apiKey])
 
   useEffect(() => {
@@ -75,7 +53,7 @@ export default function EasyModeDashboard({
   }, [messages, sending])
 
   async function send(text?: string) {
-    const msg = (text ?? input).trim()
+    const msg = (text || input).trim()
     if (!msg || sending) return
     setInput('')
     setSending(true)
@@ -84,15 +62,23 @@ export default function EasyModeDashboard({
 
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }))
-      const siteContext = siteInfo ? { site_url: cleanUrl, site_name: siteInfo.site?.name, description: siteInfo.site?.description } : { site_url: cleanUrl }
       const res  = await fetch('/api/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, siteContext }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history, siteUrl: cleanUrl, apiKey }),
       })
       const data = await res.json()
+
+      // If there's an action, execute it
+      if (data.action) {
+        await executeAction(data.action)
+      }
+
       setMessages(prev => [...prev, {
-        role: 'assistant', content: data.text || 'Done!',
-        options: data.options || undefined, ts: new Date(),
+        role: 'assistant',
+        content: data.text || 'Done!',
+        options: data.options || undefined,
+        ts: new Date(),
       }])
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.', ts: new Date() }])
@@ -101,175 +87,182 @@ export default function EasyModeDashboard({
     }
   }
 
-  const siteName = siteInfo?.site?.name || cleanUrl.replace(/^https?:\/\//, '')
+  async function executeAction(action: any) {
+    const type = action.type
+    try {
+      if (type === 'clear_cache') {
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        setIframeKey(k => k + 1)
+      } else if (type === 'update_page' || type === 'create_page') {
+        await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        setIframeKey(k => k + 1)
+        setTimeout(() => setIframeKey(k => k + 1), 3000)
+      } else if (type === 'update_seo') {
+        await fetch('/api/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+      } else if (type === 'install_plugin' || type === 'install_theme') {
+        await fetch('/api/wordpress/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+      } else if (type === 'plugin_action') {
+        await fetch('/api/plugins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+      } else if (type === 'update_element') {
+        await fetch('/api/element', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action.findByDescription ? 'find_and_update' : 'update_element', siteUrl: cleanUrl, apiKey, pageId: action.pageId, elementId: action.elementId, description: action.findByDescription, updates: action.updates }) })
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        setIframeKey(k => k + 1)
+      }
+    } catch {
+      // Action failed silently — AI will report what happened
+    }
+  }
+
+  const siteName = siteInfo?.site_name || cleanUrl.replace(/^https?:\/\//, '')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Poppins, sans-serif', background: '#F7F8FC' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Poppins, system-ui, sans-serif', background: '#F7F8FC' }}>
 
-      {/* ── Top bar ───────────────────────────────────────── */}
-      <div style={{ height: 60, background: 'white', borderBottom: '1px solid #E2DDD8', padding: '0 24px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: '#1a1a4e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f3af00', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>✦</div>
+      {/* Top bar */}
+      <div style={{ height: 56, background: 'white', borderBottom: '1px solid #E2DDD8', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: '#1a1a4e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f3af00', fontSize: 14, fontWeight: 800 }}>I</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a4e', lineHeight: 1.2 }}>
-            {siteName}
-          </div>
-          <div style={{ fontSize: 11, color: '#A89D94' }}>Easy Mode · AI Assistant</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a4e' }}>{siteName}</div>
+          <div style={{ fontSize: 10, color: '#A89D94' }}>Easy Mode</div>
         </div>
-        <button onClick={onSwitchMode} style={{ fontSize: 12, color: '#6B6056', textDecoration: 'none', padding: '6px 14px', border: '1px solid #E2DDD8', borderRadius: 8, fontWeight: 500, background: 'white', cursor: 'pointer' }}>
-          ⚡ Advanced Mode
-        </button>
+        {onSwitchMode && (
+          <button onClick={onSwitchMode} style={{ fontSize: 12, color: '#6B6056', padding: '5px 12px', border: '1px solid #E2DDD8', borderRadius: 7, background: 'white', cursor: 'pointer' }}>
+            Advanced
+          </button>
+        )}
       </div>
 
-      {/* ── Main area ─────────────────────────────────────── */}
-      {!hasMessages ? (
-        /* Empty state — input front and center */
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px 80px' }}>
-          {/* Greeting */}
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>✦</div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1a1a4e', margin: '0 0 8px' }}>
-              Hey{userName ? `, ${userName.split(' ')[0]}` : ''}! What would you like to do?
-            </h1>
-            <p style={{ fontSize: 16, color: '#6B6056', margin: 0 }}>
-              Just tell me what you want — I'll handle it on {siteName}.
-            </p>
-          </div>
+      {/* Main content — split: chat top, preview bottom */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          {/* Big centered input */}
-          <div style={{ width: '100%', maxWidth: 680, marginBottom: 28 }}>
-            <div style={{ background: 'white', border: '2px solid #E2DDD8', borderRadius: 16, padding: '4px 4px 4px 20px', display: 'flex', alignItems: 'flex-end', gap: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', transition: 'border-color 0.2s' }}
-              onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = '#1a1a4e'}
-              onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = '#E2DDD8'}
-            >
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="e.g. Add a pricing section to my homepage, Improve my SEO, Run a 20% sale…"
-                rows={3}
-                style={{ flex: 1, border: 'none', outline: 'none', fontSize: 16, color: '#1a1a4e', fontFamily: 'Poppins, sans-serif', resize: 'none', background: 'transparent', padding: '12px 0', lineHeight: 1.5 }}
-              />
-              <button onClick={() => send()} disabled={sending || !input.trim()} style={{
-                width: 46, height: 46, borderRadius: 12, border: 'none', flexShrink: 0, marginBottom: 4,
-                background: sending || !input.trim() ? '#E2DDD8' : '#f3af00',
-                cursor: sending || !input.trim() ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, transition: 'all 0.15s',
-              }}>↑</button>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: '#A89D94' }}>Press Enter to send · Shift+Enter for new line</div>
-          </div>
+        {/* Chat area — takes ~60% when chatting, centers when empty */}
+        <div style={{ flex: hasMessages ? '0 0 55%' : '1', display: 'flex', flexDirection: 'column', overflow: hasMessages ? 'auto' : 'visible' }}>
+          {!hasMessages ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 20px 20px' }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>I</div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1a1a4e', margin: '0 0 6px', textAlign: 'center' }}>
+                What would you like to change?
+              </h1>
+              <p style={{ fontSize: 14, color: '#6B6056', margin: '0 0 24px', textAlign: 'center' }}>
+                Just describe it. I will handle it on {siteName}.
+              </p>
 
-          {/* Quick actions */}
-          <div style={{ width: '100%', maxWidth: 680 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#A89D94', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, textAlign: 'center' }}>Quick Actions</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-              {actions.map(a => (
-                <button key={a.label} onClick={() => send(a.prompt)} style={{
-                  padding: '12px 10px', border: '1.5px solid #E2DDD8', borderRadius: 12,
-                  background: 'white', color: '#1a1a4e', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s', lineHeight: 1.4,
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f3af00'; e.currentTarget.style.background = '#FFFBEB' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2DDD8'; e.currentTarget.style.background = 'white' }}
-                >
-                  <div style={{ fontSize: 22, marginBottom: 4 }}>{a.icon}</div>
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Chat mode — messages + input at bottom */
-        <>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 24px 0' }}>
-            <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
-              {messages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
-                  {msg.role === 'assistant' && (
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a1a4e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f3af00', fontSize: 13, fontWeight: 700, flexShrink: 0, marginTop: 2 }}>✦</div>
-                  )}
-                  <div style={{ maxWidth: '80%' }}>
-                    <div style={{
-                      padding: '12px 16px',
-                      borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '4px 18px 18px 18px',
-                      background: msg.role === 'user' ? '#1a1a4e' : 'white',
-                      color: msg.role === 'user' ? 'white' : '#1a1a4e',
-                      fontSize: 14, lineHeight: 1.65,
-                      boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
-                    }}>{msg.content}</div>
-                    {msg.options && (
-                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {msg.options.map((opt: any, oi: number) => (
-                          <button key={oi} onClick={() => send(opt.label)} style={{
-                            padding: '9px 14px', borderRadius: 10,
-                            border: '1.5px solid #1a1a4e', background: 'white', color: '#1a1a4e',
-                            fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
-                          }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#f3af00'; e.currentTarget.style.borderColor = '#f3af00' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#1a1a4e' }}
-                          >→ {opt.label}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              <div style={{ width: '100%', maxWidth: 600, marginBottom: 20 }}>
+                <div style={{ background: 'white', border: '2px solid #E2DDD8', borderRadius: 14, padding: '4px 4px 4px 16px', display: 'flex', alignItems: 'flex-end', gap: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                    placeholder="e.g. Update my phone number, Add a pricing section, Improve my SEO..."
+                    rows={2}
+                    style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, color: '#1a1a4e', fontFamily: 'inherit', resize: 'none', background: 'transparent', padding: '10px 0', lineHeight: 1.5 }}
+                  />
+                  <button onClick={() => send()} disabled={sending || !input.trim()} style={{
+                    width: 42, height: 42, borderRadius: 10, border: 'none', flexShrink: 0, marginBottom: 3,
+                    background: sending || !input.trim() ? '#E2DDD8' : '#f3af00',
+                    cursor: sending || !input.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+                  }}>&#8593;</button>
                 </div>
-              ))}
-              {sending && (
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a1a4e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f3af00', fontSize: 13 }}>✦</div>
-                  <div style={{ padding: '12px 16px', background: 'white', borderRadius: '4px 18px 18px 18px', boxShadow: '0 1px 6px rgba(0,0,0,0.07)' }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#A89D94', animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>)}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={bottomRef}/>
-            </div>
-          </div>
+              </div>
 
-          {/* Input bar — bottom of chat mode */}
-          <div style={{ background: 'white', borderTop: '1px solid #E2DDD8', padding: '12px 24px', flexShrink: 0 }}>
-            <div style={{ maxWidth: 720, margin: '0 auto' }}>
-              {/* Mini quick actions */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' as const }}>
-                {actions.slice(0, 5).map(a => (
+              <div style={{ width: '100%', maxWidth: 600, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {QUICK_ACTIONS.map(a => (
                   <button key={a.label} onClick={() => send(a.prompt)} style={{
-                    padding: '4px 12px', border: '1px solid #E2DDD8', borderRadius: 20,
-                    background: '#F7F8FC', color: '#6B6056', fontSize: 12, fontWeight: 500,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s',
+                    padding: '10px 8px', border: '1px solid #E2DDD8', borderRadius: 10,
+                    background: 'white', color: '#1a1a4e', fontSize: 11, fontWeight: 600,
+                    cursor: 'pointer', textAlign: 'center', lineHeight: 1.3,
                   }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#f3af00'; e.currentTarget.style.background = '#FFFBEB' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2DDD8'; e.currentTarget.style.background = '#F7F8FC' }}
-                  >{a.icon} {a.label}</button>
+                    onMouseEnter={e => { (e.target as HTMLElement).style.borderColor = '#f3af00' }}
+                    onMouseLeave={e => { (e.target as HTMLElement).style.borderColor = '#E2DDD8' }}
+                  >
+                    <div style={{ fontSize: 18, marginBottom: 3 }}>{a.icon}</div>
+                    {a.label}
+                  </button>
                 ))}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <textarea
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                  placeholder="Tell me what to change or improve…"
-                  rows={2}
-                  style={{ flex: 1, padding: '10px 14px', border: '1.5px solid #E2DDD8', borderRadius: 12, fontSize: 14, color: '#1a1a4e', outline: 'none', fontFamily: 'Poppins, sans-serif', resize: 'none', transition: 'border-color 0.15s' }}
-                  onFocus={e => { e.target.style.borderColor = '#1a1a4e' }}
-                  onBlur={e => { e.target.style.borderColor = '#E2DDD8' }}
-                />
-                <button onClick={() => send()} disabled={sending || !input.trim()} style={{
-                  width: 46, borderRadius: 12, border: 'none', alignSelf: 'stretch',
-                  background: sending || !input.trim() ? '#E2DDD8' : '#f3af00',
-                  cursor: sending || !input.trim() ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-                }}>↑</button>
-              </div>
             </div>
-          </div>
-        </>
-      )}
+          ) : (
+            <>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
+                <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {messages.map((msg, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+                      {msg.role === 'assistant' && <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1a4e', color: '#f3af00', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 2 }}>I</div>}
+                      <div style={{ maxWidth: '80%' }}>
+                        <div style={{
+                          padding: '10px 14px',
+                          borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
+                          background: msg.role === 'user' ? '#1a1a4e' : 'white',
+                          color: msg.role === 'user' ? 'white' : '#1a1a4e',
+                          fontSize: 13, lineHeight: 1.6,
+                          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                        }}>{msg.content}</div>
+                        {msg.options && (
+                          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {msg.options.map((opt, oi) => (
+                              <button key={oi} onClick={() => send(opt.label || opt.value)} style={{
+                                padding: '7px 12px', borderRadius: 8,
+                                border: '1px solid #1a1a4e', background: 'white', color: '#1a1a4e',
+                                fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                              }}>{opt.label}</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {sending && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1a4e', color: '#f3af00', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>I</div>
+                      <div style={{ padding: '10px 14px', background: 'white', borderRadius: '4px 16px 16px 16px', fontSize: 13, color: '#A89D94' }}>Thinking...</div>
+                    </div>
+                  )}
+                  <div ref={bottomRef}/>
+                </div>
+              </div>
 
-      <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}`}</style>
+              {/* Chat input bar */}
+              <div style={{ background: 'white', borderTop: '1px solid #E2DDD8', padding: '10px 16px', flexShrink: 0 }}>
+                <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', gap: 8 }}>
+                  <textarea
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                    placeholder="What else would you like to change?"
+                    rows={1}
+                    style={{ flex: 1, padding: '9px 12px', border: '1px solid #E2DDD8', borderRadius: 10, fontSize: 13, color: '#1a1a4e', outline: 'none', fontFamily: 'inherit', resize: 'none' }}
+                  />
+                  <button onClick={() => send()} disabled={sending || !input.trim()} style={{
+                    width: 40, borderRadius: 10, border: 'none',
+                    background: sending || !input.trim() ? '#E2DDD8' : '#f3af00',
+                    cursor: sending || !input.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                  }}>&#8593;</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Live preview — always visible, takes bottom portion */}
+        <div style={{ flex: hasMessages ? '0 0 45%' : '0 0 0', borderTop: hasMessages ? '1px solid #E2DDD8' : 'none', background: '#e8e4df', position: 'relative', overflow: 'hidden', transition: 'flex 0.3s' }}>
+          {hasMessages && (
+            <>
+              <div style={{ position: 'absolute', top: 8, left: 12, fontSize: 10, color: '#6B6056', background: 'rgba(255,255,255,0.8)', padding: '2px 8px', borderRadius: 4, zIndex: 2 }}>Live Preview</div>
+              <iframe
+                key={iframeKey}
+                src={cleanUrl}
+                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                sandbox="allow-same-origin allow-scripts"
+                title="Site preview"
+              />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

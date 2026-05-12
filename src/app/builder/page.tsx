@@ -289,7 +289,7 @@ function BuilderInner() {
                   onClick={() => setCurrentPage(page)}
                   style={{
                     padding: '9px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9,
-                    background: currentPage?.id===page.id?C.accentDim:'transparent',
+                    background: currentPage?.id===page.id?'#FFF7ED':'transparent',
                     borderLeft: `2px solid ${currentPage?.id===page.id?C.accent:'transparent'}`,
                     transition: 'all 0.1s',
                   }}
@@ -325,7 +325,7 @@ function BuilderInner() {
                     style={{
                       padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
                       border: `1.5px solid ${selectedPalette?.name===palette.name?C.accent:C.border}`,
-                      background: selectedPalette?.name===palette.name?C.accentDim:'white',
+                      background: selectedPalette?.name===palette.name?'#FFF7ED':'white',
                       display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s',
                     }}
                   >

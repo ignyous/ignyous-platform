@@ -568,7 +568,7 @@ function DashboardInner() {
 
       const res  = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })), siteContext: ctx }),
+        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })), siteContext: ctx, siteUrl: cleanUrl, apiKey }),
       })
       const data = await res.json()
 
