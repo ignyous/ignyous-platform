@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import './globals.css'
 import Providers from './providers'
 
 export const metadata: Metadata = {
@@ -12,20 +13,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com"/>
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous"/>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
         <style suppressHydrationWarning>{`
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           html, body {
             background: #FFFFFF;
             color: #1A1410;
-            font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
             font-size: 16px;
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
           }
           *, input, textarea, select, button, h1, h2, h3, h4, h5, h6 {
-            font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
           }
           ::-webkit-scrollbar { width: 5px; height: 5px; }
           ::-webkit-scrollbar-thumb { background: #E2DDD8; border-radius: 3px; }
