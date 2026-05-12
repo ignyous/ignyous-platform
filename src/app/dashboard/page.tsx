@@ -1081,6 +1081,53 @@ function DashboardInner() {
           result = { type: 'install_theme', success: r.success, message: r.success ? `Theme "${action.name || action.slug}" installed and activated` : `Could not auto-install. Go to WP Admin → Appearance → Themes to install manually.` }
           break
         }
+        case 'scan_content': {
+          const r = await fetch('/api/scan/content', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query, pattern: action.pattern, scope: action.scope }),
+          })
+          const d = await r.json()
+          result = {
+            type: 'scan_content', success: d.success ?? false,
+            message: d.success
+              ? `Found ${d.total} match${d.total !== 1 ? 'es' : ''} (${d.unique_values} unique value${d.unique_values !== 1 ? 's' : ''}).`
+              : (d.error || 'Scan failed'),
+            data: d,
+          }
+          // Feed results back into the conversation so AI can summarize
+          if (d.success && d.summary?.length > 0) {
+            const summaryText = d.summary.slice(0, 15).map((s: any, i: number) =>
+              `${i+1}. "${s.value}" - ${s.count} match${s.count !== 1 ? 'es' : ''} in ${s.locations.join(', ')}`
+            ).join('\n')
+            setMessages(prev => [...prev, {
+              role: 'assistant' as const,
+              content: `I found ${d.unique_values} unique value${d.unique_values !== 1 ? 's' : ''}:\n\n${summaryText}`,
+              ts: new Date(),
+            }])
+          }
+          break
+        }
+
+        case 'replace_content': {
+          const r = await fetch('/api/scan/content', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace, scope: action.scope, targets: action.targets }),
+          })
+          const d = await r.json()
+          result = {
+            type: 'replace_content', success: d.success ?? false,
+            message: d.success
+              ? `Replaced ${d.replacements} instance${d.replacements !== 1 ? 's' : ''} of "${action.find}" with "${action.replace}". Cache cleared.`
+              : (d.error || 'Replace failed'),
+          }
+          // Refresh preview after replacement
+          if (d.success) {
+            setIframeKey(k => k + 1)
+            setTimeout(() => setIframeKey(k => k + 1), 3000)
+          }
+          break
+        }
+
         case 'scan_site': {
           const r = await fetch('/api/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: cleanUrl }) })
           const d = await r.json()
@@ -1099,6 +1146,18 @@ function DashboardInner() {
           result = { type: action.type, success: true, message: 'Done!' }
       }
     } catch (e: any) { result = { type: action.type, success: false, message: `Error: ${e.message}` } }
+
+    // ── Auto-cache-clear after content changes ──────────────────
+    const contentActions = ['update_page', 'create_page', 'update_element', 'replace_content', 'update_site_options', 'plugin_action']
+    if (result.success && contentActions.includes(action.type)) {
+      try {
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+      } catch {}
+      // Refresh preview after short delay for cache to clear
+      setIframeKey(k => k + 1)
+      setTimeout(() => setIframeKey(k => k + 1), 2500)
+    }
+
     if (snapshotId) result.snapshotId = snapshotId
     setMessages(prev => prev.map(m => m === msg ? { ...m, actionResult: result } : m))
   }

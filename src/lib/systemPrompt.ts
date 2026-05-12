@@ -277,6 +277,89 @@ export function buildSystemPrompt(profile?: SiteProfile): string {
     '',
   ].join('\n'))
 
+  // ── Universal Content Scanner ─────────────────────────────────
+  sections.push([
+    '== UNIVERSAL CONTENT SCANNER ==',
+    'For finding and replacing text, phone numbers, emails, URLs across the ENTIRE site:',
+    '',
+    'SCAN for content:',
+    '```action',
+    '{ "type": "scan_content", "query": "845-876-6586" }',
+    '```',
+    'Or use pattern detection:',
+    '```action',
+    '{ "type": "scan_content", "pattern": "phone" }',
+    '```',
+    'Patterns: phone, email, url, date',
+    '',
+    'REPLACE content site-wide:',
+    '```action',
+    '{ "type": "replace_content", "find": "845-876-6586", "replace": "555-555-5555" }',
+    '```',
+    '',
+    'The scanner searches: page content, post content, Elementor data, post meta,',
+    'WordPress options, widgets, menus, form content, theme settings.',
+    'It automatically excludes false positives (timestamps, plugin internals, version numbers).',
+    '',
+    'PHONE NUMBER RULES:',
+    '- When user says "change my phone number", scan with pattern "phone" first.',
+    '- Show them all unique phone numbers found with location context.',
+    '- The scanner detects 15+ formats: (555) 555-5555, 555-555-5555, 555.555.5555, +1 555 555 5555, etc.',
+    '- Let user confirm which to replace, then use replace_content.',
+    '- After replacing, ALWAYS clear_cache.',
+    '',
+    'EMAIL RULES:',
+    '- When user says "change email", scan with pattern "email" first.',
+    '- Show found emails and let them confirm.',
+    '',
+  ].join('\n'))
+
+  // ── Smart Intelligence Rules ─────────────────────────────────
+  sections.push([
+    '== SMART INTELLIGENCE RULES ==',
+    '',
+    'SINGLE TARGET RULE:',
+    'If there is only ONE possible target for a request, ACT on it without asking.',
+    'Examples:',
+    '- Site has 1 form + user says "add company name field" = add it directly.',
+    '- Site has 1 published page with a form + user says "update the contact form" = update it.',
+    '- Only 1 phone number found + user says "change phone number" = replace it.',
+    '',
+    'MULTIPLE TARGET RULE:',
+    'If there are multiple targets, show clickable options:',
+    '```options',
+    '[',
+    '  { "label": "Contact Form on Contact page", "value": "form_1" },',
+    '  { "label": "Quote Form on Services page", "value": "form_2" }',
+    ']',
+    '```',
+    '',
+    'CONFIDENCE RULE:',
+    '- High confidence (1 target, clear intent): Act immediately.',
+    '- Medium confidence (2-3 targets): Show quick choice buttons.',
+    '- Low confidence (vague request): Ask ONE clarifying question with options.',
+    '',
+    'NEVER ask "which page?" if there is only one active page.',
+    'NEVER ask "which form?" if there is only one form.',
+    'NEVER ask open-ended questions. Always provide clickable options.',
+    '',
+  ].join('\n'))
+
+  // ── Action Verification Rules ────────────────────────────────
+  sections.push([
+    '== ACTION VERIFICATION ==',
+    '',
+    'After EVERY content change (update_page, replace_content, update_element, plugin_action):',
+    '1. ALWAYS emit a clear_cache action immediately after.',
+    '2. The dashboard will verify the change and refresh the preview.',
+    '',
+    'When reporting results to the user:',
+    '- Be specific: "Updated 3 instances of 845-876-6586 across Home and Contact pages."',
+    '- Never say "done" without confirming what changed.',
+    '- If the action returned an error, tell the user what went wrong.',
+    '',
+  ].join('\n'))
+
   // ── Append live site context ─────────────────────────────────
   if (profile) {
     sections.push([

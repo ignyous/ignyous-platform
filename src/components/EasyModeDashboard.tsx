@@ -108,6 +108,30 @@ export default function EasyModeDashboard({ siteUrl, apiKey, pluginSlugs = [], u
         await fetch('/api/element', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action.findByDescription ? 'find_and_update' : 'update_element', siteUrl: cleanUrl, apiKey, pageId: action.pageId, elementId: action.elementId, description: action.findByDescription, updates: action.updates }) })
         await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
         setIframeKey(k => k + 1)
+      } else if (type === 'scan_content') {
+        const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query, pattern: action.pattern }) })
+        const d = await r.json()
+        if (d.success && d.summary?.length > 0) {
+          const summaryText = d.summary.slice(0, 10).map((s: any, i: number) =>
+            (i+1) + '. "' + s.value + '" - ' + s.count + ' match' + (s.count !== 1 ? 'es' : '') + ' in ' + s.locations.join(', ')
+          ).join('\n')
+          setMessages(prev => [...prev, {
+            role: 'assistant' as const,
+            content: 'Found ' + d.unique_values + ' unique value' + (d.unique_values !== 1 ? 's' : '') + ':\n\n' + summaryText,
+            ts: new Date(),
+          }])
+        }
+      } else if (type === 'replace_content') {
+        const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
+        const d = await r.json()
+        if (d.success) {
+          setIframeKey(k => k + 1)
+          setTimeout(() => setIframeKey(k => k + 1), 3000)
+        }
+      } else if (type === 'update_site_options') {
+        await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        setIframeKey(k => k + 1)
       }
     } catch {
       // Action failed silently — AI will report what happened
