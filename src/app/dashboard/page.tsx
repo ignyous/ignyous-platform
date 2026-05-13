@@ -36,16 +36,35 @@ function getStoredKey(siteUrl: string): string {
   } catch { return '' }
 }
 
-// ─── Colors ───────────────────────────────────────────────────────
+// ─── Colors (Clean Design System) ─────────────────────────────────
+import { designSystem } from '@/lib/designSystem'
+
 const C = {
-  bg: '#F4F4FB', white: '#FFFFFF', text: '#1A1A2E', text2: '#6B6B8A', text3: '#A0A0C0',
-  border: '#E2E2F0', surface: '#F7F7FD',
-  accent: '#1a1a4e', accentDim: '#F0F0FA', accentBorder: '#C8C8E8',
-  gold: '#f3af00', goldDim: '#fffbeb', goldBorder: '#fde68a',
-  green: '#1E7B4B', greenBg: '#F0FAF5', greenBorder: '#B8E5CF',
-  blue: '#1B5FA8', blueBg: '#EFF6FF', blueBorder: '#BFDBFE',
-  red: '#B91C1C', redBg: '#FEF2F2', redBorder: '#FECACA',
-  yellow: '#92400E', yellowBg: '#FFFBEB', yellowBorder: '#FDE68A',
+  bg: designSystem.colors.bg,
+  white: designSystem.colors.card,
+  text: designSystem.colors.foreground,
+  text2: designSystem.colors.textSecondary,
+  text3: designSystem.colors.muted,
+  border: designSystem.colors.border,
+  surface: designSystem.colors.cardAlt,
+  accent: designSystem.colors.primary,
+  accentDim: designSystem.colors.primaryVeryLight,
+  accentBorder: designSystem.colors.primaryLight,
+  gold: designSystem.colors.tones.yellow.color,
+  goldDim: designSystem.colors.tones.yellow.bg,
+  goldBorder: designSystem.colors.tones.yellow.bg,
+  green: designSystem.colors.success,
+  greenBg: designSystem.colors.successBg,
+  greenBorder: designSystem.colors.success,
+  blue: designSystem.colors.info,
+  blueBg: designSystem.colors.infoBg,
+  blueBorder: designSystem.colors.info,
+  red: designSystem.colors.error,
+  redBg: designSystem.colors.errorBg,
+  redBorder: designSystem.colors.error,
+  yellow: designSystem.colors.warning,
+  yellowBg: designSystem.colors.warningBg,
+  yellowBorder: designSystem.colors.warning,
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

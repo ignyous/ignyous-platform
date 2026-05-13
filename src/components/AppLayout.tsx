@@ -3,13 +3,22 @@ import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { designSystem } from '@/lib/designSystem'
 
 const C = {
-  primary: '#1a1a4e', primaryHover: '#252566', primaryBorder: 'rgba(255,255,255,0.1)',
-  gold: '#f3af00',
-  text: '#1A1A2E', text2: '#6B6B8A', text3: '#A0A0C0',
-  border: '#E2E2F0', surface: '#F7F7FD', white: '#FFFFFF',
-  green: '#1E7B4B',
+  primary: designSystem.colors.primary,
+  primaryHover: designSystem.colors.primaryDark,
+  primaryBorder: designSystem.colors.borderLight,
+  gold: designSystem.colors.tones.yellow.color,
+  text: designSystem.colors.foreground,
+  text2: designSystem.colors.textSecondary,
+  text3: designSystem.colors.muted,
+  border: designSystem.colors.border,
+  surface: designSystem.colors.bg,
+  white: designSystem.colors.card,
+  green: designSystem.colors.success,
+  sidebarBg: designSystem.colors.card,
+  sidebarText: designSystem.colors.foreground,
 }
 interface Site { id: string; url: string; name: string | null; connectedAt: string }
 function siteSlug(u: string) { return u.replace(/^https?:\/\//, '').replace(/\/$/, '') }
@@ -72,30 +81,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ width:W, flexShrink:0, background:C.primary, display:'flex', flexDirection:'column' as const, position:'sticky', top:0, height:'100vh', overflowY:'auto', overflowX:'hidden', transition:'width .2s ease' }}>
-        <div style={{ padding:'16px 12px', borderBottom:`1px solid ${C.primaryBorder}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, minHeight:60 }}>
+      <div style={{ width:W, flexShrink:0, background:C.white, display:'flex', flexDirection:'column' as const, position:'sticky', top:0, height:'100vh', overflowY:'auto', overflowX:'hidden', transition:'width .2s ease', borderRight:`1px solid ${C.border}` }}>
+        <div style={{ padding:'16px 12px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, minHeight:60 }}>
           {!collapsed && (
             <div style={{ display:'flex', alignItems:'center', gap:9, overflow:'hidden' }}>
-              <div style={{ width:32, height:32, background:C.gold, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="#1a1a4e"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
+              <div style={{ width:32, height:32, background:C.primary, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
               </div>
-              <span style={{ fontSize:18, fontWeight:700, color:'white', whiteSpace:'nowrap' as const }}>ignyous<span style={{ color:C.gold }}>.ai</span></span>
+              <span style={{ fontSize:18, fontWeight:700, color:C.text, whiteSpace:'nowrap' as const }}>ignyous<span style={{ color:C.primary }}>.ai</span></span>
             </div>
           )}
           {collapsed && (
-            <div style={{ width:32, height:32, background:C.gold, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="#1a1a4e"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
+            <div style={{ width:32, height:32, background:C.primary, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M8 1L2 5v6l6 4 6-4V5L8 1zm0 2l4 2.7V11L8 13.4 4 11V5.7L8 3z"/></svg>
             </div>
           )}
-          <button onClick={() => setCollapsed(c=>!c)} title={collapsed?'Expand':'Collapse'} style={{ background:'rgba(255,255,255,0.08)', border:'none', borderRadius:7, width:26, height:26, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.5)', flexShrink:0, fontSize:12 }}>
+          <button onClick={() => setCollapsed(c=>!c)} title={collapsed?'Expand':'Collapse'} style={{ background:C.border, border:'none', borderRadius:7, width:26, height:26, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:C.text3, flexShrink:0, fontSize:12 }}>
             {collapsed ? '→' : '←'}
           </button>
         </div>
 
-        {!collapsed && <div style={{ padding:'16px 14px 5px', fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.35)', textTransform:'uppercase' as const, letterSpacing:'0.1em' }}>My Sites</div>}
+        {!collapsed && <div style={{ padding:'16px 14px 5px', fontSize:11, fontWeight:700, color:C.text3, textTransform:'uppercase' as const, letterSpacing:'0.1em' }}>My Sites</div>}
 
         <div style={{ flex:1, overflowY:'auto' }}>
-          {sites.length===0 && !collapsed && <div style={{ padding:'8px 14px', fontSize:13, color:'rgba(255,255,255,0.3)' }}>No sites connected yet</div>}
+          {sites.length===0 && !collapsed && <div style={{ padding:'8px 14px', fontSize:13, color:C.text3 }}>No sites connected yet</div>}
           {sites.map(site => {
             const slug   = siteSlug(site.url)
             const active = path.includes(encodeURIComponent(site.url)) || path.includes(slug)
@@ -103,15 +112,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link key={site.id} href={`/dashboard?site=${encodeURIComponent(site.url)}&key=`} title={collapsed?(site.name||slug):''} style={{
                 display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
                 justifyContent:collapsed?'center':'flex-start', textDecoration:'none', transition:'background 0.15s',
-                background:active?'rgba(243,175,0,0.13)':'transparent', borderLeft:`3px solid ${active?C.gold:'transparent'}`,
+                background:active?`${designSystem.colors.primaryVeryLight}`:'transparent', borderLeft:`3px solid ${active?C.primary:'transparent'}`,
               }}
-                onMouseEnter={e=>{ if(!active) e.currentTarget.style.background=C.primaryHover }}
+                onMouseEnter={e=>{ if(!active) e.currentTarget.style.background=designSystem.colors.cardAlt }}
                 onMouseLeave={e=>{ if(!active) e.currentTarget.style.background='transparent' }}
               >
-                <div style={{ width:30, height:30, borderRadius:8, flexShrink:0, background:active?C.gold:'rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>🌐</div>
+                <div style={{ width:30, height:30, borderRadius:8, flexShrink:0, background:active?C.primary:C.border, color:active?'white':C.text3, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>🌐</div>
                 {!collapsed && <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:600, color:active?'white':'rgba(255,255,255,0.8)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{site.name||slug}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{slug}</div>
+                  <div style={{ fontSize:14, fontWeight:600, color:active?C.primary:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{site.name||slug}</div>
+                  <div style={{ fontSize:11, color:C.text3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{slug}</div>
                 </div>}
                 {!collapsed && <div style={{ width:7, height:7, borderRadius:'50%', background:C.green, flexShrink:0 }}/>}
               </Link>
@@ -119,24 +128,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
           <Link href="/bridge/connect" title={collapsed?'Connect a site':''} style={{
             display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
-            justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, transition:'color 0.15s',
+            justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:C.text3, fontSize:13, transition:'color 0.15s',
           }}
-            onMouseEnter={e=>(e.currentTarget.style.color='white')}
-            onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.4)')}
+            onMouseEnter={e=>(e.currentTarget.style.color=C.primary)}
+            onMouseLeave={e=>(e.currentTarget.style.color=C.text3)}
           >
-            <div style={{ width:30, height:30, borderRadius:8, border:'1.5px dashed rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>+</div>
+            <div style={{ width:30, height:30, borderRadius:8, border:`1.5px dashed ${C.border}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>+</div>
             {!collapsed && <span>Connect a site</span>}
           </Link>
         </div>
 
-        <div style={{ borderTop:`1px solid ${C.primaryBorder}`, padding:'8px 0' }}>
+        <div style={{ borderTop:`1px solid ${C.border}`, padding:'8px 0' }}>
           {[{icon:'🌐',label:'All Sites',href:'/overview'},{icon:'✨',label:'New Site',href:'/create'},{icon:'🤖',label:'AI Agents',href:'/agents'},{icon:'🔍',label:'SEO Manager',href:'/seo'},{icon:'📋',label:'Activity Log',href:'/activity'},{icon:'👥',label:'Team',href:'/team'},{icon:'⚙',label:'Settings',href:'/settings'},{icon:'❓',label:'Help',href:'/help'}].map(item=>(
             <Link key={item.href} href={item.href} title={collapsed?item.label:''} style={{
               display:'flex', alignItems:'center', gap:collapsed?0:10, padding:collapsed?'10px 0':'9px 14px',
-              justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:'rgba(255,255,255,0.4)', fontSize:13, transition:'color 0.15s',
+              justifyContent:collapsed?'center':'flex-start', textDecoration:'none', color:C.text3, fontSize:13, transition:'color 0.15s',
             }}
-              onMouseEnter={e=>(e.currentTarget.style.color='white')}
-              onMouseLeave={e=>(e.currentTarget.style.color='rgba(255,255,255,0.4)')}
+              onMouseEnter={e=>(e.currentTarget.style.color=C.primary)}
+              onMouseLeave={e=>(e.currentTarget.style.color=C.text3)}
             >
               <span style={{ fontSize:18, flexShrink:0 }}>{item.icon}</span>{!collapsed&&item.label}
             </Link>
