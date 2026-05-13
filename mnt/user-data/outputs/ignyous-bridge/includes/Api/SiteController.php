@@ -84,3 +84,6 @@ class SiteController {
         return false;
     }
 }
+
+// ── Media upload endpoint ────────────────────────────────────────
+// (registered in register_routes below — added as a second class)

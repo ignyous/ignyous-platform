@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown'
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  image?: { base64: string; mediaType: string; name: string }
   options?: Array<{ label: string; value?: string }>
   ts: Date
 }
@@ -155,10 +156,13 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const [showSiteDrop, setShowSiteDrop] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [siteStatus, setSiteStatus]     = useState<'live' | 'offline' | 'checking'>('checking')
-  const bottomRef  = useRef<HTMLDivElement>(null)
-  const inputRef   = useRef<HTMLTextAreaElement>(null)
-  const dropRef    = useRef<HTMLDivElement>(null)
-  const userRef    = useRef<HTMLDivElement>(null)
+  const [pendingImage, setPendingImage] = useState<{ base64: string; mediaType: string; name: string } | null>(null)
+  const [dragOver, setDragOver]         = useState(false)
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const inputRef    = useRef<HTMLTextAreaElement>(null)
+  const dropRef     = useRef<HTMLDivElement>(null)
+  const userRef     = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const cleanUrl    = siteUrl ? siteUrl.replace(/\/$/, '') : ''
   const siteDomain  = cleanUrl.replace(/^https?:\/\//, '')
@@ -305,6 +309,21 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         await fetch('/api/wordpress/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
         return null
 
+      } else if (type === 'upload_image' || type === 'upload_logo') {
+        // Use the pendingImage if the action doesn't supply its own base64
+        const base64    = action.imageBase64 || ''
+        const mediaType = action.mediaType   || 'image/png'
+        const fileName  = action.fileName    || 'logo.png'
+        const setAsLogo = action.setAsLogo   ?? (type === 'upload_logo')
+        if (!base64) return '⚠️ No image data to upload. Please attach an image first.'
+        const r = await fetch('/api/wordpress/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, imageBase64: base64, mediaType, fileName, setAsLogo }),
+        })
+        const d = await r.json()
+        return d.success ? `✅ ${d.message}${d.url ? `\n\n[View image](${d.url})` : ''}` : `❌ Upload failed: ${d.error}`
+
       } else if (type === 'scan_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query }) })
         const d = await r.json()
@@ -326,23 +345,55 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     return null
   }
 
+  function handleImageFile(file: File) {
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      const base64  = dataUrl.split(',')[1]
+      setPendingImage({ base64, mediaType: file.type, name: file.name })
+    }
+    reader.readAsDataURL(file)
+  }
+
   async function send(text?: string) {
     const msg = (text || input).trim()
-    if (!msg || sending) return
+    if ((!msg && !pendingImage) || sending) return
 
+    const imageToSend = pendingImage
     setInput('')
+    setPendingImage(null)
     setSending(true)
 
-    const userMsg: Message = { role: 'user', content: msg, ts: new Date() }
+    const userMsg: Message = {
+      role: 'user',
+      content: msg || (imageToSend ? `Please process this image: ${imageToSend.name}` : ''),
+      image: imageToSend || undefined,
+      ts: new Date(),
+    }
     const nextMessages = [...messages, userMsg]
     setMessages(nextMessages)
 
     try {
+      // Build messages for Claude — include image as vision content block if present
+      const apiMessages = nextMessages.map(m => {
+        if (m.image && m.role === 'user') {
+          return {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: m.image.mediaType, data: m.image.base64 } },
+              { type: 'text',  text: m.content || 'Please process this image.' },
+            ],
+          }
+        }
+        return { role: m.role, content: m.content }
+      })
+
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages:    nextMessages.map(m => ({ role: m.role, content: m.content })),
+          messages:    apiMessages,
           siteUrl:     cleanUrl,
           apiKey,
           siteContext: buildSiteContext(),
@@ -350,11 +401,10 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       })
       const data = await res.json()
 
-      // Execute action — scan_site returns a string summary, others return null
       let actionResult: string | null = null
       if (data.action) actionResult = await executeAction(data.action)
 
-      const aiText = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
+      const aiText    = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
       const finalText = actionResult || aiText
 
       setMessages(prev => [...prev, {
@@ -544,11 +594,28 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(520px, 1.35fr) minmax(460px, .9fr)' }}>
 
             {/* ── CHAT COLUMN ── */}
-            <section style={{ position: 'relative', display: 'flex', flexDirection: 'column', borderRight: `1px solid ${S.border}`, minWidth: 0 }}>
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: messages.length ? '28px 28px 112px' : '0 24px 112px' }}>
+            <section
+              style={{ display: 'flex', flexDirection: 'column', borderRight: `1px solid ${S.border}`, minWidth: 0, overflow: 'hidden' }}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => {
+                e.preventDefault(); setDragOver(false)
+                const file = e.dataTransfer.files[0]
+                if (file) handleImageFile(file)
+              }}
+            >
+              {/* drag overlay */}
+              {dragOver && (
+                <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(99,87,255,0.08)', border: `2px dashed ${S.primary}`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: S.primary }}>📎 Drop image here</div>
+                </div>
+              )}
+
+              {/* ── MESSAGES (scrollable) ── */}
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: messages.length ? '24px 28px 16px' : '0 24px' }}>
                 {messages.length === 0 ? (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                    <div style={{ maxWidth: 520, marginTop: 40 }}>
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                    <div style={{ maxWidth: 520 }}>
                       <div style={{ width: 80, height: 80, borderRadius: 40, background: 'hsl(248 79% 94%)', color: S.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                         <SparkIcon />
                       </div>
@@ -556,6 +623,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                       <p style={{ color: S.muted, fontSize: 15, lineHeight: 1.55, margin: '0 auto', maxWidth: 460 }}>
                         Ask me anything about your WordPress site. I can help you edit content, change themes, optimize SEO, and much more.
                       </p>
+                      <p style={{ color: S.mutedLight, fontSize: 13, marginTop: 12 }}>💡 You can also drag & drop or paste images directly into the chat.</p>
                     </div>
                   </div>
                 ) : (
@@ -567,6 +635,12 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                             {msg.role === 'user' ? 'You' : <SparkIcon small />}
                           </div>
                           <div>
+                            {/* Image preview if message has an image */}
+                            {msg.image && (
+                              <div style={{ marginBottom: 6 }}>
+                                <img src={`data:${msg.image.mediaType};base64,${msg.image.base64}`} alt={msg.image.name} style={{ maxWidth: 260, maxHeight: 180, borderRadius: 12, border: `1px solid ${S.border}`, display: 'block' }} />
+                              </div>
+                            )}
                             <div style={{ background: msg.role === 'user' ? S.primary : S.card, color: msg.role === 'user' ? 'white' : S.foreground, border: msg.role === 'user' ? 'none' : `1px solid ${S.border}`, borderRadius: msg.role === 'user' ? '18px 18px 5px 18px' : '18px 18px 18px 5px', padding: '12px 15px', boxShadow: msg.role === 'user' ? '0 10px 24px hsla(248,79%,60%,.2)' : '0 1px 2px rgba(15,23,42,.04)', fontSize: 14, lineHeight: 1.6 }}>
                               {msg.role === 'user' ? (
                                 <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
@@ -609,7 +683,6 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                         </div>
                       </div>
                     ))}
-
                     {sending && (
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: S.muted, fontSize: 14 }}>
                         <div style={{ width: 32, height: 32, borderRadius: 16, background: 'hsl(248 79% 94%)', color: S.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><SparkIcon small /></div>
@@ -621,27 +694,53 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                 )}
               </div>
 
-              {/* Input bar — absolutely positioned */}
-              <div style={{ position: 'absolute', left: 32, right: 32, bottom: 38 }}>
-                <div style={{ maxWidth: 844, margin: '0 auto' }}>
-                  <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 15, boxShadow: '0 10px 28px rgba(15,23,42,.07)', display: 'flex', alignItems: 'flex-end', gap: 10, padding: '10px 10px 10px 16px' }}>
-                    <textarea
-                      ref={inputRef}
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-                      }}
-                      placeholder="Ask AI to edit your WordPress site..."
-                      rows={1}
-                      style={{ flex: 1, minHeight: 38, maxHeight: 124, border: 0, outline: 0, resize: 'none', background: 'transparent', color: S.foreground, fontFamily: 'inherit', fontSize: 15, lineHeight: '38px' }}
-                    />
-                    <button onClick={() => send()} disabled={sending || !input.trim()} aria-label="Send" style={{ width: 34, height: 34, border: 0, borderRadius: 12, flexShrink: 0, background: sending || !input.trim() ? 'hsl(248 70% 78%)' : S.primary, color: 'white', cursor: sending || !input.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <SendIcon />
-                    </button>
+              {/* ── INPUT BAR (flex item, not absolute) ── */}
+              <div style={{ flexShrink: 0, padding: '10px 28px 20px', background: S.bg }}>
+                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value = '' }} />
+
+                {/* Pending image preview */}
+                {pendingImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '8px 12px', background: S.card, border: `1px solid ${S.border}`, borderRadius: 10 }}>
+                    <img src={`data:${pendingImage.mediaType};base64,${pendingImage.base64}`} alt={pendingImage.name} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6 }} />
+                    <div style={{ flex: 1, fontSize: 12, color: S.muted }}>{pendingImage.name}</div>
+                    <button onClick={() => setPendingImage(null)} style={{ border: 0, background: 'transparent', color: S.muted, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
                   </div>
-                  <div style={{ textAlign: 'center', color: S.mutedLight, fontSize: 11, marginTop: 10 }}>AI can make mistakes. Always verify changes before publishing.</div>
+                )}
+
+                <div style={{ maxWidth: 844, margin: '0 auto', background: S.card, border: `1px solid ${S.border}`, borderRadius: 15, boxShadow: '0 4px 20px rgba(15,23,42,.06)', display: 'flex', alignItems: 'flex-end', gap: 8, padding: '10px 10px 10px 14px' }}>
+                  {/* Upload button */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Attach image"
+                    style={{ width: 32, height: 32, flexShrink: 0, border: 0, borderRadius: 8, background: pendingImage ? S.primaryLight : 'transparent', color: pendingImage ? S.primary : S.mutedLight, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = S.primaryLight; (e.currentTarget as HTMLElement).style.color = S.primary }}
+                    onMouseLeave={e => { if (!pendingImage) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = S.mutedLight } }}
+                  >
+                    📎
+                  </button>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                    onPaste={e => {
+                      const items = e.clipboardData.items
+                      for (const item of Array.from(items)) {
+                        if (item.type.startsWith('image/')) {
+                          const file = item.getAsFile()
+                          if (file) { handleImageFile(file); e.preventDefault() }
+                        }
+                      }
+                    }}
+                    placeholder="Ask AI to edit your WordPress site... (or drag & drop an image)"
+                    rows={1}
+                    style={{ flex: 1, minHeight: 38, maxHeight: 124, border: 0, outline: 0, resize: 'none', background: 'transparent', color: S.foreground, fontFamily: 'inherit', fontSize: 15, lineHeight: '38px' }}
+                  />
+                  <button onClick={() => send()} disabled={sending || (!input.trim() && !pendingImage)} aria-label="Send" style={{ width: 34, height: 34, border: 0, borderRadius: 12, flexShrink: 0, background: (sending || (!input.trim() && !pendingImage)) ? 'hsl(248 70% 78%)' : S.primary, color: 'white', cursor: (sending || (!input.trim() && !pendingImage)) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <SendIcon />
+                  </button>
                 </div>
+                <div style={{ textAlign: 'center', color: S.mutedLight, fontSize: 11, marginTop: 8 }}>AI can make mistakes. Always verify changes before publishing.</div>
               </div>
             </section>
 

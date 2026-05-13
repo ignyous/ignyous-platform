@@ -55,6 +55,7 @@ class IgnyousBridge {
         (new \Ignyous\Api\PagesController())->register_routes();
         (new \Ignyous\Api\PluginsController())->register_routes();
         (new \Ignyous\Api\AuthController())->register_routes();
+        (new \Ignyous\Api\MediaController())->register_routes();
     }
 
     public function add_menu() {
