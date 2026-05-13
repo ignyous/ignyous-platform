@@ -1,16 +1,20 @@
 'use client'
 
+import { designSystem } from '@/lib/designSystem'
+
 interface Props {
   onSelect: (mode: 'easy' | 'advanced') => void
 }
 
 export default function ModePicker({ onSelect }: Props) {
+  const C = designSystem.colors
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 99999,
-      background: 'linear-gradient(135deg, #0f0f2e 0%, #1a1a4e 50%, #0d1b3e 100%)',
+      background: `linear-gradient(135deg, ${C.primary}0d 0%, ${C.primaryDark}1a 50%, ${C.primary}0a 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Poppins, sans-serif', padding: 24,
+      fontFamily: designSystem.typography.fontFamily, padding: 24,
     }}>
       {/* Stars background effect */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
@@ -32,7 +36,7 @@ export default function ModePicker({ onSelect }: Props) {
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: 48, position: 'relative' }}>
         <div style={{ fontSize: 32, fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
-          ignyous<span style={{ color: '#f3af00' }}>.ai</span>
+          ignyous<span style={{ color: C.primary }}>.ai</span>
         </div>
         <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', marginTop: 8, fontWeight: 400 }}>
           How would you like to work?
@@ -48,15 +52,15 @@ export default function ModePicker({ onSelect }: Props) {
           border: '1.5px solid rgba(255,255,255,0.12)',
           borderRadius: 20, padding: '36px 32px',
           cursor: 'pointer', textAlign: 'left',
-          transition: 'all 0.2s ease',
+          transition: `all ${designSystem.transitions.normal}`,
           backdropFilter: 'blur(12px)',
           position: 'relative', overflow: 'hidden',
         }}
           onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(243,175,0,0.1)'
-            e.currentTarget.style.borderColor = '#f3af00'
+            e.currentTarget.style.background = `rgba(${parseInt(C.primary.split('(')[1], 10)}, 0.1)`
+            e.currentTarget.style.borderColor = C.primary
             e.currentTarget.style.transform = 'translateY(-4px)'
-            e.currentTarget.style.boxShadow = '0 20px 48px rgba(243,175,0,0.2)'
+            e.currentTarget.style.boxShadow = `0 20px 48px ${C.primary}33`
           }}
           onMouseLeave={e => {
             e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
@@ -72,10 +76,10 @@ export default function ModePicker({ onSelect }: Props) {
           </div>
           <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {['Plain English', 'Guided steps', 'No setup'].map(tag => (
-              <span key={tag} style={{ background: 'rgba(243,175,0,0.15)', color: '#f3af00', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(243,175,0,0.3)' }}>{tag}</span>
+              <span key={tag} style={{ background: `${C.primary}26`, color: C.primary, fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.primary}4d` }}>{tag}</span>
             ))}
           </div>
-          <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 8, color: '#f3af00', fontSize: 14, fontWeight: 600 }}>
+          <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 8, color: C.primary, fontSize: 14, fontWeight: 600 }}>
             Get started <span style={{ fontSize: 18 }}>→</span>
           </div>
         </button>
@@ -86,15 +90,15 @@ export default function ModePicker({ onSelect }: Props) {
           border: '1.5px solid rgba(255,255,255,0.12)',
           borderRadius: 20, padding: '36px 32px',
           cursor: 'pointer', textAlign: 'left',
-          transition: 'all 0.2s ease',
+          transition: `all ${designSystem.transitions.normal}`,
           backdropFilter: 'blur(12px)',
           position: 'relative', overflow: 'hidden',
         }}
           onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
-            e.currentTarget.style.borderColor = '#818cf8'
+            e.currentTarget.style.background = `${C.info}1f`
+            e.currentTarget.style.borderColor = C.info
             e.currentTarget.style.transform = 'translateY(-4px)'
-            e.currentTarget.style.boxShadow = '0 20px 48px rgba(99,102,241,0.2)'
+            e.currentTarget.style.boxShadow = `0 20px 48px ${C.info}33`
           }}
           onMouseLeave={e => {
             e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
@@ -110,10 +114,10 @@ export default function ModePicker({ onSelect }: Props) {
           </div>
           <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {['Live preview', 'Full control', 'All tools'].map(tag => (
-              <span key={tag} style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.3)' }}>{tag}</span>
+              <span key={tag} style={{ background: `${C.info}26`, color: C.info, fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.info}4d` }}>{tag}</span>
             ))}
           </div>
-          <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 8, color: '#818cf8', fontSize: 14, fontWeight: 600 }}>
+          <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', gap: 8, color: C.info, fontSize: 14, fontWeight: 600 }}>
             Open dashboard <span style={{ fontSize: 18 }}>→</span>
           </div>
         </button>

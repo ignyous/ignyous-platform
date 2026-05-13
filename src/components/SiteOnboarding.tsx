@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { designSystem } from '@/lib/designSystem'
 
 interface Gap {
   id:       string
@@ -18,14 +19,7 @@ interface Props {
   onDismiss: () => void
 }
 
-const c = {
-  accent: '#E8651A', accentDim: '#FFF7ED', accentBorder: '#FED7AA',
-  green: '#1E7B4B', greenBg: '#F0FAF5', greenBorder: '#B8E5CF',
-  yellow: '#92400E', yellowBg: '#FFFBEB', yellowBorder: '#FDE68A',
-  red: '#B91C1C', redBg: '#FEF2F2', redBorder: '#FECACA',
-  text: '#1A1410', text2: '#6B6056', text3: '#A89D94',
-  border: '#E2DDD8', surface: '#F7F5F2', white: '#FFFFFF',
-}
+const C = designSystem.colors
 
 export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onDismiss }: Props) {
   const [dismissed, setDismissed] = useState<string[]>([])
@@ -127,17 +121,17 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
   const others       = visible.filter(g => g.priority !== 'high')
 
   return (
-    <div style={{ background: c.white, border: `2px solid ${c.accentBorder}`, borderRadius: 18, overflow: 'hidden', marginBottom: 20, boxShadow: '0 4px 20px rgba(232,101,26,0.1)' }}>
+    <div style={{ background: C.card, border: `2px solid ${C.primary}33`, borderRadius: designSystem.borderRadius.lg, overflow: 'hidden', marginBottom: 20, boxShadow: designSystem.shadows.primarySm }}>
       {/* Header */}
-      <div style={{ padding: '16px 20px', background: c.accentDim, borderBottom: `1px solid ${c.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '16px 20px', background: C.primaryVeryLight, borderBottom: `1px solid ${C.primary}33`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: c.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 19 }}>✦</div>
+          <div style={{ width: 36, height: 36, borderRadius: designSystem.borderRadius.md, background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 19 }}>✦</div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Poppins, sans-serif', color: c.text }}>Your site needs some attention</div>
-            <div style={{ fontSize: 14, color: c.text2 }}>{visible.length} issues found — ignyous can fix all of these for you</div>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: designSystem.typography.fontFamily, color: C.foreground }}>Your site needs some attention</div>
+            <div style={{ fontSize: 14, color: C.textSecondary }}>{visible.length} issues found — ignyous can fix all of these for you</div>
           </div>
         </div>
-        <button onClick={onDismiss} style={{ fontSize: 13, color: c.text3, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Poppins, sans-serif' }}>Dismiss all</button>
+        <button onClick={onDismiss} style={{ fontSize: 13, color: C.muted, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: designSystem.typography.fontFamily }}>Dismiss all</button>
       </div>
 
       {/* Issues */}
@@ -145,25 +139,25 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
         {visible.map(gap => (
           <div key={gap.id} style={{
             display: 'flex', alignItems: 'flex-start', gap: 12,
-            padding: '12px 14px', borderRadius: 12,
-            background: gap.priority === 'high' ? c.redBg : c.yellowBg,
-            border: `1px solid ${gap.priority === 'high' ? c.redBorder : c.yellowBorder}`,
+            padding: '12px 14px', borderRadius: designSystem.borderRadius.md,
+            background: gap.priority === 'high' ? C.errorBg : C.warningBg,
+            border: `1px solid ${gap.priority === 'high' ? C.error : C.warning}33`,
           }}>
             <div style={{ fontSize: 21, flexShrink: 0, marginTop: 1 }}>{gap.icon}</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: c.text, marginBottom: 3 }}>{gap.title}</div>
-              <div style={{ fontSize: 14, color: c.text2, lineHeight: 1.5 }}>{gap.desc}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.foreground, marginBottom: 3 }}>{gap.title}</div>
+              <div style={{ fontSize: 14, color: C.textSecondary, lineHeight: 1.5 }}>{gap.desc}</div>
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <button onClick={() => onAsk(gap.prompt)} style={{
-                padding: '7px 14px', background: c.accent, border: 'none', borderRadius: 8,
+                padding: '7px 14px', background: C.primary, border: 'none', borderRadius: designSystem.borderRadius.sm,
                 color: 'white', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif', whiteSpace: 'nowrap' as const,
+                fontFamily: designSystem.typography.fontFamily, whiteSpace: 'nowrap' as const,
               }}>Fix with AI ✦</button>
               <button onClick={() => dismiss(gap.id)} style={{
-                padding: '7px 10px', border: `1px solid ${c.border}`, borderRadius: 8,
-                background: 'white', color: c.text3, fontSize: 13, cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
+                padding: '7px 10px', border: `1px solid ${C.border}`, borderRadius: designSystem.borderRadius.sm,
+                background: 'white', color: C.muted, fontSize: 13, cursor: 'pointer',
+                fontFamily: designSystem.typography.fontFamily,
               }}>✕</button>
             </div>
           </div>
@@ -174,9 +168,9 @@ export default function SiteOnboarding({ siteInfo, scanReport, pages, onAsk, onD
       {visible.length > 1 && (
         <div style={{ padding: '0 20px 16px' }}>
           <button onClick={() => onAsk(`My site has ${visible.length} issues that need fixing: ${visible.map(g => g.title).join(', ')}. Let's fix them one by one, starting with the most important.`)} style={{
-            width: '100%', padding: '12px', background: c.accent, border: 'none', borderRadius: 10,
+            width: '100%', padding: '12px', background: C.primary, border: 'none', borderRadius: designSystem.borderRadius.md,
             color: 'white', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'Poppins, sans-serif', boxShadow: '0 2px 8px rgba(232,101,26,0.25)',
+            fontFamily: designSystem.typography.fontFamily, boxShadow: designSystem.shadows.primary,
           }}>
             ✦ Fix all {visible.length} issues with AI
           </button>

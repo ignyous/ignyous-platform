@@ -1,4 +1,5 @@
 'use client'
+import { designSystem } from '@/lib/designSystem'
 import { useState } from 'react'
 
 // Screenshot via thum.io - screenshots the actual WP.org theme page

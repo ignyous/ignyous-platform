@@ -1,4 +1,5 @@
 'use client'
+import { designSystem } from '@/lib/designSystem'
 import { useState, useEffect } from 'react'
 
 const C = {

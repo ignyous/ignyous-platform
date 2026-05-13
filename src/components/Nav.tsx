@@ -1,9 +1,11 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { designSystem } from '@/lib/designSystem'
 
 export default function Nav() {
   const path = usePathname()
+  const C = designSystem.colors
 
   const links = [
     { href: '/',                label: 'Dashboard' },
@@ -13,17 +15,18 @@ export default function Nav() {
 
   return (
     <nav style={{
-      height: 60, background: '#FFFFFF',
-      borderBottom: '1px solid #E2DDD8',
+      height: 60, background: C.card,
+      borderBottom: `1px solid ${C.border}`,
       display: 'flex', alignItems: 'center',
       padding: '0 32px', justifyContent: 'space-between',
       position: 'sticky', top: 0, zIndex: 100,
-      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      boxShadow: designSystem.shadows.sm,
+      fontFamily: designSystem.typography.fontFamily,
     }}>
       {/* Logo */}
       <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
-          width: 32, height: 32, background: '#E8651A', borderRadius: 8,
+          width: 32, height: 32, background: C.primary, borderRadius: designSystem.borderRadius.md,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
           <svg width="18" height="18" viewBox="0 0 16 16" fill="white">
@@ -31,9 +34,9 @@ export default function Nav() {
           </svg>
         </div>
         <span style={{
-          fontFamily: 'Poppins, sans-serif', fontSize: 17, fontWeight: 700, color: '#1A1410',
+          fontFamily: designSystem.typography.fontFamily, fontSize: 17, fontWeight: 700, color: C.foreground,
         }}>
-          ignyous<span style={{ color: '#E8651A' }}>.ai</span>
+          ignyous<span style={{ color: C.primary }}>.ai</span>
         </span>
       </Link>
 
@@ -41,11 +44,11 @@ export default function Nav() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         {links.map(link => (
           <Link key={link.href} href={link.href} style={{
-            padding: '6px 14px', borderRadius: 8, fontSize: 15, fontWeight: 500,
+            padding: '6px 14px', borderRadius: designSystem.borderRadius.md, fontSize: 15, fontWeight: 500,
             textDecoration: 'none',
-            background: path === link.href ? '#FFF0E8' : 'transparent',
-            color: path === link.href ? '#E8651A' : '#6B6056',
-            transition: 'all 0.15s',
+            background: path === link.href ? C.primaryVeryLight : 'transparent',
+            color: path === link.href ? C.primary : C.textSecondary,
+            transition: `all ${designSystem.transitions.normal}`,
           }}>
             {link.label}
           </Link>
@@ -57,9 +60,9 @@ export default function Nav() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '5px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500,
-          background: '#F0FAF5', border: '1px solid #B8E5CF', color: '#1E7B4B',
+          background: C.tones.teal.bg, border: `1px solid ${C.success}`, color: C.success,
         }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#1E7B4B' }}/>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.success }}/>
           All systems live
         </div>
       </div>
