@@ -325,12 +325,16 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           body: JSON.stringify({ siteUrl: cleanUrl, apiKey, imageBase64: base64, mediaType, fileName, setAsLogo }),
         })
         const d = await r.json()
-        const debugLines = d.debug_log?.length
-          ? '\n\n**Debug log:**\n```\n' + d.debug_log.join('\n') + '\n```'
+
+        const debugSection = d.debug_log?.length
+          ? `\n\n---\n**Debug log:**\n${d.debug_log.map((l: string) => `\`${l}\``).join('\n')}`
           : ''
-        return d.success
-          ? `✅ ${d.message}${d.url ? `\n\n[View uploaded image ↗](${d.url})` : ''}${debugLines}`
-          : `❌ Upload failed: ${d.error || 'Unknown error'}\n\nMake sure the updated ignyous-bridge plugin (v2.1+) is installed on your site.${debugLines}`
+
+        if (!d.success) {
+          return `❌ Upload failed: ${d.error || 'Unknown error'}${debugSection}\n\nMake sure the updated ignyous-bridge plugin is installed.`
+        }
+
+        return `✅ ${d.message}${d.url ? `\n\n[View uploaded image ↗](${d.url})` : ''}${debugSection}`
 
       } else if (type === 'scan_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query }) })
