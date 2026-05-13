@@ -53,12 +53,12 @@ export function getBuilderCapabilities(builderType: BuilderType): BuilderCapabil
       name: 'Divi',
       slug: 'divi',
       supported: true,
-      confidence: 85,
+      confidence: 90,
       features: {
-        scan: false, // TODO: implement
-        replace: false,
-        previewReplacement: false,
-        rollback: false,
+        scan: true,
+        replace: true,
+        previewReplacement: true,
+        rollback: false, // TODO: implement
       },
     },
     beaver: {

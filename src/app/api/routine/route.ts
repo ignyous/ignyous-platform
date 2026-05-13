@@ -3,6 +3,7 @@ import axios from 'axios'
 import { detectPageBuilder } from '@/lib/builders/detector'
 import { scanAllElementorContent, replaceInElementor } from '@/lib/builders/elementor-scanner'
 import { scanAllGutenbergContent, replaceInGutenberg } from '@/lib/builders/gutenberg-scanner'
+import { scanAllDiviContent, replaceInDivi } from '@/lib/builders/divi-scanner'
 
 /**
  * Routine API with Builder Support
@@ -108,6 +109,21 @@ async function handlePhoneScan(
           blockIndex: match.blockIndex,
         },
       }))
+    } else if (builderDetection.active && builderDetection.builderType === 'divi') {
+      const matches = await scanAllDiviContent(siteUrl, apiKey, oldPhone)
+      
+      results = matches.map(match => ({
+        id: match.id,
+        location: match.location,
+        current: match.current,
+        proposed: match.proposed,
+        confidence: match.confidence,
+        metadata: {
+          pageId: match.pageId,
+          contentType: match.contentType,
+          metaKey: match.metaKey,
+        },
+      }))
     } else {
       // Fallback to standard scanning
       results = await scanStandardPhones(siteUrl, apiKey, oldPhone)
@@ -193,6 +209,28 @@ async function handlePhoneReplace(
         )
         changed += pageChanged
       }
+    } else if (builderDetection.active && builderDetection.builderType === 'divi') {
+      // Group by page ID
+      const byPage = new Map<number, any[]>()
+      for (const item of preview) {
+        const pageId = item.metadata?.pageId
+        if (pageId) {
+          if (!byPage.has(pageId)) byPage.set(pageId, [])
+          byPage.get(pageId)!.push(item)
+        }
+      }
+
+      // Replace in each page
+      for (const [pageId] of byPage) {
+        const pageChanged = await replaceInDivi(
+          siteUrl,
+          apiKey,
+          pageId,
+          oldPhone,
+          newPhone
+        )
+        changed += pageChanged
+      }
     } else {
       // Fallback to standard replacement
       changed = await replaceStandardPhones(siteUrl, apiKey, oldPhone, newPhone, preview)
@@ -255,6 +293,21 @@ async function handleEmailScan(
           pageId: match.pageId,
           blockType: match.blockType,
           blockIndex: match.blockIndex,
+        },
+      }))
+    } else if (builderDetection.active && builderDetection.builderType === 'divi') {
+      const matches = await scanAllDiviContent(siteUrl, apiKey, oldEmail)
+      
+      results = matches.map(match => ({
+        id: match.id,
+        location: match.location,
+        current: match.current,
+        proposed: match.proposed,
+        confidence: match.confidence,
+        metadata: {
+          pageId: match.pageId,
+          contentType: match.contentType,
+          metaKey: match.metaKey,
         },
       }))
     } else {
@@ -334,6 +387,28 @@ async function handleEmailReplace(
       // Replace in each page
       for (const [pageId] of byPage) {
         const pageChanged = await replaceInGutenberg(
+          siteUrl,
+          apiKey,
+          pageId,
+          oldEmail,
+          newEmail
+        )
+        changed += pageChanged
+      }
+    } else if (builderDetection.active && builderDetection.builderType === 'divi') {
+      // Group by page ID
+      const byPage = new Map<number, any[]>()
+      for (const item of preview) {
+        const pageId = item.metadata?.pageId
+        if (pageId) {
+          if (!byPage.has(pageId)) byPage.set(pageId, [])
+          byPage.get(pageId)!.push(item)
+        }
+      }
+
+      // Replace in each page
+      for (const [pageId] of byPage) {
+        const pageChanged = await replaceInDivi(
           siteUrl,
           apiKey,
           pageId,
