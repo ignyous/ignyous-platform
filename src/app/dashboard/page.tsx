@@ -9,6 +9,7 @@ import EasyModeDashboard from '@/components/EasyModeDashboard'
 import GlobalDesignPanel from '@/components/GlobalDesignPanel'
 import SiteStatusIndicator from '@/components/SiteStatusIndicator'
 import RoutineLibrary from '@/components/RoutineLibrary'
+import ReactMarkdown from 'react-markdown'
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Plugin  { name: string; slug: string; active: boolean; version: string; update: string | null }
@@ -1381,7 +1382,33 @@ function DashboardInner() {
                 </div>
                 <div style={{ maxWidth: '80%' }}>
                   <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 15, fontWeight: 500, lineHeight: 1.65, background: msg.role==='user'?'#1a1a4e':C.surface, color: msg.role==='user'?'white':C.text, border: msg.role==='user'?'none':`1px solid ${C.border}`, ...(msg.role==='user'?{borderTopRightRadius:4}:{borderTopLeftRadius:4}) }}>
-                    {msg.content.split('\n').map((l,li) => <div key={li} style={{ marginBottom: li<msg.content.split('\n').length-1?4:0 }}>{l.replace(/\*\*(.*?)\*\*/g,'$1')}</div>)}
+                    {msg.role === 'user' ? (
+                      <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                    ) : (
+                      <ReactMarkdown
+                        components={{
+                          table: ({ children }) => (
+                            <div style={{ overflowX: 'auto', margin: '8px 0' }}>
+                              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>{children}</table>
+                            </div>
+                          ),
+                          thead: ({ children }) => <thead style={{ background: 'rgba(26,26,78,0.06)' }}>{children}</thead>,
+                          th: ({ children }) => <th style={{ padding: '7px 12px', textAlign: 'left', fontWeight: 700, color: '#1a1a4e', borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap' as const }}>{children}</th>,
+                          td: ({ children }) => <td style={{ padding: '7px 12px', borderBottom: `1px solid ${C.border}` }}>{children}</td>,
+                          tr: ({ children }) => <tr>{children}</tr>,
+                          p: ({ children }) => <p style={{ margin: '0 0 6px', lineHeight: 1.65 }}>{children}</p>,
+                          strong: ({ children }) => <strong style={{ fontWeight: 700, color: '#1a1a4e' }}>{children}</strong>,
+                          ul: ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ul>,
+                          ol: ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ol>,
+                          li: ({ children }) => <li style={{ lineHeight: 1.55 }}>{children}</li>,
+                          code: ({ children }) => <code style={{ background: 'rgba(26,26,78,0.08)', padding: '1px 6px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace' }}>{children}</code>,
+                          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'underline' }}>{children}</a>,
+                          hr: () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '8px 0' }} />,
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    )}
                   </div>
                   {msg.action && !msg.actionResult && (
                     <div style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, background: C.yellowBg, border: `1px solid ${C.yellowBorder}`, fontSize: 14, color: C.yellow, display: 'flex', alignItems: 'center', gap: 7 }}>

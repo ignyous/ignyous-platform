@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -249,17 +250,29 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
 
   // ── Build rich siteContext for AI (includes pages) ─────────────
   function buildSiteContext() {
+    const theme   = siteInfo?.theme?.name   || siteInfo?.site?.theme  || ''
+    const builder = siteInfo?.builder       || ''
+    const activeP = pages.filter((p: any) => p.status === 'publish')
+    const draftP  = pages.filter((p: any) => p.status !== 'publish')
     return {
-      site_name:    siteName,
-      site_url:     cleanUrl,
-      wp_version:   wpVersion,
-      plugin_count: pluginCount,
-      plugins:      activePlugins.map((p: any) => ({ name: p.name, slug: p.slug })),
-      pages:        pages.map((p: any) => ({ id: p.id, title: p.title, status: p.status, link: p.link })),
-      page_count:   pages.length,
-      active_pages: pages.filter((p: any) => p.status === 'publish').length,
-      mode:         'easy',
-      instruction:  'Respond in plain English. Use the pages and plugin data already provided — do NOT emit scan_site. Be concise and direct.',
+      site_name:     siteName,
+      site_url:      cleanUrl,
+      wp_version:    wpVersion,
+      theme:         theme,
+      active_theme:  theme,
+      builder:       builder,
+      plugin_count:  pluginCount,
+      plugins:       activePlugins.map((p: any) => ({ name: p.name, slug: p.slug })),
+      pages:         pages.map((p: any) => ({ id: p.id, title: p.title, status: p.status, link: p.link })),
+      page_count:    pages.length,
+      active_pages:  activeP.length,
+      draft_pages:   draftP.length,
+      mode:          'easy',
+      instruction:   [
+        'You have FULL site context. Use it — do NOT emit scan_site or any scanning action.',
+        'Format responses using markdown: **bold**, bullet lists, and tables where useful.',
+        'Keep answers concise and helpful.',
+      ].join(' '),
     }
   }
 
@@ -272,21 +285,16 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return null
 
       } else if (type === 'scan_site') {
-        // Fetch real page data and feed back to AI as a follow-up
-        const r = await fetch('/api/wordpress', {
+        // Silently refresh page data — don't override AI's text response
+        fetch('/api/wordpress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: 'pages', method: 'GET' }),
-        })
-        const d = await r.json()
-        const fetched = d?.data?.pages || d?.pages || pages
-        setPages(fetched)
-        // Return summary so the next AI message has real data
-        const pub   = fetched.filter((p: any) => p.status === 'publish')
-        const draft = fetched.filter((p: any) => p.status === 'draft')
-        return `Site scan complete. Found ${fetched.length} pages: ${pub.length} published, ${draft.length} drafts.\n\nPages:\n` +
-          pub.map((p: any) => `• ${p.title} (${p.link})`).join('\n') +
-          (draft.length ? '\n\nDrafts:\n' + draft.map((p: any) => `• ${p.title}`).join('\n') : '')
+        }).then(r => r.json()).then(d => {
+          const fetched = d?.data?.pages || d?.pages || []
+          if (fetched.length > 0) setPages(fetched)
+        }).catch(() => {})
+        return null  // ← let the AI's text stand
 
       } else if (type === 'update_page' || type === 'create_page' || type === 'update_site_options') {
         await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
@@ -559,8 +567,34 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                             {msg.role === 'user' ? 'You' : <SparkIcon small />}
                           </div>
                           <div>
-                            <div style={{ background: msg.role === 'user' ? S.primary : S.card, color: msg.role === 'user' ? 'white' : S.foreground, border: msg.role === 'user' ? 'none' : `1px solid ${S.border}`, borderRadius: msg.role === 'user' ? '18px 18px 5px 18px' : '18px 18px 18px 5px', padding: '12px 15px', boxShadow: msg.role === 'user' ? '0 10px 24px hsla(248,79%,60%,.2)' : '0 1px 2px rgba(15,23,42,.04)', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                              {msg.content}
+                            <div style={{ background: msg.role === 'user' ? S.primary : S.card, color: msg.role === 'user' ? 'white' : S.foreground, border: msg.role === 'user' ? 'none' : `1px solid ${S.border}`, borderRadius: msg.role === 'user' ? '18px 18px 5px 18px' : '18px 18px 18px 5px', padding: '12px 15px', boxShadow: msg.role === 'user' ? '0 10px 24px hsla(248,79%,60%,.2)' : '0 1px 2px rgba(15,23,42,.04)', fontSize: 14, lineHeight: 1.6 }}>
+                              {msg.role === 'user' ? (
+                                <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                              ) : (
+                                <ReactMarkdown
+                                  components={{
+                                    table: ({ children }) => (
+                                      <div style={{ overflowX: 'auto', margin: '8px 0' }}>
+                                        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>{children}</table>
+                                      </div>
+                                    ),
+                                    thead: ({ children }) => <thead style={{ background: S.sidebarAccent }}>{children}</thead>,
+                                    th: ({ children }) => <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: S.primaryDark, borderBottom: `2px solid ${S.border}`, whiteSpace: 'nowrap' as const }}>{children}</th>,
+                                    td: ({ children }) => <td style={{ padding: '8px 14px', borderBottom: `1px solid ${S.border}` }}>{children}</td>,
+                                    tr: ({ children }) => <tr>{children}</tr>,
+                                    p: ({ children }) => <p style={{ margin: '0 0 6px', lineHeight: 1.65 }}>{children}</p>,
+                                    strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+                                    ul: ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ul>,
+                                    ol: ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</ol>,
+                                    li: ({ children }) => <li style={{ lineHeight: 1.55 }}>{children}</li>,
+                                    code: ({ children }) => <code style={{ background: S.sidebarAccent, padding: '1px 6px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace', color: S.primaryDark }}>{children}</code>,
+                                    a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: S.primary, textDecoration: 'underline' }}>{children}</a>,
+                                    hr: () => <hr style={{ border: 'none', borderTop: `1px solid ${S.border}`, margin: '8px 0' }} />,
+                                  }}
+                                >
+                                  {msg.content}
+                                </ReactMarkdown>
+                              )}
                             </div>
                             {msg.options && msg.options.length > 0 && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
