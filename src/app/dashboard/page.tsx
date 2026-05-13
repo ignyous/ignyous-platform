@@ -7,6 +7,7 @@ import ThemeBrowser from '@/components/ThemeBrowser'
 import ModePicker from '@/components/ModePicker'
 import EasyModeDashboard from '@/components/EasyModeDashboard'
 import GlobalDesignPanel from '@/components/GlobalDesignPanel'
+import SiteStatusIndicator from '@/components/SiteStatusIndicator'
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Plugin  { name: string; slug: string; active: boolean; version: string; update: string | null }
@@ -1324,6 +1325,11 @@ function DashboardInner() {
           <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid #1a1a4e`, borderRadius: 8, background: '#1a1a4e', color: 'white', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>WP Admin ↗</a>
           <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>View Site ↗</a>
         </div>
+      </div>
+
+      {/* ── STATUS INDICATOR ── */}
+      <div style={{ padding: '16px 24px', background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+        <SiteStatusIndicator siteUrl={cleanUrl} apiKey={apiKey} />
       </div>
 
       {/* ── MAIN LAYOUT: AI LEFT + PREVIEW RIGHT ── */}
