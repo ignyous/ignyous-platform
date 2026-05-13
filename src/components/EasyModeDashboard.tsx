@@ -281,7 +281,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   }
 
   // ── Execute AI actions ─────────────────────────────────────────
-  async function executeAction(action: any): Promise<string | null> {
+  async function executeAction(action: any, capturedImage?: { base64: string; mediaType: string; name: string } | null): Promise<string | null> {
     const type = action.type
     try {
       if (type === 'clear_cache') {
@@ -289,7 +289,6 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return null
 
       } else if (type === 'scan_site') {
-        // Silently refresh page data — don't override AI's text response
         fetch('/api/wordpress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -298,7 +297,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           const fetched = d?.data?.pages || d?.pages || []
           if (fetched.length > 0) setPages(fetched)
         }).catch(() => {})
-        return null  // ← let the AI's text stand
+        return null
 
       } else if (type === 'update_page' || type === 'create_page' || type === 'update_site_options') {
         await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
@@ -310,19 +309,25 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return null
 
       } else if (type === 'upload_image' || type === 'upload_logo') {
-        // Use the pendingImage if the action doesn't supply its own base64
-        const base64    = action.imageBase64 || ''
-        const mediaType = action.mediaType   || 'image/png'
-        const fileName  = action.fileName    || 'logo.png'
-        const setAsLogo = action.setAsLogo   ?? (type === 'upload_logo')
-        if (!base64) return '⚠️ No image data to upload. Please attach an image first.'
+        // Priority: image the user attached → action.imageBase64 → action.data (Claude sometimes puts it here)
+        const base64    = capturedImage?.base64 || action.imageBase64 || action.data || ''
+        const mediaType = capturedImage?.mediaType || action.mediaType || 'image/png'
+        const fileName  = capturedImage?.name || action.fileName || action.filename || 'upload.png'
+        const setAsLogo = action.setAsLogo ?? (type === 'upload_logo') ?? true
+
+        if (!base64) {
+          return '⚠️ No image attached. Please use the 📎 button to attach an image, then try again.'
+        }
+
         const r = await fetch('/api/wordpress/upload-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ siteUrl: cleanUrl, apiKey, imageBase64: base64, mediaType, fileName, setAsLogo }),
         })
         const d = await r.json()
-        return d.success ? `✅ ${d.message}${d.url ? `\n\n[View image](${d.url})` : ''}` : `❌ Upload failed: ${d.error}`
+        return d.success
+          ? `✅ ${d.message}${d.url ? `\n\n[View uploaded image ↗](${d.url})` : ''}`
+          : `❌ Upload failed: ${d.error || 'Unknown error'}\n\nMake sure the updated ignyous-bridge plugin (v2.1+) is installed on your site.`
 
       } else if (type === 'scan_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query }) })
@@ -402,7 +407,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       const data = await res.json()
 
       let actionResult: string | null = null
-      if (data.action) actionResult = await executeAction(data.action)
+      if (data.action) actionResult = await executeAction(data.action, imageToSend)
 
       const aiText    = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
       const finalText = actionResult || aiText
