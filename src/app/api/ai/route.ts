@@ -7,6 +7,101 @@ import { buildSiteProfile } from '@/lib/siteProfile'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
+/**
+ * Detect if user message is requesting a specific routine operation
+ */
+function detectRoutineIntent(message: string): {
+  type?: 'business_info' | 'form' | 'image' | 'theme_settings'
+  operation?: 'phone' | 'email' | 'address' | 'add_field' | 'replace_form' | 'change_image' | 'change_colors'
+  oldValue?: string
+  newValue?: string
+} | null {
+  const lower = message.toLowerCase()
+
+  // BUSINESS INFO: Phone changes
+  if (
+    (lower.includes('change') || lower.includes('update')) &&
+    (lower.includes('phone') || /\d{3}[-.]?\d{3}[-.]?\d{4}/.test(message))
+  ) {
+    const phoneMatch = message.match(
+      /(?:change|update|to|replace)\s+(?:to\s+)?(\d{10,}|[\d\s\-().]{10,})/i
+    )
+    return {
+      type: 'business_info',
+      operation: 'phone',
+      oldValue: extractPhoneFromMessage(message, true),
+      newValue: phoneMatch ? phoneMatch[1] : undefined,
+    }
+  }
+
+  // BUSINESS INFO: Email changes
+  if (
+    (lower.includes('change') || lower.includes('update')) &&
+    (lower.includes('email') || /@/.test(message))
+  ) {
+    const oldEmail = extractEmailFromMessage(message, true)
+    const newEmail = extractEmailFromMessage(message, false)
+    if (oldEmail || newEmail) {
+      return {
+        type: 'business_info',
+        operation: 'email',
+        oldValue: oldEmail,
+        newValue: newEmail,
+      }
+    }
+  }
+
+  // BUSINESS INFO: Address changes
+  if ((lower.includes('change') || lower.includes('update')) && lower.includes('address')) {
+    return {
+      type: 'business_info',
+      operation: 'address',
+    }
+  }
+
+  // FORMS: Add field
+  if (lower.includes('add') && (lower.includes('field') || lower.includes('form'))) {
+    return {
+      type: 'form',
+      operation: 'add_field',
+    }
+  }
+
+  // IMAGES: Change image
+  if ((lower.includes('change') || lower.includes('update')) && lower.includes('image')) {
+    return {
+      type: 'image',
+      operation: 'change_image',
+    }
+  }
+
+  // THEME: Change colors/fonts
+  if ((lower.includes('change') || lower.includes('update')) && (lower.includes('color') || lower.includes('font'))) {
+    return {
+      type: 'theme_settings',
+      operation: lower.includes('color') ? 'change_colors' : 'change_colors',
+    }
+  }
+
+  return null
+}
+
+/**
+ * Extract phone number from message
+ */
+function extractPhoneFromMessage(message: string, first = true): string | undefined {
+  const matches = message.match(/\d{3}[-.]?\d{3}[-.]?\d{4}|\(\d{3}\)\s?\d{3}[-.]?\d{4}|\d{10}/g)
+  return matches ? (first ? matches[0] : matches[matches.length - 1]) : undefined
+}
+
+/**
+ * Extract email from message
+ */
+function extractEmailFromMessage(message: string, first = true): string | undefined {
+  const matches = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)
+  return matches ? (first ? matches[0] : matches[matches.length - 1]) : undefined
+}
+
 export async function POST(req: NextRequest) {
   const start = Date.now()
   try {
@@ -27,12 +122,20 @@ export async function POST(req: NextRequest) {
       if (built) profile = built
     }
 
-    // Build system prompt with live profile
+    // ── CHECK IF THIS IS A ROUTINE REQUEST ──
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content || ''
+    const routineIntent = detectRoutineIntent(String(lastUserMsg))
+
+    if (routineIntent && siteUrl && apiKey) {
+      // Route to appropriate routine handler
+      return await handleRoutineRequest(routineIntent, siteUrl, apiKey, profile, session, start)
+    }
+
+    // ── OTHERWISE, USE CLAUDE FOR CHAT ──
     const system = buildSystemPrompt(profile)
 
-    // Call Claude
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 1500,
       system,
       messages,
@@ -41,17 +144,21 @@ export async function POST(req: NextRequest) {
     const raw = response.content[0].type === 'text' ? response.content[0].text : ''
 
     // Parse action and options blocks
-    const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
+    const actionMatch = raw.match(/```action\n([\s\S]*?)\n```/)
     const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
 
     let action: any = null
     let options: any = null
 
     if (actionMatch?.[1]) {
-      try { action = JSON.parse(actionMatch[1]) } catch {}
+      try {
+        action = JSON.parse(actionMatch[1])
+      } catch {}
     }
     if (optionsMatch?.[1]) {
-      try { options = JSON.parse(optionsMatch[1]) } catch {}
+      try {
+        options = JSON.parse(optionsMatch[1])
+      } catch {}
     }
 
     // Strip action/options blocks from visible text
@@ -61,24 +168,97 @@ export async function POST(req: NextRequest) {
       .trim()
 
     // Log the interaction
-    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content || ''
     await logActivity({
-      userId:    session?.user?.email ?? undefined,
-      siteUrl:   profile?.site_url,
-      siteName:  profile?.site_name,
-      category:  action ? 'ai_action' : 'system',
-      action:    action?.type || 'ai_chat',
-      status:    'success',
-      summary:   action
+      userId: session?.user?.email ?? undefined,
+      siteUrl: profile?.site_url,
+      siteName: profile?.site_name,
+      category: action ? 'ai_action' : 'system',
+      action: action?.type || 'ai_chat',
+      status: 'success',
+      summary: action
         ? 'AI action: ' + action.type + (action.title ? ' on ' + action.title : '')
         : 'Chat: ' + String(lastUserMsg).slice(0, 80),
-      detail:    { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
+      detail: { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
       ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
       userAgent: req.headers.get('user-agent') ?? undefined,
       durationMs: Date.now() - start,
     })
 
-    return NextResponse.json({ text, action, options })
+    return NextResponse.json({ text, action, options, routineUsed: false })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
+/**
+ * Handle routine request by routing to appropriate API endpoint
+ */
+async function handleRoutineRequest(
+  intent: any,
+  siteUrl: string,
+  apiKey: string,
+  profile: SiteProfile | undefined,
+  session: any,
+  start: number
+): Promise<NextResponse> {
+  try {
+    // For now, return instruction to use routine endpoint
+    // In production, you'd call the routine API directly here
+
+    let routineType = ''
+    let operation = ''
+    let params: any = {}
+
+    if (intent.type === 'business_info') {
+      routineType = 'business_info_manager'
+      operation = intent.operation // 'phone', 'email', 'address'
+      params = {
+        oldValue: intent.oldValue,
+        newValue: intent.newValue,
+      }
+    } else if (intent.type === 'form') {
+      routineType = 'form_manager'
+      operation = intent.operation
+    } else if (intent.type === 'image') {
+      routineType = 'image_manager'
+      operation = intent.operation
+    } else if (intent.type === 'theme_settings') {
+      routineType = 'theme_settings_manager'
+      operation = intent.operation
+    }
+
+    // Log routine attempt
+    await logActivity({
+      userId: session?.user?.email ?? undefined,
+      siteUrl: profile?.site_url,
+      siteName: profile?.site_name,
+      category: 'routine_request',
+      action: `${routineType}_${operation}`,
+      status: 'initiated',
+      summary: `Routing to ${routineType} for ${operation}`,
+      detail: params,
+      ipAddress: undefined,
+      userAgent: undefined,
+      durationMs: Date.now() - start,
+    })
+
+    // Return routine instruction
+    return NextResponse.json({
+      text: `I'll help you ${intent.operation} on your site. Scanning for all instances...`,
+      routineUsed: true,
+      routine: {
+        type: routineType,
+        operation,
+        params,
+        siteUrl,
+        apiKey,
+      },
+      action: {
+        type: 'routine_scan',
+        routine: routineType,
+        operation,
+      },
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
