@@ -41,12 +41,12 @@ export function getBuilderCapabilities(builderType: BuilderType): BuilderCapabil
       name: 'Gutenberg',
       slug: 'gutenberg',
       supported: true,
-      confidence: 92,
+      confidence: 95,
       features: {
-        scan: false, // TODO: implement
-        replace: false,
-        previewReplacement: false,
-        rollback: false,
+        scan: true,
+        replace: true,
+        previewReplacement: true,
+        rollback: false, // TODO: implement
       },
     },
     divi: {
