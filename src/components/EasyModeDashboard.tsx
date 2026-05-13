@@ -338,6 +338,33 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return null
 
+      } else if (type === 'scan_options') {
+        // Confidence-scored DB scan — finds where content is stored across options + posts
+        const r = await fetch('/api/wordpress/scan-options', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, query: action.query, scope: action.scope || 'all' }),
+        })
+        const d = await r.json()
+        if (!d.success || !d.matches?.length) return `No matches found for "${action.query}".`
+        const lines = d.matches.slice(0, 10).map((m: any) => {
+          const conf = m.confidence >= 80 ? '🟢 High' : m.confidence >= 50 ? '🟡 Medium' : '🔴 Low'
+          const loc  = m.source === 'post_content' ? `Page "${m.post_title}"` : m.field_path
+          return `- **${conf}** confidence — \`${loc}\`\n  Current value: "${m.current_value}"`
+        }).join('\n')
+        return `Found **${d.count}** match${d.count !== 1 ? 'es' : ''} for "${action.query}":\n\n${lines}`
+
+      } else if (type === 'update_option') {
+        // Update a specific DB option field (from a previous scan_options result)
+        const r = await fetch('/api/wordpress/update-option', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, ...action }),
+        })
+        const d = await r.json()
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return d.success
+          ? `✅ Updated \`${action.field_path}\`\nOld: "${d.old}"\nNew: "${d.new}"`
+          : `❌ Update failed: ${d.error}`
+
       } else if (type === 'replace_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
         const d = await r.json()

@@ -165,13 +165,13 @@ export default function AppLayout({ children, onSwitchToEasy }: { children: Reac
             </> : <span style={{ fontWeight:700, color:C.text }}>Dashboard</span>}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            {/* Easy / Advanced mode toggle */}
+            {/* Easy / Advanced mode toggle — same position and style as Easy Mode header */}
             {onSwitchToEasy && (
-              <div style={{ background:'hsl(220 16% 94%)', borderRadius:11, padding:3, display:'flex', alignItems:'center', gap:2 }}>
-                <button onClick={onSwitchToEasy} style={{ border:0, background:'transparent', color:'hsl(224 15% 38%)', borderRadius:9, padding:'5px 12px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              <div style={{ background:'hsl(220 16% 94%)', borderRadius:12, padding:3, display:'flex', alignItems:'center', gap:3 }}>
+                <button onClick={onSwitchToEasy} style={{ border:0, background:'transparent', color:'hsl(224 15% 35%)', borderRadius:10, padding:'6px 14px', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
                   ✨ Easy
                 </button>
-                <button style={{ border:0, background:C.primary, color:'white', borderRadius:9, padding:'5px 12px', fontSize:12, fontWeight:700, cursor:'default' }}>
+                <button style={{ border:0, background:C.primary, color:'white', borderRadius:10, padding:'6px 14px', fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6, cursor:'default' }}>
                   ‹/› Advanced
                 </button>
               </div>
