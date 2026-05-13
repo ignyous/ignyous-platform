@@ -433,6 +433,15 @@ function DashboardInner() {
     if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
   }, [messages])
 
+  // Persist chat to localStorage
+  useEffect(() => {
+    if (!siteKey || messages.length === 0) return
+    try {
+      const toSave = messages.slice(-80).map(m => ({ role: m.role, content: m.content, ts: m.ts.getTime() }))
+      localStorage.setItem(`ignyous_chat_${siteKey}`, JSON.stringify(toSave))
+    } catch {}
+  }, [messages, siteKey])
+
   async function bridge(endpoint: string, method = 'GET', body?: any) {
     const res  = await fetch('/api/wordpress', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -484,6 +493,14 @@ function DashboardInner() {
   async function loadAll() {
     setLoading(true)
     try {
+      // Load saved chat history first
+      try {
+        const saved = JSON.parse(localStorage.getItem(`ignyous_chat_${siteKey}`) || '[]')
+        if (saved.length > 0) {
+          setMessages(saved.map((m: any) => ({ ...m, ts: new Date(m.ts), options: undefined, action: undefined, actionResult: undefined })))
+        }
+      } catch {}
+
       const [infoRes, pagesRes, pluginsRes] = await Promise.all([bridge('site'), bridge('pages'), bridge('plugins')])
 
       // Handle all possible response shapes from the bridge
@@ -528,12 +545,16 @@ function DashboardInner() {
       const pageCt   = loadedPages.length || info?.content?.pages || 0
       const activePageCt = loadedPages.filter(p => p.status === 'publish').length || info?.content?.active_pages || 0
 
-      setMessages([{
-        role: 'assistant', ts: new Date(),
-        content: mem.welcomed
-          ? `Welcome back! Connected to **${siteName}** — ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total), ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. What would you like to do today?`
-          : `Hi! I'm now connected to **${siteName}**.\n\nI can see ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total) and ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. I'm scanning for issues now.\n\nJust tell me in plain English what you want — I'll handle everything.`,
-      }])
+      // Only show welcome if no saved chat history
+      const hasSavedChat = (() => { try { return JSON.parse(localStorage.getItem(`ignyous_chat_${siteKey}`) || '[]').length > 0 } catch { return false } })()
+      if (!hasSavedChat) {
+        setMessages([{
+          role: 'assistant', ts: new Date(),
+          content: mem.welcomed
+            ? `Welcome back! Connected to **${siteName}** — ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total), ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. What would you like to do today?`
+            : `Hi! I'm now connected to **${siteName}**.\n\nI can see ${activePageCt} active page${activePageCt === 1 ? '' : 's'} (${pageCt} total) and ${plugCt} active plugin${plugCt === 1 ? '' : 's'}. I'm scanning for issues now.\n\nJust tell me in plain English what you want — I'll handle everything.`,
+        }])
+      }
       saveSiteMem(siteKey, { welcomed: true, site_name: info?.site?.name, last_visit: Date.now() })
       setPreviewUrl(cleanUrl)
     } catch {

@@ -145,14 +145,15 @@ interface SiteEntry { id: string; url: string; name: string | null }
 
 export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchMode }: Props) {
   const { data: session } = useSession()
-  const [messages, setMessages]       = useState<Message[]>([])
-  const [input, setInput]             = useState('')
-  const [sending, setSending]         = useState(false)
-  const [siteInfo, setSiteInfo]       = useState<any>(null)
-  const [sites, setSites]             = useState<SiteEntry[]>([])
+  const [messages, setMessages]         = useState<Message[]>([])
+  const [input, setInput]               = useState('')
+  const [sending, setSending]           = useState(false)
+  const [siteInfo, setSiteInfo]         = useState<any>(null)
+  const [pages, setPages]               = useState<any[]>([])
+  const [sites, setSites]               = useState<SiteEntry[]>([])
   const [showSiteDrop, setShowSiteDrop] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [siteStatus, setSiteStatus]   = useState<'live' | 'offline' | 'checking'>('checking')
+  const [siteStatus, setSiteStatus]     = useState<'live' | 'offline' | 'checking'>('checking')
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
   const dropRef    = useRef<HTMLDivElement>(null)
@@ -160,6 +161,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
 
   const cleanUrl    = siteUrl ? siteUrl.replace(/\/$/, '') : ''
   const siteDomain  = cleanUrl.replace(/^https?:\/\//, '')
+  const siteKey     = cleanUrl.replace(/[^a-z0-9]/gi, '_')
   const siteName    = siteInfo?.site?.name || siteInfo?.site_name || siteDomain || 'your WordPress site'
   const wpVersion   = siteInfo?.wordpress?.version || siteInfo?.wp_version || ''
   const activePlugins = (siteInfo?.plugins || []).filter((p: any) => p.active !== false)
@@ -167,15 +169,47 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const displayUser = session?.user?.name || session?.user?.email?.split('@')[0] || userName || 'Account'
   const userInitial = displayUser[0]?.toUpperCase() || 'A'
 
-  // Load site info + check status
+  // ── Save chat to localStorage whenever messages change ─────────
+  useEffect(() => {
+    if (!siteKey || messages.length === 0) return
+    try {
+      const toSave = messages.slice(-60).map(m => ({ role: m.role, content: m.content, ts: m.ts.getTime() }))
+      localStorage.setItem(`ignyous_chat_${siteKey}`, JSON.stringify(toSave))
+    } catch {}
+  }, [messages, siteKey])
+
+  // ── Load site info + pages + status ───────────────────────────
   useEffect(() => {
     if (!siteUrl || !apiKey) return
+
+    // Load saved chat
+    try {
+      const saved = JSON.parse(localStorage.getItem(`ignyous_chat_${siteKey}`) || '[]')
+      if (saved.length > 0) {
+        setMessages(saved.map((m: any) => ({ ...m, ts: new Date(m.ts) })))
+      }
+    } catch {}
+
+    // Fetch site profile
     fetch('/api/scan/profile?siteUrl=' + encodeURIComponent(cleanUrl) + '&apiKey=' + encodeURIComponent(apiKey))
       .then(r => r.json())
       .then(d => {
         if (d.profile) setSiteInfo(d.profile)
         else if (d.site) setSiteInfo(d)
         else setSiteInfo(d)
+      })
+      .catch(() => {})
+
+    // Fetch pages directly from bridge
+    fetch('/api/wordpress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: 'pages', method: 'GET' }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        const raw = d?.data?.pages || d?.pages || []
+        setPages(raw)
       })
       .catch(() => {})
 
@@ -189,7 +223,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       .catch(() => setSiteStatus('offline'))
 
     setTimeout(() => inputRef.current?.focus(), 250)
-  }, [siteUrl, apiKey, cleanUrl])
+  }, [siteUrl, apiKey, cleanUrl, siteKey])
 
   // Load connected sites for dropdown
   useEffect(() => {
@@ -213,31 +247,75 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, sending])
 
-  async function executeAction(action: any) {
+  // ── Build rich siteContext for AI (includes pages) ─────────────
+  function buildSiteContext() {
+    return {
+      site_name:    siteName,
+      site_url:     cleanUrl,
+      wp_version:   wpVersion,
+      plugin_count: pluginCount,
+      plugins:      activePlugins.map((p: any) => ({ name: p.name, slug: p.slug })),
+      pages:        pages.map((p: any) => ({ id: p.id, title: p.title, status: p.status, link: p.link })),
+      page_count:   pages.length,
+      active_pages: pages.filter((p: any) => p.status === 'publish').length,
+      mode:         'easy',
+      instruction:  'Respond in plain English. Use the pages and plugin data already provided — do NOT emit scan_site. Be concise and direct.',
+    }
+  }
+
+  // ── Execute AI actions ─────────────────────────────────────────
+  async function executeAction(action: any): Promise<string | null> {
     const type = action.type
     try {
       if (type === 'clear_cache') {
         await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return null
+
+      } else if (type === 'scan_site') {
+        // Fetch real page data and feed back to AI as a follow-up
+        const r = await fetch('/api/wordpress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: 'pages', method: 'GET' }),
+        })
+        const d = await r.json()
+        const fetched = d?.data?.pages || d?.pages || pages
+        setPages(fetched)
+        // Return summary so the next AI message has real data
+        const pub   = fetched.filter((p: any) => p.status === 'publish')
+        const draft = fetched.filter((p: any) => p.status === 'draft')
+        return `Site scan complete. Found ${fetched.length} pages: ${pub.length} published, ${draft.length} drafts.\n\nPages:\n` +
+          pub.map((p: any) => `• ${p.title} (${p.link})`).join('\n') +
+          (draft.length ? '\n\nDrafts:\n' + draft.map((p: any) => `• ${p.title}`).join('\n') : '')
+
       } else if (type === 'update_page' || type === 'create_page' || type === 'update_site_options') {
         await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
         await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return null
+
       } else if (type === 'install_plugin' || type === 'install_theme') {
         await fetch('/api/wordpress/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
+        return null
+
       } else if (type === 'scan_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'scan', siteUrl: cleanUrl, apiKey, query: action.query }) })
         const d = await r.json()
         if (d.success && d.summary?.length > 0) {
-          const text = d.summary.slice(0, 10).map((s: any, i: number) =>
-            `${i + 1}. "${s.value}" — ${s.count} match${s.count !== 1 ? 'es' : ''} in ${s.locations.join(', ')}`
-          ).join('\n')
-          setMessages(prev => [...prev, { role: 'assistant', content: `Found ${d.unique_values} unique value${d.unique_values !== 1 ? 's' : ''}:\n\n${text}`, ts: new Date() }])
+          return `Found ${d.unique_values} unique value${d.unique_values !== 1 ? 's' : ''}:\n\n` +
+            d.summary.slice(0, 10).map((s: any, i: number) => `${i + 1}. "${s.value}" — ${s.count} match${s.count !== 1 ? 'es' : ''} in ${s.locations.join(', ')}`).join('\n')
         }
+        return null
+
       } else if (type === 'replace_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
         const d = await r.json()
         if (d.success) await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return null
       }
-    } catch { /* let the AI message explain */ }
+    } catch (e: any) {
+      return `Action failed: ${e.message}`
+    }
+    return null
   }
 
   async function send(text?: string) {
@@ -256,30 +334,29 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
-          siteUrl: cleanUrl,
+          messages:    nextMessages.map(m => ({ role: m.role, content: m.content })),
+          siteUrl:     cleanUrl,
           apiKey,
-          siteContext: {
-            site_name:    siteName,
-            site_url:     cleanUrl,
-            wp_version:   wpVersion,
-            plugin_count: pluginCount,
-            plugins:      activePlugins.map((p: any) => ({ name: p.name, slug: p.slug })),
-            mode:         'easy',
-            instruction:  'Respond in plain English. Inspect the site before asking clarifying questions. Be concise.',
-          },
+          siteContext: buildSiteContext(),
         }),
       })
       const data = await res.json()
-      if (data.action) await executeAction(data.action)
+
+      // Execute action — scan_site returns a string summary, others return null
+      let actionResult: string | null = null
+      if (data.action) actionResult = await executeAction(data.action)
+
+      const aiText = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
+      const finalText = actionResult || aiText
+
       setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.'),
+        role:    'assistant',
+        content: finalText,
         options: data.options || undefined,
-        ts: new Date(),
+        ts:      new Date(),
       }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.', ts: new Date() }])
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${err?.message || err}`, ts: new Date() }])
     } finally {
       setSending(false)
       setTimeout(() => inputRef.current?.focus(), 100)
@@ -357,6 +434,9 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           <nav style={{ padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
             <button style={{ border: 0, borderRadius: 9, background: S.sidebarAccent, color: S.primaryDark, height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 600, cursor: 'default', textAlign: 'left' }}>
               <NavIcon>▱</NavIcon> Chat
+            </button>
+            <button onClick={() => { setMessages([]); try { localStorage.removeItem(`ignyous_chat_${siteKey}`) } catch {} }} style={{ border: 0, borderRadius: 9, background: 'transparent', color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' as const, width: '100%' }}>
+              <NavIcon>＋</NavIcon> New Chat
             </button>
             <Link href="/overview" style={{ textDecoration: 'none', borderRadius: 9, color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500 }}>
               <NavIcon>◎</NavIcon> Sites
