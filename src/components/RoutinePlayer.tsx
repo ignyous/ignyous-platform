@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { designSystem } from '@/lib/designSystem'
 import { RoutineStatus, RoutineType, ROUTINES, RoutineResults } from '@/types/routine'
+import ConfidenceBadge from '@/components/ConfidenceBadge'
 
 interface Props {
   routineType: RoutineType
@@ -379,6 +380,13 @@ function PreviewPhase({
 }) {
   const C = designSystem.colors
 
+  // Calculate confidence distribution
+  const confidenceStats = {
+    safe: results?.preview?.filter((p: any) => p.confidence?.recommendation === 'safe').length || 0,
+    review: results?.preview?.filter((p: any) => p.confidence?.recommendation === 'review').length || 0,
+    skip: results?.preview?.filter((p: any) => p.confidence?.recommendation === 'skip').length || 0,
+  }
+
   return (
     <div>
       {/* Progress Bar */}
@@ -425,9 +433,60 @@ function PreviewPhase({
             Found {results.found} instances
           </div>
 
+          {/* Confidence Distribution */}
+          {(confidenceStats.safe > 0 || confidenceStats.review > 0 || confidenceStats.skip > 0) && (
+            <div
+              style={{
+                display: 'flex',
+                gap: designSystem.spacing.md,
+                marginBottom: designSystem.spacing.lg,
+                padding: designSystem.spacing.md,
+                background: C.bg,
+                borderRadius: designSystem.borderRadius.md,
+                border: `1px solid ${C.border}`,
+              }}
+            >
+              {confidenceStats.safe > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.success }}>
+                      {confidenceStats.safe} Safe
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textSecondary }}>95%+ confident</div>
+                  </div>
+                </div>
+              )}
+
+              {confidenceStats.review > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.warning }}>
+                      {confidenceStats.review} Review
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textSecondary }}>70-85% confident</div>
+                  </div>
+                </div>
+              )}
+
+              {confidenceStats.skip > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 18 }}>❌</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.error }}>
+                      {confidenceStats.skip} Skip
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textSecondary }}>{'<70% confident'}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div
             style={{
-              maxHeight: 300,
+              maxHeight: 400,
               overflowY: 'auto',
               border: `1px solid ${C.border}`,
               borderRadius: designSystem.borderRadius.md,
@@ -436,79 +495,174 @@ function PreviewPhase({
               gap: 1,
             }}
           >
-            {results.preview.map(item => (
-              <label
-                key={item.id}
-                style={{
-                  padding: designSystem.spacing.md,
-                  borderBottom: `1px solid ${C.border}`,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: designSystem.spacing.md,
-                  cursor: 'pointer',
-                  background: previewChecked.has(item.id)
-                    ? C.primaryVeryLight
-                    : 'transparent',
-                  transition: `background ${designSystem.transitions.normal}`,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={previewChecked.has(item.id)}
-                  onChange={() => togglePreview(item.id)}
-                  style={{ marginTop: 4, cursor: 'pointer' }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
+            {results.preview.map((item: any) => {
+              const isChecked = previewChecked.has(item.id)
+              const confidence = item.confidence
+
+              // Determine checkbox state based on recommendation
+              const shouldAutoCheck = confidence?.recommendation === 'safe' || confidence?.recommendation === 'review'
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    padding: designSystem.spacing.md,
+                    borderBottom: `1px solid ${C.border}`,
+                    background: isChecked ? C.primaryVeryLight : 'transparent',
+                    transition: `background ${designSystem.transitions.normal}`,
+                  }}
+                >
+                  <label
                     style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: C.foreground,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: designSystem.spacing.md,
+                      cursor: 'pointer',
+                      marginBottom: designSystem.spacing.md,
                     }}
                   >
-                    {item.location}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: C.textSecondary,
-                      marginTop: 4,
-                    }}
-                  >
-                    <strong>Current:</strong>{' '}
-                    <code
-                      style={{
-                        background: C.bg,
-                        padding: '2px 6px',
-                        borderRadius: 3,
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {item.current}
-                    </code>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: C.success,
-                      marginTop: 2,
-                    }}
-                  >
-                    <strong>New:</strong>{' '}
-                    <code
-                      style={{
-                        background: C.bg,
-                        padding: '2px 6px',
-                        borderRadius: 3,
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      {item.proposed}
-                    </code>
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => togglePreview(item.id)}
+                      defaultChecked={shouldAutoCheck}
+                      style={{ marginTop: 4, cursor: 'pointer' }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: designSystem.spacing.md,
+                          marginBottom: designSystem.spacing.sm,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: C.foreground,
+                          }}
+                        >
+                          {item.location}
+                        </div>
+                        {confidence && (
+                          <div
+                            style={{
+                              padding: '2px 8px',
+                              background: confidence.recommendation === 'safe' ? C.successBg : 
+                                          confidence.recommendation === 'review' ? C.warningBg :
+                                          C.errorBg,
+                              border: `1px solid ${confidence.recommendation === 'safe' ? C.success : 
+                                               confidence.recommendation === 'review' ? C.warning :
+                                               C.error}33`,
+                              borderRadius: designSystem.borderRadius.sm,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: confidence.recommendation === 'safe' ? C.success :
+                                    confidence.recommendation === 'review' ? C.warning :
+                                    C.error,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {confidence.recommendation === 'safe' ? '✅' : 
+                             confidence.recommendation === 'review' ? '⚠️' : '❌'}
+                            {' '}{confidence.overallScore}%
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: C.textSecondary,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <strong>Current:</strong>{' '}
+                        <code
+                          style={{
+                            background: C.bg,
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {item.current}
+                        </code>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: C.success,
+                          marginBottom: designSystem.spacing.sm,
+                        }}
+                      >
+                        <strong>New:</strong>{' '}
+                        <code
+                          style={{
+                            background: C.bg,
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {item.proposed}
+                        </code>
+                      </div>
+
+                      {/* Mini Confidence Breakdown */}
+                      {confidence && (
+                        <details
+                          style={{
+                            marginTop: designSystem.spacing.sm,
+                            fontSize: 11,
+                            color: C.textSecondary,
+                          }}
+                        >
+                          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                            Show confidence details
+                          </summary>
+                          <div
+                            style={{
+                              marginTop: designSystem.spacing.sm,
+                              paddingTop: designSystem.spacing.sm,
+                              borderTop: `1px solid ${C.border}`,
+                            }}
+                          >
+                            {confidence.factors.map((factor: any) => (
+                              <div
+                                key={factor.name}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  marginBottom: 4,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <span>{factor.name}:</span>
+                                <span style={{ fontWeight: 600 }}>{factor.score}%</span>
+                              </div>
+                            ))}
+                            {confidence.risks.length > 0 && (
+                              <div style={{ marginTop: designSystem.spacing.sm }}>
+                                <div style={{ color: C.error, fontWeight: 600 }}>Risks:</div>
+                                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 10 }}>
+                                  {confidence.risks.map((risk: string, idx: number) => (
+                                    <li key={idx}>{risk}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  </label>
                 </div>
-              </label>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
