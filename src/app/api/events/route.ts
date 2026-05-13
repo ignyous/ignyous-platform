@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (action === 'create_from_description') {
     // AI generates structured event data from description
     const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', max_tokens: 500,
+      model: 'claude-sonnet-4-6', max_tokens: 500,
       messages: [{ role: 'user', content:
         `Generate a WordPress event from this description: "${eventDescription}"\n` +
         `Site: ${siteContext?.site_name || ''}\n\n` +

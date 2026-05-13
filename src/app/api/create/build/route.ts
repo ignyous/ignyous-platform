@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         // ── Step 4: AI Generate Content ────────────────────────────
         step(4, 'running', 'AI generating your site structure and content…')
         const contentResp = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514', max_tokens: 3000,
+          model: 'claude-sonnet-4-6', max_tokens: 3000,
           messages: [{ role: 'user', content:
             `Build a complete WordPress site for:\n"${description}"\n` +
             `Features: ${features.join(', ')}\nBuilder: ${builder}\nTheme: ${themeSlug}\n\n` +

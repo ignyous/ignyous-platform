@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         ).join('\n')
 
         const resp = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514', max_tokens: 60,
+          model: 'claude-sonnet-4-6', max_tokens: 60,
           messages: [{ role: 'user', content:
             `Builder: ${builder}. Page elements:\n${summary}\n\n` +
             `User wants to edit: "${description}"\n\n` +

@@ -91,7 +91,7 @@ Generate ONLY a JSON object (no markdown, no explanation):
 }`
 
     const response  = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', max_tokens: 800,
+      model: 'claude-sonnet-4-6', max_tokens: 800,
       messages: [{ role: 'user', content: prompt }],
     })
     const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
@@ -121,7 +121,7 @@ Return: {"seo_title":"","meta_description":"","focus_keyword":"","og_title":"","
 
       try {
         const res = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514', max_tokens: 400,
+          model: 'claude-sonnet-4-6', max_tokens: 400,
           messages: [{ role: 'user', content: prompt }],
         })
         const raw  = res.content[0].type === 'text' ? res.content[0].text : '{}'
@@ -148,7 +148,7 @@ Site: ${siteContext?.site_name} at ${siteContext?.site_url}
 Type: ${req.headers.get('x-schema-type') || 'auto-detect'}`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', max_tokens: 600,
+      model: 'claude-sonnet-4-6', max_tokens: 600,
       messages: [{ role: 'user', content: prompt }],
     })
     const schema = response.content[0].type === 'text' ? response.content[0].text.trim() : ''

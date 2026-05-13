@@ -274,7 +274,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       if (data.action) await executeAction(data.action)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.text || data.error || 'Something went wrong.',
+        content: data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.'),
         options: data.options || undefined,
         ts: new Date(),
       }])

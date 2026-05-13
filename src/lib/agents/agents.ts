@@ -182,7 +182,7 @@ export async function runContentAgent(site: any) {
       handler: async (input, ctx) => {
         // Generate full post content
         const resp = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514', max_tokens: 1500,
+          model: 'claude-sonnet-4-6', max_tokens: 1500,
           messages: [{ role: 'user', content:
             `Write a 600-word SEO-optimised blog post for: "${input.topic}"\n` +
             `Site: ${ctx.siteName}\nKeyword: ${input.keyword}\n\n` +

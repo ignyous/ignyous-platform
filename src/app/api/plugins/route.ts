@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     case 'revslider:generate_slide': {
       // AI generates slide content from description
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 300,
+        model: 'claude-sonnet-4-6', max_tokens: 300,
         messages: [{ role: 'user', content: `Generate a compelling slider slide for: "${data?.description}". JSON only: {"title":"","subtitle":"","button_text":"","button_link":"#","bg_color":"#1a1a4e"}` }],
       })
       const raw  = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     case 'tablepress:create_from_data': {
       // AI structures the data into a table
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 500,
+        model: 'claude-sonnet-4-6', max_tokens: 500,
         messages: [{ role: 'user', content: `Convert this to a TablePress table JSON: "${data?.description}". JSON only: {"name":"","data":[["Header1","Header2"],["row1col1","row1col2"]]}` }],
       })
       const raw    = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await bridge(siteUrl, apiKey, `woo/orders?status=${data?.status || 'any'}&per_page=20`))
     case 'woocommerce:create_coupon': {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        model: 'claude-sonnet-4-6', max_tokens: 200,
         messages: [{ role: 'user', content: `Generate WooCommerce coupon JSON for: "${data?.description}". JSON only: {"code":"","discount_type":"percent|fixed_cart","amount":"","date_expires":"","usage_limit":null,"description":""}` }],
       })
       const raw    = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await bridge(siteUrl, apiKey, 'woo/products/bulk-price', 'PATCH', data))
     case 'woocommerce:create_product': {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
+        model: 'claude-sonnet-4-6', max_tokens: 400,
         messages: [{ role: 'user', content: `Generate a WooCommerce product for: "${data?.description}". JSON only: {"name":"","description":"","short_description":"","regular_price":"","sku":"","categories":[{"name":""}],"status":"publish"}` }],
       })
       const raw  = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       const pageRes = await bridge(siteUrl, apiKey, `pages/${data?.pageId}`)
       const content = pageRes?.data?.page?.content || ''
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 2000,
+        model: 'claude-sonnet-4-6', max_tokens: 2000,
         messages: [{ role: 'user', content: `Translate this page content to ${data?.language}. Keep all HTML tags intact, only translate the text:\n\n${content}` }],
       })
       const translated = resp.content[0].type === 'text' ? resp.content[0].text : content

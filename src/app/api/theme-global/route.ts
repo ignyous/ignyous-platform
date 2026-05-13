@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     const settingsSummary = JSON.stringify(currentSettings || {}).slice(0, 1500)
 
     const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', max_tokens: 800,
+      model: 'claude-sonnet-4-6', max_tokens: 800,
       messages: [{ role: 'user', content:
         `You are a WordPress theme design expert. The user wants to make a global design change.\n\n` +
         `Current theme settings:\n${settingsSummary}\n\n` +

@@ -104,124 +104,161 @@ function extractEmailFromMessage(message: string, first = true): string | undefi
 
 export async function POST(req: NextRequest) {
   const start = Date.now()
-  try {
-    const session = await getServerSession()
-    const { messages, siteContext, siteUrl, apiKey } = await req.json()
+  let session: any = null
+  let lastUserMsg = ''
+  let profile: SiteProfile | undefined
 
+  try {
+    session = await getServerSession()
+    const body = await req.json()
+    const { messages, siteContext, siteUrl, apiKey } = body
+
+    // ── Guard: API key ──────────────────────────────────────────
     if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
+      const msg = 'ANTHROPIC_API_KEY is not configured on the server.'
+      console.error('[/api/ai]', msg)
+      return NextResponse.json({ error: msg, debug: msg }, { status: 500 })
     }
 
-    if (!messages || messages.length === 0) {
+    if (!messages?.length) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 })
     }
 
-    // Build site profile (scan-before-action)
-    let profile: SiteProfile | undefined
+    lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content ?? ''
 
+    // ── Build site profile ──────────────────────────────────────
     if (siteContext) {
       profile = siteContext as SiteProfile
     } else if (siteUrl && apiKey) {
       try {
         const built = await buildSiteProfile(siteUrl, apiKey)
         if (built) profile = built
-      } catch (err) {
-        console.error('[buildSiteProfile error]', err)
+      } catch (err: any) {
+        console.error('[buildSiteProfile]', err?.message)
+        // non-fatal — continue without profile
       }
     }
 
-    // ── CHECK IF THIS IS A ROUTINE REQUEST ──
-    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content || ''
+    // ── Routine routing ─────────────────────────────────────────
     const routineIntent = detectRoutineIntent(String(lastUserMsg))
-
     if (routineIntent && siteUrl && apiKey) {
-      // Route to appropriate routine handler
       return await handleRoutineRequest(routineIntent, siteUrl, apiKey, profile, session, start)
     }
 
-    // ── OTHERWISE, USE CLAUDE FOR CHAT ──
+    // ── Claude call ─────────────────────────────────────────────
+    let system: string
     try {
-      const system = buildSystemPrompt(profile)
+      system = buildSystemPrompt(profile)
+    } catch (promptErr: any) {
+      console.error('[buildSystemPrompt]', promptErr?.message)
+      system = 'You are ignyous.ai, a WordPress AI assistant. Answer the user helpfully.'
+    }
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+    const cleanMessages = messages.map((m: any) => ({
+      role:    m.role as 'user' | 'assistant',
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    }))
+
+    let response: any
+    try {
+      response = await anthropic.messages.create({
+        model:      'claude-sonnet-4-6',
         max_tokens: 1500,
         system,
-        messages: messages.map((m: any) => ({ 
-          role: m.role, 
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) 
-        })),
+        messages:   cleanMessages,
       })
+    } catch (claudeErr: any) {
+      const detail = claudeErr?.message ?? String(claudeErr)
+      console.error('[Claude API]', detail, '| status:', claudeErr?.status)
 
-      const raw = response.content[0]?.type === 'text' ? response.content[0].text : ''
-
-      if (!raw) {
-        return NextResponse.json({ 
-          text: 'I received your request but had trouble formulating a response. Please try again.',
-          routineUsed: false,
-        })
-      }
-
-      // Parse action and options blocks
-      const actionMatch = raw.match(/```action\n([\s\S]*?)\n```/)
-      const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
-
-      let action: any = null
-      let options: any = null
-
-      if (actionMatch?.[1]) {
-        try {
-          action = JSON.parse(actionMatch[1])
-        } catch (e) {
-          console.error('[action parse error]', e)
-        }
-      }
-      if (optionsMatch?.[1]) {
-        try {
-          options = JSON.parse(optionsMatch[1])
-        } catch (e) {
-          console.error('[options parse error]', e)
-        }
-      }
-
-      // Strip action/options blocks from visible text
-      const text = raw
-        .replace(/```action[\s\S]*?```/g, '')
-        .replace(/```options[\s\S]*?```/g, '')
-        .trim()
-
-      // Log the interaction
+      // Log the failure
       try {
         await logActivity({
-          userId: session?.user?.email ?? undefined,
-          siteUrl: profile?.site_url,
-          siteName: profile?.site_name,
-          category: action ? 'ai_action' : 'system',
-          action: action?.type || 'ai_chat',
-          status: 'success',
-          summary: action
-            ? 'AI action: ' + action.type + (action.title ? ' on ' + action.title : '')
-            : 'Chat: ' + String(lastUserMsg).slice(0, 80),
-          detail: { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
+          userId:    session?.user?.email ?? undefined,
+          siteUrl:   profile?.site_url,
+          siteName:  profile?.site_name,
+          category:  'system',
+          action:    'ai_chat_error',
+          status:    'error',
+          summary:   'Claude API error: ' + detail.slice(0, 120),
+          detail:    { error: detail, status: claudeErr?.status, userMessage: lastUserMsg.slice(0, 200) },
           ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
           userAgent: req.headers.get('user-agent') ?? undefined,
           durationMs: Date.now() - start,
         })
-      } catch (logErr) {
-        console.error('[logActivity error]', logErr)
-      }
+      } catch { /* logging must never crash the route */ }
 
-      return NextResponse.json({ text, action, options, routineUsed: false })
-    } catch (claudeErr: any) {
-      console.error('[Claude API error]', claudeErr)
-      return NextResponse.json({ 
-        error: claudeErr?.message || 'Claude API error',
-        text: 'I encountered an error processing your request. Please try again.'
+      return NextResponse.json({
+        error: detail,
+        debug: `Claude API error (${claudeErr?.status ?? 'unknown status'}): ${detail}`,
+        text:  `⚠️ AI error: ${detail}`,
       }, { status: 500 })
     }
+
+    // ── Parse response ──────────────────────────────────────────
+    const raw = response.content[0]?.type === 'text' ? response.content[0].text : ''
+    if (!raw) {
+      return NextResponse.json({ text: 'No response from AI. Please try again.' })
+    }
+
+    const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
+    const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
+
+    let action: any  = null
+    let options: any = null
+    try { if (actionMatch?.[1])  action  = JSON.parse(actionMatch[1])  } catch { /* ignore bad JSON */ }
+    try { if (optionsMatch?.[1]) options = JSON.parse(optionsMatch[1]) } catch { /* ignore bad JSON */ }
+
+    const text = raw
+      .replace(/```action[\s\S]*?```/g, '')
+      .replace(/```options[\s\S]*?```/g, '')
+      .trim()
+
+    // ── Activity log ────────────────────────────────────────────
+    try {
+      await logActivity({
+        userId:    session?.user?.email ?? undefined,
+        siteUrl:   profile?.site_url,
+        siteName:  profile?.site_name,
+        category:  action ? 'ai_action' : 'system',
+        action:    action?.type || 'ai_chat',
+        status:    'success',
+        summary:   action
+          ? `AI action: ${action.type}${action.title ? ' — ' + action.title : ''}`
+          : `Chat: ${String(lastUserMsg).slice(0, 80)}`,
+        detail:    { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
+        ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
+        userAgent: req.headers.get('user-agent') ?? undefined,
+        durationMs: Date.now() - start,
+      })
+    } catch (logErr: any) {
+      console.error('[logActivity]', logErr?.message)
+    }
+
+    return NextResponse.json({ text, action, options, routineUsed: false })
+
   } catch (err: any) {
-    console.error('[POST error]', err)
-    return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })
+    const detail = err?.message ?? String(err)
+    console.error('[/api/ai unhandled]', detail)
+
+    try {
+      await logActivity({
+        userId:    session?.user?.email ?? undefined,
+        siteUrl:   profile?.site_url,
+        category:  'system',
+        action:    'ai_route_error',
+        status:    'error',
+        summary:   'Unhandled error in /api/ai: ' + detail.slice(0, 120),
+        detail:    { error: detail, userMessage: lastUserMsg.slice(0, 200) },
+        durationMs: Date.now() - start,
+      })
+    } catch { /* ignore */ }
+
+    return NextResponse.json({
+      error: detail,
+      debug: detail,
+      text:  `⚠️ Server error: ${detail}`,
+    }, { status: 500 })
   }
 }
 

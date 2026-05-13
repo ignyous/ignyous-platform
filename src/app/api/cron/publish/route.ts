@@ -23,7 +23,7 @@ async function bridgeCall(siteUrl: string, apiKey: string, body: any) {
 async function generateNextPost(siteId: string, userId: string, topics: string[], frequency: string, siteName: string) {
   const topicsList = topics.join(', ') || 'general business topics'
   const response   = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     messages: [{ role: 'user', content: `Write a professional WordPress blog post for "${siteName}".
 Topics: ${topicsList}

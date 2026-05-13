@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (action === 'generate_form') {
     // Use AI to generate appropriate form fields from a description
     const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514', max_tokens: 500,
+      model: 'claude-sonnet-4-6', max_tokens: 500,
       messages: [{ role: 'user', content:
         `Generate form fields for: "${formDescription}"\n` +
         `Plugin: ${plugin || 'contact-form-7'}\n` +

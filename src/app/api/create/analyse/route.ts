@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const { description, features } = await req.json()
 
   const resp = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514', max_tokens: 400,
+    model: 'claude-sonnet-4-6', max_tokens: 400,
     messages: [{ role: 'user', content:
       `Analyse this site description and write a 2-sentence summary of what we'll build.\n` +
       `Description: "${description}"\n` +

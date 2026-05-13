@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   // AI picks the best themes for this site
   const resp = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514', max_tokens: 600,
+    model: 'claude-sonnet-4-6', max_tokens: 600,
     messages: [{ role: 'user', content:
       `Site description: "${description}"\n` +
       `Features needed: ${features.join(', ')}\n` +

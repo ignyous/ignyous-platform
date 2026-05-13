@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (description) {
       // AI generates product data
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 300,
+        model: 'claude-sonnet-4-6', max_tokens: 300,
         messages: [{ role: 'user', content: `Create an EDD digital product from: "${description}". JSON only: {"name":"","description":"","price":"","categories":[]}` }],
       })
       const raw = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (action === 'edd_create_discount') {
     if (description) {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        model: 'claude-sonnet-4-6', max_tokens: 200,
         messages: [{ role: 'user', content: `Create EDD discount from: "${description}". JSON only: {"name":"","code":"","type":"percent","amount":10,"max_uses":0,"expiration":""}` }],
       })
       const raw = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   if (action === 'give_create_form') {
     if (description) {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        model: 'claude-sonnet-4-6', max_tokens: 200,
         messages: [{ role: 'user', content: `Create GiveWP donation form from: "${description}". JSON only: {"title":"","description":"","suggested_amount":25,"goal":null,"custom_amount":true}` }],
       })
       const raw = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   if (action === 'gf_create_form') {
     if (description) {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
+        model: 'claude-sonnet-4-6', max_tokens: 400,
         messages: [{ role: 'user', content:
           `Generate Gravity Forms fields for: "${description}".\n` +
           `JSON only: {"title":"","submit_text":"Submit","confirmation":"<p>Thank you!</p>","fields":[{"type":"text|email|phone|textarea|select|name|address","label":"","required":true,"options":[]}]}`
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   if (action === 'wpf_create_form') {
     if (description) {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
+        model: 'claude-sonnet-4-6', max_tokens: 400,
         messages: [{ role: 'user', content:
           `Generate WPForms fields for: "${description}".\n` +
           `JSON only: {"title":"","submit_text":"Submit","confirmation":"<p>Thank you!</p>","fields":[{"type":"text|email|phone|textarea|select|name","label":"","required":true}]}`
