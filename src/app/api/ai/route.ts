@@ -112,14 +112,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
     }
 
+    if (!messages || messages.length === 0) {
+      return NextResponse.json({ error: 'No messages provided' }, { status: 400 })
+    }
+
     // Build site profile (scan-before-action)
     let profile: SiteProfile | undefined
 
     if (siteContext) {
       profile = siteContext as SiteProfile
     } else if (siteUrl && apiKey) {
-      const built = await buildSiteProfile(siteUrl, apiKey)
-      if (built) profile = built
+      try {
+        const built = await buildSiteProfile(siteUrl, apiKey)
+        if (built) profile = built
+      } catch (err) {
+        console.error('[buildSiteProfile error]', err)
+      }
     }
 
     // ── CHECK IF THIS IS A ROUTINE REQUEST ──
@@ -132,61 +140,88 @@ export async function POST(req: NextRequest) {
     }
 
     // ── OTHERWISE, USE CLAUDE FOR CHAT ──
-    const system = buildSystemPrompt(profile)
+    try {
+      const system = buildSystemPrompt(profile)
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      system,
-      messages,
-    })
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        system,
+        messages: messages.map((m: any) => ({ 
+          role: m.role, 
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) 
+        })),
+      })
 
-    const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+      const raw = response.content[0]?.type === 'text' ? response.content[0].text : ''
 
-    // Parse action and options blocks
-    const actionMatch = raw.match(/```action\n([\s\S]*?)\n```/)
-    const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
+      if (!raw) {
+        return NextResponse.json({ 
+          text: 'I received your request but had trouble formulating a response. Please try again.',
+          routineUsed: false,
+        })
+      }
 
-    let action: any = null
-    let options: any = null
+      // Parse action and options blocks
+      const actionMatch = raw.match(/```action\n([\s\S]*?)\n```/)
+      const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
 
-    if (actionMatch?.[1]) {
+      let action: any = null
+      let options: any = null
+
+      if (actionMatch?.[1]) {
+        try {
+          action = JSON.parse(actionMatch[1])
+        } catch (e) {
+          console.error('[action parse error]', e)
+        }
+      }
+      if (optionsMatch?.[1]) {
+        try {
+          options = JSON.parse(optionsMatch[1])
+        } catch (e) {
+          console.error('[options parse error]', e)
+        }
+      }
+
+      // Strip action/options blocks from visible text
+      const text = raw
+        .replace(/```action[\s\S]*?```/g, '')
+        .replace(/```options[\s\S]*?```/g, '')
+        .trim()
+
+      // Log the interaction
       try {
-        action = JSON.parse(actionMatch[1])
-      } catch {}
+        await logActivity({
+          userId: session?.user?.email ?? undefined,
+          siteUrl: profile?.site_url,
+          siteName: profile?.site_name,
+          category: action ? 'ai_action' : 'system',
+          action: action?.type || 'ai_chat',
+          status: 'success',
+          summary: action
+            ? 'AI action: ' + action.type + (action.title ? ' on ' + action.title : '')
+            : 'Chat: ' + String(lastUserMsg).slice(0, 80),
+          detail: { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
+          ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
+          userAgent: req.headers.get('user-agent') ?? undefined,
+          durationMs: Date.now() - start,
+        })
+      } catch (logErr) {
+        console.error('[logActivity error]', logErr)
+      }
+
+      return NextResponse.json({ text, action, options, routineUsed: false })
+    } catch (claudeErr: any) {
+      console.error('[Claude API error]', claudeErr)
+      return NextResponse.json({ 
+        error: claudeErr?.message || 'Claude API error',
+        text: 'I encountered an error processing your request. Please try again.'
+      }, { status: 500 })
     }
-    if (optionsMatch?.[1]) {
-      try {
-        options = JSON.parse(optionsMatch[1])
-      } catch {}
-    }
-
-    // Strip action/options blocks from visible text
-    const text = raw
-      .replace(/```action[\s\S]*?```/g, '')
-      .replace(/```options[\s\S]*?```/g, '')
-      .trim()
-
-    // Log the interaction
-    await logActivity({
-      userId: session?.user?.email ?? undefined,
-      siteUrl: profile?.site_url,
-      siteName: profile?.site_name,
-      category: action ? 'ai_action' : 'system',
-      action: action?.type || 'ai_chat',
-      status: 'success',
-      summary: action
-        ? 'AI action: ' + action.type + (action.title ? ' on ' + action.title : '')
-        : 'Chat: ' + String(lastUserMsg).slice(0, 80),
-      detail: { userMessage: lastUserMsg, action, aiResponse: text.slice(0, 300) },
-      ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
-      userAgent: req.headers.get('user-agent') ?? undefined,
-      durationMs: Date.now() - start,
-    })
-
-    return NextResponse.json({ text, action, options, routineUsed: false })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error('[POST error]', err)
+    return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })
   }
 }
 
