@@ -142,23 +142,83 @@ class MediaController {
         $log[] = "Option names (by size): " . implode(', ', array_map(fn($r) => $r->option_name . '(' . $r->len . ')', array_slice($rows, 0, 15)));
 
         $found_option = null;
+        // Known plugin option names to skip — these are never theme logo options
+        $skip_options = [
+            'revslider', 'revslider_installedversion', 'revslider_update',
+            'revslider_purchase_code', 'revslider_checked', 'revslider_demo',
+            'wp_user_roles', 'widget_', 'sidebars_widgets', 'nav_menu',
+            'active_plugins', 'rewrite_rules', 'wp_mail_smtp',
+        ];
+
         foreach ($rows as $row) {
+            // Skip known plugin options by prefix/name
+            $skip = false;
+            foreach ($skip_options as $prefix) {
+                if (stripos($row->option_name, $prefix) !== false) { $skip = true; break; }
+            }
+            if ($skip) {
+                $log[] = "  [{$row->option_name}] → skipped (known plugin option)";
+                continue;
+            }
+
             // Use get_option() so WordPress handles unserialize safely
             $val = get_option($row->option_name);
-            if (!is_array($val)) continue;
 
-            // Check if this array has a 'logo' key that's itself an array with 'url' and 'id'
-            if (isset($val['logo']) && is_array($val['logo'])
-                && array_key_exists('url', $val['logo'])
-                && array_key_exists('id', $val['logo'])
+            // Must be a plain PHP array (not stdClass object, not scalar)
+            if (!is_array($val)) {
+                $log[] = "  [{$row->option_name}] → " . gettype($val) . ", skipping";
+                continue;
+            }
+
+            // Must have a 'logo' key that is itself an array with 'url' and 'id'
+            if (!isset($val['logo']) || !is_array($val['logo'])
+                || !array_key_exists('url', $val['logo'])
+                || !array_key_exists('id', $val['logo'])
             ) {
-                $found_option = $row->option_name;
-                $cur_url = $val['logo']['url'] ?? '(empty)';
-                $cur_id  = $val['logo']['id']  ?? '(empty)';
-                $log[] = "";
-                $log[] = "✅ FOUND logo array in option: [{$found_option}] (size: {$row->len} bytes)";
-                $log[] = "   Current: url={$cur_url} | id={$cur_id}";
-                $log[] = "   New:     url={$url} | id={$id}";
+                $log[] = "  [{$row->option_name}] → array/{" . count($val) . " keys}, no logo→{url,id} structure";
+                continue;
+            }
+
+            // False-positive check 1: logo.id must be numeric (WordPress attachment ID)
+            $logo_id_val = $val['logo']['id'];
+            if (!empty($logo_id_val) && !is_numeric($logo_id_val)) {
+                $log[] = "  [{$row->option_name}] → has logo.id='{$logo_id_val}' but it's not numeric — likely a plugin logo, skipping";
+                continue;
+            }
+
+            // False-positive check 2: logo.url must look like an image file (if set)
+            $logo_url_val = $val['logo']['url'];
+            if (!empty($logo_url_val)) {
+                $ext = strtolower(pathinfo(parse_url($logo_url_val, PHP_URL_PATH), PATHINFO_EXTENSION));
+                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', ''])) {
+                    $log[] = "  [{$row->option_name}] → logo.url='{$logo_url_val}' has non-image extension '{$ext}' — skipping";
+                    continue;
+                }
+            }
+
+            // False-positive check 3: the array should look like theme settings.
+            // Theme options (Redux/Kirki/etc.) typically contain typography/color/header keys.
+            $theme_indicators = ['last_tab', 'color_scheme', 'opt-header-type', 'opt-header-color',
+                                  'navigation_text', 'body_text', 'footer_text', 'footer-style',
+                                  'h1', 'h2', 'h3', 'button_font', 'blog_style'];
+            $indicator_count = 0;
+            foreach ($theme_indicators as $indicator) {
+                if (array_key_exists($indicator, $val)) $indicator_count++;
+            }
+            if ($indicator_count === 0) {
+                $top_keys = implode(', ', array_slice(array_keys($val), 0, 6));
+                $log[] = "  [{$row->option_name}] → has logo→{url,id} but 0 theme indicators — likely a plugin, skipping. Keys: {$top_keys}";
+                continue;
+            }
+
+            // All checks passed
+            $found_option  = $row->option_name;
+            $cur_url = $val['logo']['url'] ?? '(empty)';
+            $cur_id  = $val['logo']['id']  ?? '(empty)';
+            $log[] = "";
+            $log[] = "✅ FOUND theme logo array in [{$found_option}] ({$row->len} bytes, {$indicator_count} theme indicators)";
+            $log[] = "   Current: url={$cur_url} | id={$cur_id}";
+            $log[] = "   New:     url={$url} | id={$id}";
 
                 // Also log any other logo-variant keys (logo_sticky, etc.)
                 $logo_keys = array_filter(array_keys($val), fn($k) => is_string($k) && stripos($k, 'logo') !== false && is_array($val[$k]));
