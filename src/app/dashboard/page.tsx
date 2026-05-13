@@ -8,6 +8,7 @@ import ModePicker from '@/components/ModePicker'
 import EasyModeDashboard from '@/components/EasyModeDashboard'
 import GlobalDesignPanel from '@/components/GlobalDesignPanel'
 import SiteStatusIndicator from '@/components/SiteStatusIndicator'
+import RoutineLibrary from '@/components/RoutineLibrary'
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Plugin  { name: string; slug: string; active: boolean; version: string; update: string | null }
@@ -1492,6 +1493,13 @@ function DashboardInner() {
             </div>
           </div>
         )}
+
+        {/* ════ ROUTINE LIBRARY ════ */}
+        <div style={{ padding: '12px 12px 16px' }}>
+          <RoutineLibrary siteUrl={cleanUrl} onRoutineComplete={(routine, msg) => {
+            addMessage({ role: 'assistant', content: msg, ts: new Date() })
+          }}/>
+        </div>
 
         {/* ════ QUICK ACTIONS ════ */}
         <div style={{ padding: '12px 12px 16px' }}>
