@@ -6,7 +6,7 @@ class MediaController {
         register_rest_route('ignyous/v1', '/media/upload', [
             'methods'             => 'POST',
             'callback'            => [$this, 'upload_image'],
-            'permission_callback' => [$this, 'check_permission'],
+            'permission_callback' => '__return_true',  // auth done inside callback
         ]);
         register_rest_route('ignyous/v1', '/media/logo-info', [
             'methods'             => 'GET',
@@ -15,7 +15,51 @@ class MediaController {
         ]);
     }
 
+    /** Verify the request is from ignyous — check header AND body */
+    private function verify_request($request) {
+        $stored_key = get_option('ignyous_bridge_api_key', '');
+        if (empty($stored_key)) return false;
+
+        // 1. Authorization header (multiple server fallbacks)
+        $auth_header = '';
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            foreach ($headers as $name => $value) {
+                if (strtolower($name) === 'authorization') {
+                    $auth_header = $value;
+                    break;
+                }
+            }
+        }
+        if (empty($auth_header)) {
+            $auth_header = $_SERVER['HTTP_AUTHORIZATION']
+                        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+                        ?? '';
+        }
+        if (preg_match('/Bearer\s+(.+)/i', $auth_header, $m)) {
+            if (hash_equals($stored_key, trim($m[1]))) return true;
+        }
+
+        // 2. api_key in request body (fallback when header is stripped)
+        $body = $request->get_json_params();
+        if (!empty($body['api_key']) && hash_equals($stored_key, $body['api_key'])) {
+            return true;
+        }
+
+        // 3. api_key as query param (last resort)
+        $qp = $request->get_query_params();
+        if (!empty($qp['api_key']) && hash_equals($stored_key, $qp['api_key'])) {
+            return true;
+        }
+
+        return false;
+    }
+
     public function upload_image($request) {
+        if (!$this->verify_request($request)) {
+            return new \WP_Error('rest_forbidden', 'Invalid or missing API key.', ['status' => 401]);
+        }
+
         $body       = $request->get_json_params();
         $base64     = $body['image_base64'] ?? '';
         $media_type = $body['media_type']   ?? 'image/png';
@@ -31,121 +75,96 @@ class MediaController {
             return new \WP_Error('bad_base64', 'Invalid or empty base64 image data', ['status' => 400]);
         }
 
-        // Write to temp file
-        $upload_dir = wp_upload_dir();
-        $tmp_path   = $upload_dir['path'] . '/' . $file_name;
-        $written    = file_put_contents($tmp_path, $decoded);
-
-        if ($written === false) {
-            return new \WP_Error('write_failed', 'Could not write image file to uploads directory', ['status' => 500]);
-        }
-
         require_once ABSPATH . 'wp-admin/includes/image.php';
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
 
+        // Write to temp file in WP uploads dir
+        $tmp = tempnam(sys_get_temp_dir(), 'ignyous_');
+        file_put_contents($tmp, $decoded);
+
         $file_array = [
             'name'     => $file_name,
             'type'     => $media_type,
-            'tmp_name' => $tmp_path,
+            'tmp_name' => $tmp,
             'error'    => 0,
             'size'     => strlen($decoded),
         ];
 
         $attachment_id = media_handle_sideload($file_array, 0, sanitize_text_field($file_name));
+        @unlink($tmp);
 
         if (is_wp_error($attachment_id)) {
-            @unlink($tmp_path);
             return new \WP_Error('upload_failed', $attachment_id->get_error_message(), ['status' => 500]);
         }
 
-        @unlink($tmp_path);
-
-        $url     = wp_get_attachment_url($attachment_id);
-        $updated = [];
+        $url      = wp_get_attachment_url($attachment_id);
+        $updated  = [];
 
         if ($set_logo) {
             $updated = $this->set_logo_everywhere($attachment_id, $url);
         }
 
         return [
-            'success' => true,
-            'id'      => $attachment_id,
-            'url'     => $url,
-            'message' => $set_logo
+            'success'            => true,
+            'id'                 => $attachment_id,
+            'url'                => $url,
+            'message'            => $set_logo
                 ? 'Logo uploaded and applied to ' . count($updated) . ' location(s)!'
                 : 'Image uploaded to Media Library.',
-            'locations_updated' => $updated,
+            'locations_updated'  => $updated,
         ];
     }
 
-    /**
-     * Set the logo in every known WordPress location.
-     */
     private function set_logo_everywhere($attachment_id, $url) {
         $updated = [];
 
-        // 1. WordPress core custom_logo (Customizer)
+        // 1. WordPress core custom_logo (Customizer / most themes)
         set_theme_mod('custom_logo', $attachment_id);
         $updated[] = 'theme_mod:custom_logo';
 
-        // 2. site_logo option (used by some themes + FSE)
+        // 2. site_logo option (FSE / block themes)
         update_option('site_logo', $attachment_id);
         $updated[] = 'option:site_logo';
 
-        // 3. Scan active theme options for common logo keys
+        // 3. Scan existing theme_mods for common logo keys
         $theme_mods = get_theme_mods();
         $logo_keys  = ['logo', 'logo_image', 'logo_url', 'header_logo', 'site_logo_url', 'logo_img'];
         foreach ($logo_keys as $key) {
-            if (isset($theme_mods[$key])) {
+            if (array_key_exists($key, $theme_mods)) {
                 set_theme_mod($key, $url);
                 $updated[] = 'theme_mod:' . $key;
             }
         }
 
-        // 4. Scan wp_options table for common logo option names
-        global $wpdb;
+        // 4. Scan wp_options for common logo option names
         $option_keys = ['logo', 'logo_url', 'site_logo_url', 'header_logo', 'logo_image_url', 'custom_logo_url'];
         foreach ($option_keys as $key) {
-            $val = get_option($key);
-            if ($val !== false) {
+            if (get_option($key) !== false) {
                 update_option($key, $url);
                 $updated[] = 'option:' . $key;
             }
         }
 
-        // 5. Elementor global settings (if Elementor active)
-        if (is_plugin_active('elementor/elementor.php') || defined('ELEMENTOR_VERSION')) {
-            $el_settings = get_option('elementor_globals', []);
-            if (!empty($el_settings)) {
-                // Elementor stores site logo as a URL in kit settings
-                $this->update_elementor_logo($attachment_id, $url);
-                $updated[] = 'elementor:kit';
+        // 5. Elementor kit settings (if active)
+        if (defined('ELEMENTOR_VERSION') || is_plugin_active('elementor/elementor.php')) {
+            $kit_id = get_option('elementor_active_kit');
+            if ($kit_id) {
+                $meta = get_post_meta($kit_id, '_elementor_page_settings', true);
+                if (is_array($meta) && array_key_exists('custom_logo', $meta)) {
+                    $meta['custom_logo'] = ['id' => $attachment_id, 'url' => $url];
+                    update_post_meta($kit_id, '_elementor_page_settings', $meta);
+                    $updated[] = 'elementor:kit';
+                }
             }
         }
 
         return $updated;
     }
 
-    private function update_elementor_logo($attachment_id, $url) {
-        global $wpdb;
-        // Find the Elementor active kit
-        $kit_id = get_option('elementor_active_kit');
-        if (!$kit_id) return;
-
-        $meta = get_post_meta($kit_id, '_elementor_page_settings', true);
-        if (is_array($meta)) {
-            if (isset($meta['custom_logo'])) {
-                $meta['custom_logo'] = ['id' => $attachment_id, 'url' => $url];
-                update_post_meta($kit_id, '_elementor_page_settings', $meta);
-            }
-        }
-    }
-
     public function get_logo_info($request) {
         $logo_id  = get_theme_mod('custom_logo');
         $logo_url = $logo_id ? wp_get_attachment_url($logo_id) : get_option('site_logo_url', '');
-
         return [
             'success'       => true,
             'logo_id'       => $logo_id,
@@ -155,12 +174,21 @@ class MediaController {
     }
 
     public function check_permission() {
-        $api_key = get_option('ignyous_bridge_api_key', '');
-        if (empty($api_key)) return false;
-        $headers     = getallheaders();
-        $auth_header = $headers['Authorization'] ?? '';
+        $stored_key = get_option('ignyous_bridge_api_key', '');
+        if (empty($stored_key)) return false;
+
+        $auth_header = '';
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            foreach ($headers as $name => $value) {
+                if (strtolower($name) === 'authorization') { $auth_header = $value; break; }
+            }
+        }
+        if (empty($auth_header)) {
+            $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        }
         if (preg_match('/Bearer\s+(.+)/i', $auth_header, $m)) {
-            return hash_equals($api_key, trim($m[1]));
+            return hash_equals($stored_key, trim($m[1]));
         }
         return false;
     }
