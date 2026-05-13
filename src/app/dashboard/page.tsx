@@ -1306,10 +1306,13 @@ function DashboardInner() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentDim, border: `1px solid ${C.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19 }}>🌐</div>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{siteInfo?.site?.name || siteUrl}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {siteInfo?.site?.name || siteUrl}
+              {/* Compact status dot */}
+              <SiteStatusIndicator siteUrl={cleanUrl} apiKey={apiKey} compact />
+            </div>
             <div style={{ fontSize: 13, color: C.text3, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block'}}/>
-              {cleanUrl} · WP {siteInfo?.wordpress?.version} · {siteInfo?.theme?.name || '?'} · {activePlugins.length} plugins
+              {cleanUrl} · WP {siteInfo?.wordpress?.version || '?'} · {siteInfo?.theme?.name || siteInfo?.site?.theme || '?'} · {activePlugins.length} plugins
             </div>
           </div>
         </div>
@@ -1328,10 +1331,7 @@ function DashboardInner() {
         </div>
       </div>
 
-      {/* ── STATUS INDICATOR ── */}
-      <div style={{ padding: '16px 24px', background: C.bg, borderBottom: `1px solid ${C.border}` }}>
-        <SiteStatusIndicator siteUrl={cleanUrl} apiKey={apiKey} />
-      </div>
+      {/* Status indicator removed — now inline in site info bar above */}
 
       {/* ── MAIN LAYOUT: AI LEFT + PREVIEW RIGHT ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: 'calc(100vh - 58px - 62px)' }}>
