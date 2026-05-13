@@ -20,33 +20,39 @@ class MediaController {
         $stored_key = get_option('ignyous_bridge_api_key', '');
         if (empty($stored_key)) return false;
 
-        // 1. Authorization header (multiple server fallbacks)
-        $auth_header = '';
+        // Helper to get all request headers reliably
+        $all_headers = [];
         if (function_exists('getallheaders')) {
-            $headers = getallheaders();
-            foreach ($headers as $name => $value) {
-                if (strtolower($name) === 'authorization') {
-                    $auth_header = $value;
-                    break;
-                }
+            foreach (getallheaders() as $k => $v) {
+                $all_headers[strtolower($k)] = $v;
             }
         }
-        if (empty($auth_header)) {
-            $auth_header = $_SERVER['HTTP_AUTHORIZATION']
-                        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
-                        ?? '';
+        // Also check $_SERVER for nginx/fastcgi environments
+        foreach ($_SERVER as $k => $v) {
+            if (strpos($k, 'HTTP_') === 0) {
+                $name = strtolower(str_replace('_', '-', substr($k, 5)));
+                if (!isset($all_headers[$name])) $all_headers[$name] = $v;
+            }
         }
-        if (preg_match('/Bearer\s+(.+)/i', $auth_header, $m)) {
+
+        // 1. X-Ignyous-Key header (preferred — avoids WP Application Password conflicts)
+        if (!empty($all_headers['x-ignyous-key'])) {
+            if (hash_equals($stored_key, trim($all_headers['x-ignyous-key']))) return true;
+        }
+
+        // 2. Authorization: Bearer header
+        $auth = $all_headers['authorization'] ?? '';
+        if (preg_match('/Bearer\s+(.+)/i', $auth, $m)) {
             if (hash_equals($stored_key, trim($m[1]))) return true;
         }
 
-        // 2. api_key in request body (fallback when header is stripped)
+        // 3. api_key in request body (fallback when headers are stripped)
         $body = $request->get_json_params();
         if (!empty($body['api_key']) && hash_equals($stored_key, $body['api_key'])) {
             return true;
         }
 
-        // 3. api_key as query param (last resort)
+        // 4. api_key as query param (last resort)
         $qp = $request->get_query_params();
         if (!empty($qp['api_key']) && hash_equals($stored_key, $qp['api_key'])) {
             return true;

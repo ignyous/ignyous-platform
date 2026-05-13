@@ -349,20 +349,28 @@ function DashboardInner() {
   const [siteUrl, setSiteUrl]       = useState(urlSite)
   const [apiKey,  setApiKey]        = useState(urlKey)
   const [dashboardMode, setDashboardMode] = useState<'easy'|'advanced'|null>(null)
+  const [modeLoaded, setModeLoaded]       = useState(false)
 
   // Load dashboardMode on mount
   useEffect(() => {
     fetch('/api/user').then(r => r.json()).then(d => {
-      setDashboardMode(d.user?.dashboardMode ?? null)
-    }).catch(() => setDashboardMode('advanced'))
+      setDashboardMode(d.user?.dashboardMode ?? 'advanced')
+      setModeLoaded(true)
+    }).catch(() => { setDashboardMode('advanced'); setModeLoaded(true) })
   }, [])
 
+  // Save mode to DB (called only from Settings, not from header toggle)
   async function saveMode(mode: 'easy' | 'advanced') {
     setDashboardMode(mode)
     await fetch('/api/user', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dashboardMode: mode }),
     })
+  }
+
+  // Switch mode temporarily (header toggle — does NOT persist to DB)
+  function switchModeTemp(mode: 'easy' | 'advanced') {
+    setDashboardMode(mode)
   }
 
   // Load apiKey from DB — single source of truth, no localStorage needed
@@ -1230,7 +1238,15 @@ function DashboardInner() {
     send(`Install and activate the ${theme.name} theme (slug: ${theme.slug}) on my site. It works with ${builderName}.`)
   }
 
-  // ── MODE PICKER (first sign-in: dashboardMode is null) ─────────────
+  // ── LOADING (mode not yet fetched) — show blank spinner, NOT the mode picker ──
+  if (!modeLoaded) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f9fb' }}>
+      <div style={{ width: 40, height: 40, border: '3px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
+  // ── MODE PICKER (first sign-in: no saved preference) ─────────────
   if (dashboardMode === null) return (
     <ModePicker onSelect={saveMode} />
   )
@@ -1243,10 +1259,7 @@ function DashboardInner() {
       apiKey={apiKey}
       pluginSlugs={slugs}
       userName={''}
-      onSwitchMode={async () => {
-        await fetch('/api/user', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dashboardMode:'advanced' }) })
-        setDashboardMode('advanced')
-      }}
+      onSwitchMode={() => switchModeTemp('advanced')}
     />
   }
 
@@ -1348,6 +1361,16 @@ function DashboardInner() {
           <a href={`/activity?site=${encodeURIComponent(siteUrl)}`} style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>📋 Activity</a>
           {/* Test bridge — opens in new tab showing diagnostics */}
           <a href={`/api/debug/bridge?site=${encodeURIComponent(cleanUrl)}&key=${encodeURIComponent(apiKey)}`} target="_blank" rel="noreferrer" title="Test WP plugin connection" style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text3, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>🔧</a>
+          {/* API key copy */}
+          {apiKey && (
+            <button
+              title={`API Key: ${apiKey.slice(0,8)}…  (click to copy)`}
+              onClick={() => { navigator.clipboard.writeText(apiKey); }}
+              style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text3, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'monospace' }}
+            >
+              🔑 {apiKey.slice(0, 8)}…
+            </button>
+          )}
           <a href={`${cleanUrl}/wp-admin`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid #1a1a4e`, borderRadius: 8, background: '#1a1a4e', color: 'white', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>WP Admin ↗</a>
           <a href={cleanUrl} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.text2, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>View Site ↗</a>
         </div>
@@ -1799,7 +1822,7 @@ function DashboardInner() {
 
 export default function DashboardPage() {
   return (
-    <AppLayout>
+    <AppLayout onSwitchToEasy={() => switchModeTemp('easy')}>
       <Suspense fallback={
         <div style={{ minHeight: '100vh', background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ width: 44, height: 44, border: '3px solid #E2DDD8', borderTopColor: '#E8651A', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>

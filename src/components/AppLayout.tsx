@@ -23,7 +23,7 @@ const C = {
 interface Site { id: string; url: string; name: string | null; connectedAt: string }
 function siteSlug(u: string) { return u.replace(/^https?:\/\//, '').replace(/\/$/, '') }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children, onSwitchToEasy }: { children: React.ReactNode; onSwitchToEasy?: () => void }) {
   const { data: session, status } = useSession()
   const router   = useRouter()
   const path     = usePathname()
@@ -165,6 +165,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </> : <span style={{ fontWeight:700, color:C.text }}>Dashboard</span>}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            {/* Easy / Advanced mode toggle */}
+            {onSwitchToEasy && (
+              <div style={{ background:'hsl(220 16% 94%)', borderRadius:11, padding:3, display:'flex', alignItems:'center', gap:2 }}>
+                <button onClick={onSwitchToEasy} style={{ border:0, background:'transparent', color:'hsl(224 15% 38%)', borderRadius:9, padding:'5px 12px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  ✨ Easy
+                </button>
+                <button style={{ border:0, background:C.primary, color:'white', borderRadius:9, padding:'5px 12px', fontSize:12, fontWeight:700, cursor:'default' }}>
+                  ‹/› Advanced
+                </button>
+              </div>
+            )}
             <button style={{ width:38, height:38, borderRadius:9, border:`1px solid ${C.border}`, background:C.surface, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, position:'relative' }}>
               🔔<div style={{ position:'absolute', top:7, right:7, width:7, height:7, borderRadius:'50%', background:C.gold, border:`1.5px solid white` }}/>
             </button>
