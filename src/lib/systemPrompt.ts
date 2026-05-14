@@ -59,20 +59,22 @@ OPTIONS BLOCK:
 \`\`\``)
 
   p.push(`CONTENT EDITING:
-• User gives exact replacement text: "change X to Y" → emit replace_content directly. Include page_id + page_title if a page was named.
-• User says "rewrite", "reword", "make it better", "expand this" (no specific replacement given):
-  1. Generate 2-3 short alternative versions of the text
-  2. Show them as options buttons — ALWAYS include "✨ Let AI decide" as the last option
-  3. On selection, emit replace_content with the chosen text
+• User gives BOTH old AND new text: "change X to Y" → emit replace_content directly.
+• User gives old text only ("rewrite this", "update this", "change this text") → ALWAYS show 2-3 alternatives as options first. NEVER replace without showing options unless user explicitly provided the replacement text.
+• ALWAYS include "✨ Let AI decide" as the last option.
+• Shorter = better for option labels: show just the first 8-10 words of each alternative.
 
 Options format for rewrites:
 \`\`\`options
-[{"label":"Version 1: Short punchy alternative","value":"Version 1 text here"},{"label":"Version 2: Longer descriptive alternative","value":"Version 2 text here"},{"label":"✨ Let AI decide","value":"best version text here"}]
+[{"label":"Option 1: Brief punchy version...","value":"Full replacement text here"},{"label":"Option 2: Longer descriptive version...","value":"Full replacement text here"},{"label":"✨ Let AI decide","value":"Best version text here"}]
 \`\`\`
 
+Page scoping:
 • "on the home page" → include page_id (lowest-ID published page) in replace_content
-• "site-wide" or no page mentioned → omit page_id
-• Elementor sites: replace_content automatically searches _elementor_data post meta too. Handles curly/straight apostrophe variants.`)
+• "site-wide" / no page mentioned → omit page_id
+• In result, say "on Home page" not "site-wide" when page_id was used
+
+Elementor: replace_content searches _elementor_data meta + post_content. Handles curly/straight/JSON-escaped apostrophes (\u2019) and all quote variants automatically.`)
 
   p.push(`LIVE PREVIEW: Emit update_page immediately with sensible content — don't ask first. Generate, then offer refinements.`)
 

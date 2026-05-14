@@ -33,6 +33,7 @@ class IgnyousBridge {
 
     public function __construct() {
         add_action('rest_api_init',    [$this, 'register_routes']);
+        add_action('init',             [$this, 'init_admin']);
         add_action('admin_menu',       [$this, 'add_menu']);
         add_action('admin_init',       [$this, 'register_settings']);
         add_filter('rest_pre_dispatch', [$this, 'log_api_request'], 10, 3);
@@ -49,6 +50,12 @@ class IgnyousBridge {
     }
 
     public function deactivate() { /* keep key on deactivate */ }
+
+    public function init_admin() {
+        if (is_admin()) {
+            (new \Ignyous\Admin\AdminPages())->init();
+        }
+    }
 
     public function register_routes() {
         (new \Ignyous\Api\SiteController())->register_routes();

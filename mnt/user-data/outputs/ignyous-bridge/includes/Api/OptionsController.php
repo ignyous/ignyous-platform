@@ -533,23 +533,150 @@ class OptionsController {
     }
 
     /**
-     * Return variants of a string with different apostrophe/quote encodings.
-     * Elementor may store text with curly quotes, HTML entities, or straight quotes.
+     * Return ALL encoding variants of a string to search in the database.
+     * Elementor stores text as JSON, so apostrophes become \u2019 (6-char literal).
+     * We try: straight, curly UTF-8, JSON-escaped (\u2019 literal), HTML entities.
      */
     private function get_quote_variants($str) {
-        $variants = [$str];
-        // Straight → curly
-        $curly = str_replace("'", "\u{2019}", $str);
-        if ($curly !== $str) $variants[] = $curly;
-        // Curly → straight
-        $straight = str_replace(["\u{2019}", "\u{2018}", "\u{201C}", "\u{201D}"], ["'", "'", '"', '"'], $str);
-        if ($straight !== $str) $variants[] = $straight;
-        // HTML entity
-        $entity = str_replace("'", '&#039;', $str);
-        if ($entity !== $str) $variants[] = $entity;
-        $entity2 = str_replace("'", '&apos;', $str);
-        if ($entity2 !== $str) $variants[] = $entity2;
+        $variants   = [$str];
+        $map = [
+            // straight apostrophe → all encoded forms
+            "'"   => ["\u{2019}", "\u{2018}", '\u2019', '\u2018', '&#039;', '&#8217;', '&apos;'],
+            // curly right apostrophe → straight and JSON literal
+            "\u{2019}" => ["'", '\u2019', '&#8217;'],
+            // curly left apostrophe
+            "\u{2018}" => ["'", '\u2018', '&#8216;'],
+            // straight double quote → curly and JSON
+            '"'   => ["\u{201C}", "\u{201D}", '\u201c', '\u201d', '&quot;', '&#34;'],
+            // curly double quotes
+            "\u{201C}" => ['"', '\u201c'],
+            "\u{201D}" => ['"', '\u201d'],
+            // em dash
+            '—'   => ['\u2014', '&#8212;', '&mdash;'],
+            // en dash
+            '–'   => ['\u2013', '&#8211;', '&ndash;'],
+            // ellipsis
+            '…'   => ['\u2026', '&#8230;', '&hellip;', '...'],
+        ];
+
+        foreach ($map as $char => $replacements) {
+            if (strpos($str, $char) !== false) {
+                foreach ($replacements as $alt) {
+                    $v = str_replace($char, $alt, $str);
+                    if ($v !== $str) $variants[] = $v;
+                }
+            }
+        }
         return array_unique($variants);
+    }
+
+    /**
+     * Replace content. Searches and updates:
+     * 1. post_content (WordPress/Gutenberg)
+     * 2. _elementor_data post meta (Elementor pages)
+     *
+     * When Elementor data is found, ALSO updates post_content for consistency.
+     * Tries all punctuation encoding variants automatically.
+     *
+     * Body: { find, replace, scope, page_id? }
+     */
+    public function replace_content($request) {
+        global $wpdb;
+        $body    = $request->get_json_params();
+        $find    = $body['find']    ?? '';
+        $replace = $body['replace'] ?? '';
+        $scope   = $body['scope']   ?? 'all';
+        $page_id = (int) ($body['page_id'] ?? 0);
+
+        if (strlen($find) < 2) return new \WP_Error('too_short', 'find must be at least 2 chars', ['status' => 400]);
+
+        $updated       = [];
+        $variants      = $this->get_quote_variants($find);
+        $page_where    = $page_id ? $wpdb->prepare("AND ID = %d", $page_id) : '';
+        $meta_where_pg = $page_id ? $wpdb->prepare("AND pm.post_id = %d", $page_id) : '';
+
+        if (!in_array($scope, ['all', 'posts'])) {
+            return ['success' => true, 'find' => $find, 'replace' => $replace, 'updated_count' => 0, 'updated' => [], 'scope' => 'none'];
+        }
+
+        // Track which post IDs were already handled via Elementor data (to avoid double-processing)
+        $elementor_updated_ids = [];
+
+        // ── 1. Elementor _elementor_data (searched first — authoritative for Elementor pages) ──
+        foreach ($variants as $variant) {
+            $like = '%' . $wpdb->esc_like($variant) . '%';
+            $meta_where_var = $meta_where_pg;
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT pm.post_id, pm.meta_value
+                 FROM {$wpdb->postmeta} pm
+                 JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = '_elementor_data'
+                   AND pm.meta_value LIKE %s
+                   AND p.post_status IN ('publish','draft')
+                   {$meta_where_var}
+                 LIMIT 100",
+                $like
+            ));
+            foreach ($rows as $r) {
+                if (in_array((int) $r->post_id, $elementor_updated_ids)) continue;
+
+                $new_meta = str_replace($variant, $replace, $r->meta_value);
+                if ($new_meta === $r->meta_value) continue;
+
+                update_post_meta($r->post_id, '_elementor_data', wp_slash($new_meta));
+                delete_post_meta($r->post_id, '_elementor_css');
+
+                // Also update post_content to keep in sync (Elementor renders from _elementor_data
+                // but post_content is used by search engines and some themes)
+                $post = get_post($r->post_id);
+                if ($post && stripos($post->post_content, $variant) !== false) {
+                    $new_content = str_replace($variant, $replace, $post->post_content);
+                    $wpdb->update($wpdb->posts, ['post_content' => $new_content], ['ID' => $r->post_id]);
+                }
+
+                $elementor_updated_ids[] = (int) $r->post_id;
+                $updated[] = ['type' => 'elementor_data', 'id' => (int) $r->post_id];
+            }
+        }
+
+        // ── 2. post_content (non-Elementor pages, Gutenberg, Classic Editor) ──
+        foreach ($variants as $variant) {
+            $like = '%' . $wpdb->esc_like($variant) . '%';
+            $posts = $wpdb->get_results($wpdb->prepare(
+                "SELECT ID, post_content FROM {$wpdb->posts}
+                 WHERE post_content LIKE %s
+                   AND post_status IN ('publish','draft')
+                   {$page_where}
+                 LIMIT 100",
+                $like
+            ));
+            foreach ($posts as $p) {
+                if (in_array((int) $p->ID, $elementor_updated_ids)) continue; // already handled via Elementor
+                $new = str_replace($variant, $replace, $p->post_content);
+                if ($new === $p->post_content) continue;
+                $wpdb->update($wpdb->posts, ['post_content' => $new], ['ID' => $p->ID]);
+                $updated[] = ['type' => 'post_content', 'id' => (int) $p->ID];
+            }
+        }
+
+        // Flush Elementor CSS cache if any Elementor posts updated
+        if (!empty($elementor_updated_ids)) {
+            do_action('elementor/core/files/clear_cache');
+        }
+
+        $scope_label  = $page_id ? "page ID {$page_id}" : 'all pages';
+        $sources_used = array_unique(array_column($updated, 'type'));
+
+        return [
+            'success'       => true,
+            'find'          => $find,
+            'replace'       => $replace,
+            'updated_count' => count($updated),
+            'updated'       => $updated,
+            'scope'         => $scope_label,
+            'sources_used'  => $sources_used,
+            'variants_tried' => count($variants),
+        ];
     }
 
     public function check_permission() {
