@@ -215,25 +215,59 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: 'No response from AI. Please try again.' })
     }
 
-    const actionMatch  = raw.match(/```action\\n([\\s\\S]*?)\\n```/)
-    const optionsMatch = raw.match(/```options\\n([\\s\\S]*?)\\n```/)
+    // ── Parse action/options blocks (robust: match ```action, ```json, or plain ``` fences) ──
+    const KNOWN_ACTIONS = ['replace_content','remove_element','update_page','create_page','update_seo',
+      'update_element','upload_logo','scan_theme_css','update_custom_css','elementor_logo_size',
+      'resize_image','scan_options','scan_content','scan_site','clear_cache']
+
+    const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
+    const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
+    const findMatch    = raw.match(/```find\n([\s\S]*?)\n```/)
 
     let action: any  = null
     let options: any = null
     let findContext: { find: string; page_id?: number; page_title?: string } | null = null
-    try { if (actionMatch?.[1])  action  = JSON.parse(actionMatch[1])  } catch { /* ignore bad JSON */ }
-    try { if (optionsMatch?.[1]) options = JSON.parse(optionsMatch[1]) } catch { /* ignore bad JSON */ }
 
-    // If options present, try to extract the find text from user's message (quoted text)
-    if (options && !findContext) {
-      const q = String(lastUserMsg).match(/["""‘’'\u201C\u201D]([^"""‘’'\u201C\u201D]{3,200})["""‘’'\u201C\u201D]/)
-      if (q) findContext = { find: q[1] }
+    try { if (actionMatch?.[1])  action  = JSON.parse(actionMatch[1])  } catch {}
+    try { if (optionsMatch?.[1]) options = JSON.parse(optionsMatch[1]) } catch {}
+    try { if (findMatch?.[1])    findContext = JSON.parse(findMatch[1]) } catch {}
+
+    // Fallback: if no ```action block matched, look for action JSON in ANY code fence
+    if (!action) {
+      const allFences = [...raw.matchAll(/```(?:json|action|)\n([\s\S]*?)\n```/g)]
+      for (const m of allFences) {
+        try {
+          const parsed = JSON.parse(m[1])
+          if (parsed?.type && KNOWN_ACTIONS.includes(parsed.type)) {
+            action = parsed
+            break
+          }
+        } catch {}
+      }
     }
 
-    const text = raw
-      .replace(/```action[\\s\\S]*?```/g, '')
-      .replace(/```options[\\s\\S]*?```/g, '')
+    // If options present, extract find text from user's quoted text
+    if (options && !findContext) {
+      const quoted = String(lastUserMsg).match(/["\u201C\u201D'\u2018\u2019]([^"'\u201C\u201D\u2018\u2019]{3,200})["\u201C\u201D'\u2018\u2019]/)
+      if (quoted) findContext = { find: quoted[1] }
+    }
+
+    // Strip all recognized code fences from the displayed text
+    let text = raw
+      .replace(/```(?:action|options|find|json)\n[\s\S]*?\n```/g, (match: string) => {
+        // Keep json fences that aren't actions
+        if (match.startsWith('```json')) {
+          try { const p = JSON.parse(match.replace(/```json\n/, '').replace(/\n```/, '')); if (KNOWN_ACTIONS.includes(p?.type)) return '' } catch {}
+          return match
+        }
+        return ''
+      })
+      .replace(/```\n\{[\s\S]*?"type"\s*:[\s\S]*?\}\n```/g, (match: string) => {
+        try { const p = JSON.parse(match.replace(/```\n/, '').replace(/\n```/, '')); if (KNOWN_ACTIONS.includes(p?.type)) return '' } catch {}
+        return match
+      })
       .trim()
+
 
     // ── Activity log ────────────────────────────────────────────
     try {
