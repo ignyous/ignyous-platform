@@ -159,40 +159,52 @@ export async function POST(req: NextRequest) {
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }))
 
+    const callParams = {
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1000,   // reduced from 1500 — saves output tokens
+      system,
+      messages:   cleanMessages,
+    }
+
     let response: any
     try {
-      response = await anthropic.messages.create({
-        model:      'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system,
-        messages:   cleanMessages,
-      })
+      response = await anthropic.messages.create(callParams)
     } catch (claudeErr: any) {
-      const detail = claudeErr?.message ?? String(claudeErr)
-      console.error('[Claude API]', detail, '| status:', claudeErr?.status)
+      // Auto-retry once on 429 rate limit (wait 2s)
+      if (claudeErr?.status === 429) {
+        try {
+          await new Promise(r => setTimeout(r, 2000))
+          response = await anthropic.messages.create(callParams)
+        } catch (retryErr: any) {
+          claudeErr = retryErr  // surface the retry error below
+        }
+      }
 
-      // Log the failure
-      try {
-        await logActivity({
-          userId:    session?.user?.email ?? undefined,
-          siteUrl:   profile?.site_url,
-          siteName:  profile?.site_name,
-          category:  'system',
-          action:    'ai_chat_error',
-          status:    'error',
-          summary:   'Claude API error: ' + detail.slice(0, 120),
-          detail:    { error: detail, status: claudeErr?.status, userMessage: lastUserMsg.slice(0, 200) },
-          ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
-          userAgent: req.headers.get('user-agent') ?? undefined,
-          durationMs: Date.now() - start,
-        })
-      } catch { /* logging must never crash the route */ }
+      if (!response) {
+        const detail = claudeErr?.message ?? String(claudeErr)
+        console.error('[Claude API]', detail, '| status:', claudeErr?.status)
+        try {
+          await logActivity({
+            userId:    session?.user?.email ?? undefined,
+            siteUrl:   profile?.site_url,
+            siteName:  profile?.site_name,
+            category:  'system',
+            action:    'ai_chat_error',
+            status:    'error',
+            summary:   'Claude API error: ' + detail.slice(0, 120),
+            detail:    { error: detail, status: claudeErr?.status, userMessage: lastUserMsg.slice(0, 200) },
+            ipAddress: req.headers.get('x-forwarded-for') ?? undefined,
+            userAgent: req.headers.get('user-agent') ?? undefined,
+            durationMs: Date.now() - start,
+          })
+        } catch { /* logging must never crash the route */ }
 
-      return NextResponse.json({
-        error: detail,
-        debug: `Claude API error (${claudeErr?.status ?? 'unknown status'}): ${detail}`,
-        text:  `⚠️ AI error: ${detail}`,
-      }, { status: 500 })
+        return NextResponse.json({
+          error: detail,
+          debug: `Claude API error (${claudeErr?.status ?? 'unknown status'}): ${detail}`,
+          text:  `⚠️ AI error: ${detail}`,
+        }, { status: 500 })
+      }
     }
 
     // ── Parse response ──────────────────────────────────────────

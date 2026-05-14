@@ -78,10 +78,20 @@ Section types: hero | testimonials | pricing | features | faq | cta | team | sta
 Builders: Elementor→widget JSON | Gutenberg→blocks | Divi→shortcodes | WPBakery→vc_ shortcodes | Avada→fusion_ | Beaver Builder→fl-builder`)
 
   // ── DB / option scanning ──────────────────────────────────────
-  p.push(`DB OPTION SCANNING (for phone, email, address, any setting):
+  p.push(`DB OPTION SCANNING (for phone, email, address, logo size, any setting):
 1. scan_options first to find location with confidence score
 2. update_option to apply — update_method: "option" (plain) | "serialized_field" (nested array, use array_key) | "post_meta"
-Oshin/Be theme stores all settings in be_themes_data (not be_options).`)
+
+KNOWN OSHIN/BE THEME KEYS (option_name: be_themes_data):
+- Logo max-width:        array_key="opt-logo-max-width"         e.g. "180px"
+- Logo max-width mobile: array_key="opt-logo-max-width-mobile"  e.g. "120px"
+- Logo padding:          array_key="opt-logo-padding"           e.g. "25"
+- Primary color:         array_key="color_scheme"               e.g. "#e0a240"
+- Footer text:           array_key="footer_text1"
+- Header type:           array_key="opt-header-type"
+
+To resize the logo → update_option with option_name="be_themes_data", array_key="opt-logo-max-width", update_method="serialized_field", new_value="180px"
+Do NOT scan for these — update directly.`)
 
   // ── Content scanner ───────────────────────────────────────────
   p.push(`CONTENT SCANNER: scan_content finds text across pages, posts, options, widgets, meta.
