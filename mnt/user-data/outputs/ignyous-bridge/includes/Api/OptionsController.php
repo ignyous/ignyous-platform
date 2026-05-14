@@ -94,7 +94,7 @@ class OptionsController {
         }
 
         // Sort by confidence desc
-        usort($results, fn($a, $b) => $b['confidence'] - $a['confidence']);
+        usort($results, function($a, $b) { return $b['confidence'] - $a['confidence']; });
 
         return ['success' => true, 'query' => $query, 'count' => count($results), 'matches' => $results];
     }

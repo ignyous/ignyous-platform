@@ -34,6 +34,10 @@ const DEFAULT_STATUS: SiteStatus = {
  * - Response time
  * - Cache status
  */
+/**
+ * Hook to check WordPress site status.
+ * Checks once on mount only — call manualTest() to re-check.
+ */
 export function useSiteStatus(siteUrl: string, apiKey: string) {
   const [status, setStatus] = useState<SiteStatus>(DEFAULT_STATUS)
   const [isManualTesting, setIsManualTesting] = useState(false)
@@ -42,42 +46,20 @@ export function useSiteStatus(siteUrl: string, apiKey: string) {
     if (!siteUrl || !apiKey) return
 
     try {
-      const params = new URLSearchParams({
-        siteUrl,
-        apiKey,
-      })
-
+      const params = new URLSearchParams({ siteUrl, apiKey })
       const response = await fetch(`/api/wordpress/status?${params}`)
       const data = await response.json()
-
-      setStatus({
-        ...data,
-        siteUrl,
-        lastChecked: new Date().toISOString(),
-      } as SiteStatus)
-    } catch (error) {
-      setStatus(prev => ({
-        ...prev,
-        success: false,
-        status: 'error',
-        statusCode: 'red',
-        message: 'Failed to check status',
-        siteUrl,
-      }))
+      setStatus({ ...data, siteUrl, lastChecked: new Date().toISOString() } as SiteStatus)
+    } catch {
+      setStatus(prev => ({ ...prev, success: false, status: 'error', statusCode: 'red', message: 'Failed to check status', siteUrl }))
     }
   }, [siteUrl, apiKey])
 
-  // Auto-check on mount and every 30 seconds
+  // Check ONCE on mount — no polling interval (saves API + bridge requests)
   useEffect(() => {
     if (!siteUrl || !apiKey) return
-
-    // Initial check
     checkStatus()
-
-    // Poll every 30 seconds
-    const interval = setInterval(checkStatus, 30000)
-
-    return () => clearInterval(interval)
+    // No setInterval here — call manualTest() to re-check manually
   }, [siteUrl, apiKey, checkStatus])
 
   const manualTest = useCallback(async () => {
@@ -86,14 +68,7 @@ export function useSiteStatus(siteUrl: string, apiKey: string) {
     setIsManualTesting(false)
   }, [checkStatus])
 
-  return {
-    status,
-    isChecking: status.status === 'checking',
-    isManualTesting,
-    manualTest,
-    isConnected: status.success,
-    isSlow: status.status === 'slow',
-    isUnreachable: status.status === 'unreachable',
-    isInvalidKey: status.status === 'invalid_key',
-  }
+  return { status, isChecking: status.status === 'checking', isManualTesting, manualTest,
+           isConnected: status.success, isSlow: status.status === 'slow',
+           isUnreachable: status.status === 'unreachable', isInvalidKey: status.status === 'invalid_key' }
 }

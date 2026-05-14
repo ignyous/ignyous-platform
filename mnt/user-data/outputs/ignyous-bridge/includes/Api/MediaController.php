@@ -139,7 +139,10 @@ class MediaController {
         );
 
         $log[] = "Found " . count($rows) . " large options to inspect";
-        $log[] = "Option names (by size): " . implode(', ', array_map(fn($r) => $r->option_name . '(' . $r->len . ')', array_slice($rows, 0, 15)));
+        $names_with_size = array_slice($rows, 0, 15);
+        $name_labels = [];
+        foreach ($names_with_size as $r) $name_labels[] = $r->option_name . '(' . $r->len . ')';
+        $log[] = "Option names (by size): " . implode(', ', $name_labels);
 
         $found_option = null;
         // Known plugin option names to skip — these are never theme logo options
@@ -221,7 +224,12 @@ class MediaController {
             $log[] = "   New:     url={$url} | id={$id}";
 
                 // Also log any other logo-variant keys (logo_sticky, etc.)
-                $logo_keys = array_filter(array_keys($val), fn($k) => is_string($k) && stripos($k, 'logo') !== false && is_array($val[$k]));
+                $logo_keys = [];
+                foreach (array_keys($val) as $k) {
+                    if (is_string($k) && stripos($k, 'logo') !== false && is_array($val[$k])) {
+                        $logo_keys[] = $k;
+                    }
+                }
                 $log[] = "   Other logo-variant keys: " . (empty($logo_keys) ? 'none' : implode(', ', $logo_keys));
 
                 // Update logo fields directly — no references
