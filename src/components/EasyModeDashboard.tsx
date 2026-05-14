@@ -377,8 +377,11 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       } else if (type === 'replace_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
         const d = await r.json()
-        if (d.success) await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
-        return null
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          return `✅ Replaced ${d.updated_count ?? 0} instance${d.updated_count !== 1 ? 's' : ''} of "${action.find}" site-wide.`
+        }
+        return `❌ Replace failed: ${d.error || 'Unknown error'}`
       }
     } catch (e: any) {
       return `Action failed: ${e.message}`
@@ -462,9 +465,15 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       const aiText    = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
       const finalText = actionResult || aiText
 
+      // Hallucination guard: if AI says it made a change but emitted no action block, warn the user
+      const claimsChange = !data.action && /\b(updated|changed|replaced|modified|applied|done|complete|i've made|i have updated)\b/i.test(aiText)
+      const warningText  = claimsChange
+        ? `\n\n⚠️ *Note: No action was actually executed. Ask me again and I'll make sure to apply the change.*`
+        : ''
+
       setMessages(prev => [...prev, {
         role:    'assistant',
-        content: finalText,
+        content: finalText + warningText,
         options: data.options || undefined,
         ts:      new Date(),
       }])
@@ -645,12 +654,12 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             </div>
           </header>
 
-          {/* ── 2-column body: chat left, quick actions right ── */}
-          <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(520px, 1.35fr) minmax(460px, .9fr)' }}>
+          {/* ── 2-column body: chat left, preview right — matching Advanced Mode proportions ── */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
-            {/* ── CHAT COLUMN ── */}
+            {/* ── CHAT COLUMN — fixed 500px matching Advanced Mode ── */}
             <section
-              style={{ display: 'flex', flexDirection: 'column', borderRight: `1px solid ${S.border}`, minWidth: 0, overflow: 'hidden' }}
+              style={{ width: 500, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: `1px solid ${S.border}`, overflow: 'hidden' }}
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={e => {
@@ -804,8 +813,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
               </div>
             </section>
 
-            {/* ── PREVIEW COLUMN ── */}
-            <aside style={{ background: S.bg, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${S.border}`, overflow: 'hidden' }}>
+            {/* ── PREVIEW COLUMN — flex-1 takes all remaining space ── */}
+            <aside style={{ flex: 1, minWidth: 0, background: S.bg, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
               {/* Preview toolbar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: `1px solid ${S.border}`, flexShrink: 0, background: S.card }}>

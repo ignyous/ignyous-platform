@@ -135,7 +135,9 @@ Actions: create_coupon | create_product | list_orders | bulk_price_change`)
   p.push(`THEME INSTALL: Check builder + companion plugins before installing. Warn if switching builders. Confirm with options first.`)
 
   // ── Verification ──────────────────────────────────────────────
-  p.push(`AFTER CHANGES: Be specific — "Updated 3 instances of 555-1234 on Home and Contact." Never just say "done". Report what changed or what errored.`)
+  p.push(`AFTER CHANGES: Be specific — "Updated 3 instances of 555-1234 on Home and Contact." Never just say "done". Report what changed or what errored.
+
+CRITICAL — NO HALLUCINATION: NEVER say "Updated", "Done", "Changed", "Replaced", or "Applied" unless you have emitted an action block in this very response. If you say a change was made without an action block, nothing actually happened. When a user confirms ("use", "yes", "go ahead") after you showed options, you MUST emit the action (e.g. replace_content) in your response — not just say you did it.`)
 
   // ── Live site context ─────────────────────────────────────────
   if (profile) {
