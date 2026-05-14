@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
     if (!siteUrl || !apiKey) {
       return NextResponse.json({ error: 'siteUrl and apiKey required' }, { status: 400 })
     }
-    const base = siteUrl.replace(/\/$/, '')
+    const base = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
     const res = await fetch(`${base}/wp-json/ignyous/v1/options/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'X-Ignyous-Key': apiKey },

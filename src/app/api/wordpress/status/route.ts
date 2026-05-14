@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }, { status: 400 })
   }
 
-  const cleanUrl = siteUrl.replace(/\/$/, '')
+  const cleanUrl = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
   const started = Date.now()
 
   try {

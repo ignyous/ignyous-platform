@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
     if (!siteUrl || !apiKey || !query) {
       return NextResponse.json({ error: 'siteUrl, apiKey, and query are required' }, { status: 400 })
     }
-    const base = siteUrl.replace(/\/$/, '')
+    const base = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
 
     // Scan options
     const optRes = await fetch(

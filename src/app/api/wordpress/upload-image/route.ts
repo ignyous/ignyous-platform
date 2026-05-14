@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'siteUrl, apiKey, and imageBase64 are required' }, { status: 400 })
     }
 
-    const base = siteUrl.replace(/\/$/, '')
+    const base = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
 
     const res = await fetch(`${base}/wp-json/ignyous/v1/media/upload`, {
       method: 'POST',

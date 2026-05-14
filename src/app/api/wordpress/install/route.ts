@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const base    = siteUrl.replace(/\/$/, '')
+    const base    = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
     const auth    = Buffer.from(`${wpUser}:${wpPass}`).toString('base64')
     const headers = {
       'Authorization': `Basic ${auth}`,

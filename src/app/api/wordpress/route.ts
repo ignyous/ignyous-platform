@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'siteUrl, apiKey, and endpoint are required' }, { status: 400 })
     }
 
-    const base = siteUrl.replace(/\/$/, '')
+    const base = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
 
     // ── Categories → WP native REST API ──────────────────────────
     if (cleanEndpoint === 'categories') {
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
       success: false,
       error:   finalMsg,
       debug: {
-        url:         `${siteUrl.replace(/\/$/, '')}/wp-json/ignyous/v1/${cleanEndpoint}`,
+        url:         `${siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')}/wp-json/ignyous/v1/${cleanEndpoint}`,
         methods_tried: methodsToTry,
         attempts:    attemptLog,
         hint:        'Visit /wp-json/ignyous/v1/ on your site to see registered routes',
