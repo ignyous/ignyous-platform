@@ -574,19 +574,23 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return result
 
       } else if (type === 'remove_element') {
+        console.log('[remove_element] action:', JSON.stringify(action))
         const snapId = await takeSnapshot('content_remove', `Remove element: "${action.search_text || action.element_id}"`, { search_text: action.search_text, element_id: action.element_id })
         if (snapId) setLastSnapshotId(snapId)
+        const payload = {
+          action: 'remove_element', siteUrl: cleanUrl, apiKey,
+          post_id:     action.post_id || action.page_id,
+          search_text: action.search_text || null,
+          element_id:  action.element_id  || null,
+          nth:         action.nth          || 0,
+        }
+        console.log('[remove_element] calling /api/scan/content with:', JSON.stringify(payload))
         const r = await fetch('/api/scan/content', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'remove_element', siteUrl: cleanUrl, apiKey,
-            post_id:     action.post_id || action.page_id,
-            search_text: action.search_text || null,
-            element_id:  action.element_id  || null,
-            nth:         action.nth          || 0,
-          }),
+          body: JSON.stringify(payload),
         })
         const d = await r.json()
+        console.log('[remove_element] response:', JSON.stringify(d))
         if (d.success) {
           await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
           const page = d.page_title ? `on the **${d.page_title}** page` : 'on the specified page'

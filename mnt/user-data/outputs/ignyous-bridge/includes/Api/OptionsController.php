@@ -675,7 +675,7 @@ class OptionsController {
         delete_post_meta($post_id, '_elementor_css');
         delete_post_meta($post_id, '_elementor_page_assets');
         do_action('elementor/core/files/clear_cache');
-        if (class_exists('\\Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+        if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
             \Elementor\Plugin::$instance->files_manager->clear_cache();
         }
         $upload_dir = wp_upload_dir();
