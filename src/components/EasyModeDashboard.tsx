@@ -166,7 +166,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const userRef     = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const cleanUrl    = siteUrl ? siteUrl.replace(/\/$/, '') : ''
+  const cleanUrl    = siteUrl ? siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://') : ''
   const siteDomain  = cleanUrl.replace(/^https?:\/\//, '')
   const siteKey     = cleanUrl.replace(/[^a-z0-9]/gi, '_')
   const siteName    = siteInfo?.site?.name || siteInfo?.site_name || siteDomain || 'your WordPress site'
