@@ -176,12 +176,12 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const displayUser = session?.user?.name || session?.user?.email?.split('@')[0] || userName || 'Account'
   const userInitial = displayUser[0]?.toUpperCase() || 'A'
 
-  // ── Save chat to localStorage whenever messages change ─────────
+  // ── Save chat to sessionStorage (session-only, not persisted across reloads) ──
   useEffect(() => {
     if (!siteKey || messages.length === 0) return
     try {
       const toSave = messages.slice(-60).map(m => ({ role: m.role, content: m.content, ts: m.ts.getTime() }))
-      localStorage.setItem(`ignyous_chat_${siteKey}`, JSON.stringify(toSave))
+      sessionStorage.setItem(`ignyous_chat_${siteKey}`, JSON.stringify(toSave))
     } catch {}
   }, [messages, siteKey])
 
@@ -189,13 +189,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   useEffect(() => {
     if (!siteUrl || !apiKey) return
 
-    // Load saved chat
-    try {
-      const saved = JSON.parse(localStorage.getItem(`ignyous_chat_${siteKey}`) || '[]')
-      if (saved.length > 0) {
-        setMessages(saved.map((m: any) => ({ ...m, ts: new Date(m.ts) })))
-      }
-    } catch {}
+    // Chat starts clean on every page load (session-only memory)
+    // sessionStorage is cleared automatically when the tab/window closes
 
     // Fetch site profile
     fetch('/api/scan/profile?siteUrl=' + encodeURIComponent(cleanUrl) + '&apiKey=' + encodeURIComponent(apiKey))
