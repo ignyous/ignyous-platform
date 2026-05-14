@@ -631,6 +631,27 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return `Couldn't remove the element: ${d.error || 'Unknown error'}`
 
+      } else if (type === 'site_wide_replace') {
+        // Replace content across ALL storage: posts, Elementor data, options, widgets, menus, theme mods
+        const snapId = await takeSnapshot('site_wide_replace', `Replace "${action.find}" → "${action.replace}" site-wide`, { find: action.find, replace: action.replace })
+        if (snapId) setLastSnapshotId(snapId)
+        console.log('[site_wide_replace] action:', JSON.stringify(action))
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'site_wide_replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }),
+        })
+        const d = await r.json()
+        console.log('[site_wide_replace] response:', JSON.stringify(d))
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const details = (d.breakdown?.details || [])
+            .map((loc: any) => loc.title || loc.name || loc.key || loc.location || 'unknown')
+            .slice(0, 5)
+          const where = details.length ? `: ${details.join(', ')}` : ''
+          return `Updated ${d.total_replaced} location${d.total_replaced !== 1 ? 's' : ''}${where}.`
+        }
+        return `Couldn't complete the replacement: ${d.error || 'Unknown error'}`
+
       } else if (type === 'replace_content') {
         const snapId = await takeSnapshot('content_replace', `Content replace: "${action.find}" → "${action.replace}"`, { find: action.find })
         if (snapId) setLastSnapshotId(snapId)

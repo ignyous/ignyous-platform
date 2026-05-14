@@ -1,5 +1,7 @@
 // src/lib/systemPrompt.ts — compact, non-contradictory
 
+import { buildRoutinePrompt } from './routines'
+
 export interface SiteProfile {
   site_url: string; site_name: string; description?: string
   theme: string; builder: string; wp_version: string
@@ -49,6 +51,10 @@ remove_element:    {"type":"remove_element","post_id":2,"search_text":"Service 4
     element_id  = Elementor data-id attribute if known from page source (e.g. "580d492f") — most precise
     nth         = which occurrence to remove if text appears in multiple siblings (1=first, 4=fourth, etc.)
   Example: user says "remove the 4th service box" → search_text="Service 4" OR nth=4 with search_text="service"
+site_wide_replace: {"type":"site_wide_replace","find":"845-876-6586","replace":"212-555-1234"}
+  Replaces text across ALL storage: posts, Elementor data, wp_options, widgets, menus, theme mods.
+  Use for phone numbers, emails, addresses, business names — anything that appears in multiple places.
+  Preferred over replace_content when user says "everywhere", "site-wide", "change my phone/email".
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
@@ -209,6 +215,10 @@ ${pageIndexStr}`)
 • If the user references a section type (services, testimonials, pricing) → match it from the graph.`)
     }
   }
+
+  // Routines — smart workflows for common tasks
+  const cg2 = (profile as any)?.content_graph
+  p.push(buildRoutinePrompt(cg2?.capabilities || undefined))
 
   return p.join('\n\n')
 }

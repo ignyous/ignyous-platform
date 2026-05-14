@@ -53,6 +53,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result)
   }
 
+  // ── Site-wide Replace ──────────────────────────────────────────
+  if (action === 'site_wide_replace') {
+    if (!find) return NextResponse.json({ error: 'find text required' }, { status: 400 })
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(`${base}/wp-json/ignyous/v1/site-wide/replace`, {
+        method: 'POST',
+        headers: authHeaders(apiKey),
+        body: JSON.stringify({ find, replace: replace || '', api_key: apiKey }),
+        signal: AbortSignal.timeout(30000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    return NextResponse.json(result)
+  }
+
   // ── Remove Elementor element ───────────────────────────────────
   if (action === 'remove_element') {
     const pid        = post_id || page_id
