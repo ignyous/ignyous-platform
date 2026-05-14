@@ -222,7 +222,19 @@ class OptionsController {
                 if (!is_array($data)) return new \WP_Error('not_array', "Option '{$name}' is not an array (type: " . gettype($data) . ")", ['status' => 400]);
 
                 $old = $this->get_nested($data, $arr_key);
-                $this->set_nested($data, $arr_key, $new_value);
+
+                // Smart sanitization: if the old value (or new value) is a plain number
+                // but new value has CSS units (px, em, %, rem) — strip the unit.
+                // Handles theme fields like "opt-logo-max-width" that store "180" not "180px".
+                $sanitized_value = $new_value;
+                if (preg_match('/^(\d+(?:\.\d+)?)\s*(px|em|rem|%|pt|vh|vw)$/i', trim($new_value), $m)) {
+                    // New value has a unit — check if old value was unitless or empty
+                    if ($old === '' || $old === null || is_numeric($old)) {
+                        $sanitized_value = $m[1]; // strip the unit
+                    }
+                }
+
+                $this->set_nested($data, $arr_key, $sanitized_value);
 
                 // Force save: clear cache, delete, re-add (bypasses WP "no change" skip)
                 wp_cache_delete($name, 'options');
@@ -233,14 +245,15 @@ class OptionsController {
                 // Verify
                 $saved = get_option($name);
                 $saved_val = $this->get_nested($saved, $arr_key);
-                if ($saved_val != $new_value) {
+                if ($saved_val != $sanitized_value) {
                     // Fallback to update_option
                     update_option($name, $data);
                     wp_cache_delete($name, 'options');
                     $saved = get_option($name);
                     $saved_val = $this->get_nested($saved, $arr_key);
                 }
-                return ['success' => true, 'updated' => $field_path, 'old' => $old, 'new' => $saved_val];
+                $note = ($sanitized_value !== $new_value) ? " (unit stripped: '{$new_value}'→'{$sanitized_value}')" : '';
+                return ['success' => true, 'updated' => $field_path, 'old' => $old, 'new' => $saved_val, 'note' => $note];
 
             case 'post_meta':
                 $post_id  = (int) ($body['post_id']  ?? 0);

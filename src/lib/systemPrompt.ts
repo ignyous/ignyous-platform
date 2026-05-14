@@ -83,15 +83,14 @@ Builders: Elementor→widget JSON | Gutenberg→blocks | Divi→shortcodes | WPB
 2. update_option to apply — update_method: "option" (plain) | "serialized_field" (nested array, use array_key) | "post_meta"
 
 KNOWN OSHIN/BE THEME KEYS (option_name: be_themes_data):
-- Logo max-width:        array_key="opt-logo-max-width"         e.g. "180px"
-- Logo max-width mobile: array_key="opt-logo-max-width-mobile"  e.g. "120px"
-- Logo padding:          array_key="opt-logo-padding"           e.g. "25"
-- Primary color:         array_key="color_scheme"               e.g. "#e0a240"
+- Logo max-width:        array_key="opt-logo-max-width"         value=NUMBER ONLY e.g. "180" (no px)
+- Logo max-width mobile: array_key="opt-logo-max-width-mobile"  value=NUMBER ONLY e.g. "120"
+- Logo padding:          array_key="opt-logo-padding"           value=NUMBER ONLY e.g. "25"
+- Primary color:         array_key="color_scheme"               value="#hex"
 - Footer text:           array_key="footer_text1"
 - Header type:           array_key="opt-header-type"
 
-To resize the logo → update_option with option_name="be_themes_data", array_key="opt-logo-max-width", update_method="serialized_field", new_value="180px"
-Do NOT scan for these — update directly.`)
+NUMERIC FIELDS: opt-logo-max-width, opt-logo-max-width-mobile, opt-logo-padding store PLAIN NUMBERS — no "px" suffix. The bridge auto-strips units but always send bare numbers for these fields.`)
 
   // ── Content scanner ───────────────────────────────────────────
   p.push(`CONTENT SCANNER: scan_content finds text across pages, posts, options, widgets, meta.

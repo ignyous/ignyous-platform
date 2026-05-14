@@ -147,10 +147,12 @@ interface SiteEntry { id: string; url: string; name: string | null }
 
 export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchMode }: Props) {
   const { data: session } = useSession()
-  const [messages, setMessages]         = useState<Message[]>([])
-  const [input, setInput]               = useState('')
-  const [sending, setSending]           = useState(false)
-  const [siteInfo, setSiteInfo]         = useState<any>(null)
+  const [messages, setMessages]           = useState<Message[]>([])
+  const [input, setInput]                 = useState('')
+  const [sending, setSending]             = useState(false)
+  const [previewKey, setPreviewKey]       = useState(0)
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [siteInfo, setSiteInfo]           = useState<any>(null)
   const [pages, setPages]               = useState<any[]>([])
   const [sites, setSites]               = useState<SiteEntry[]>([])
   const [showSiteDrop, setShowSiteDrop] = useState(false)
@@ -448,7 +450,14 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       const data = await res.json()
 
       let actionResult: string | null = null
-      if (data.action) actionResult = await executeAction(data.action, imageToSend)
+      if (data.action) {
+        actionResult = await executeAction(data.action, imageToSend)
+        // Refresh preview after any action that changes the site
+        const noRefreshTypes = ['scan_options', 'scan_content', 'scan_site']
+        if (data.action?.type && !noRefreshTypes.includes(data.action.type)) {
+          setTimeout(() => setPreviewKey(k => k + 1), 800) // slight delay for WP to process
+        }
+      }
 
       const aiText    = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
       const finalText = actionResult || aiText
@@ -795,49 +804,76 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
               </div>
             </section>
 
-            {/* ── QUICK ACTIONS COLUMN ── */}
-            <aside style={{ background: S.bg, padding: '26px 44px', overflowY: 'auto' }}>
-              <h2 style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 18px' }}>Quick Actions</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
-                {QUICK_ACTIONS.map(action => {
-                  const tone = toneStyles[action.tone]
-                  return (
-                    <button key={action.title} onClick={() => send(action.prompt)}
-                      style={{ minHeight: 138, background: S.card, border: `1px solid ${S.border}`, borderRadius: 15, textAlign: 'left', padding: 20, cursor: 'pointer', transition: 'transform .16s ease, box-shadow .16s ease, border-color .16s ease' }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'translateY(-2px)'
-                        e.currentTarget.style.boxShadow = '0 16px 36px rgba(15,23,42,.08)'
-                        e.currentTarget.style.borderColor = 'hsl(248 60% 82%)'  // light purple border
-                        e.currentTarget.style.background = S.primaryLight         // light purple bg
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'translateY(0)'
-                        e.currentTarget.style.boxShadow = 'none'
-                        e.currentTarget.style.borderColor = S.border
-                        e.currentTarget.style.background = S.card
-                      }}
-                    >
-                      <div style={{ width: 36, height: 36, borderRadius: 11, background: tone.bg, color: tone.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 26 }}>{action.icon}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: S.foreground, marginBottom: 6 }}>{action.title}</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.45, color: 'hsl(224 15% 35%)' }}>{action.desc}</div>
+            {/* ── PREVIEW COLUMN ── */}
+            <aside style={{ background: S.bg, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${S.border}`, overflow: 'hidden' }}>
+
+              {/* Preview toolbar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: `1px solid ${S.border}`, flexShrink: 0, background: S.card }}>
+                {/* Device toggles */}
+                <div style={{ display: 'flex', background: 'hsl(220 16% 94%)', borderRadius: 8, padding: 2, gap: 2 }}>
+                  {(['desktop', 'mobile'] as const).map(d => (
+                    <button key={d} onClick={() => setPreviewDevice(d)}
+                      style={{ border: 0, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', background: previewDevice === d ? S.primary : 'transparent', color: previewDevice === d ? 'white' : S.muted, transition: 'all .15s' }}>
+                      {d === 'desktop' ? '🖥' : '📱'}
                     </button>
-                  )
-                })}
+                  ))}
+                </div>
+                {/* URL bar */}
+                <div style={{ flex: 1, background: 'hsl(220 20% 97%)', border: `1px solid ${S.border}`, borderRadius: 7, padding: '4px 10px', fontSize: 11, color: S.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                  {cleanUrl}
+                </div>
+                {/* Refresh */}
+                <button onClick={() => setPreviewKey(k => k + 1)} title="Refresh preview"
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', fontSize: 14, color: S.muted, padding: '4px 6px', borderRadius: 6 }}>↺</button>
+                {/* Open in new tab */}
+                <a href={cleanUrl} target="_blank" rel="noreferrer" title="Open site"
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, color: S.muted, padding: '4px 6px', borderRadius: 6, textDecoration: 'none' }}>↗</a>
               </div>
 
-              <div style={{ marginTop: 22, background: S.card, border: `1px solid ${S.border}`, borderRadius: 15, padding: 18 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>Smart Suggestions</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {SUGGESTIONS.map(s => (
-                    <button key={s} onClick={() => send(s)} style={{ border: `1px solid ${S.border}`, borderRadius: 11, background: 'hsl(220 20% 98%)', padding: '10px 12px', color: 'hsl(224 15% 35%)', fontSize: 13, fontWeight: 600, textAlign: 'left', cursor: 'pointer' }}
+              {/* iframe */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: '#fff', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', position: 'relative' }}>
+                {cleanUrl ? (
+                  previewDevice === 'desktop' ? (
+                    <iframe
+                      key={previewKey}
+                      src={cleanUrl}
+                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                      title="Site preview"
+                    />
+                  ) : (
+                    /* Mobile: scale to 375px viewport */
+                    <div style={{ width: 375, height: '100%', position: 'relative', overflow: 'hidden', transformOrigin: 'top left',
+                      transform: `scale(${Math.min(1, 460 / 375)})`, boxShadow: '0 0 0 1px hsl(220 16% 86%)' }}>
+                      <iframe
+                        key={previewKey + '-m'}
+                        src={cleanUrl}
+                        style={{ width: 375, height: '100%', border: 'none', display: 'block' }}
+                        title="Mobile preview"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: S.muted, fontSize: 13 }}>
+                    Connect a site to see a preview
+                  </div>
+                )}
+              </div>
+
+              {/* Quick actions — compact strip at bottom */}
+              <div style={{ flexShrink: 0, borderTop: `1px solid ${S.border}`, padding: '12px 14px', background: S.card, overflowY: 'auto', maxHeight: 200 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: S.muted, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Quick Actions</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {QUICK_ACTIONS.map(action => (
+                    <button key={action.title} onClick={() => send(action.prompt)}
+                      style={{ border: `1px solid ${S.border}`, borderRadius: 8, background: 'hsl(220 20% 98%)', padding: '6px 10px', color: S.foreground, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                       onMouseEnter={e => { e.currentTarget.style.background = S.primaryLight; e.currentTarget.style.borderColor = 'hsl(248 60% 82%)' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'hsl(220 20% 98%)'; e.currentTarget.style.borderColor = S.border }}
-                    >
-                      {s}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'hsl(220 20% 98%)'; e.currentTarget.style.borderColor = S.border }}>
+                      <span>{action.icon}</span> {action.title}
                     </button>
                   ))}
                 </div>
               </div>
+
             </aside>
 
           </div>
