@@ -156,7 +156,9 @@ export async function POST(req: NextRequest) {
 
     const cleanMessages = messages.map((m: any) => ({
       role:    m.role as 'user' | 'assistant',
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      // Pass content as-is: string for text messages, array for vision messages.
+      // JSON.stringify here would turn image blocks into literal text, breaking vision.
+      content: m.content,
     }))
 
     const callParams = {

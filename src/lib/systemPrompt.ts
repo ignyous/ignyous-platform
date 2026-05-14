@@ -52,6 +52,8 @@ update_seo:       {"type":"update_seo","pageId":2,"title":"...","meta_desc":"...
 update_element:   {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 reorder_sections: {"type":"reorder_sections","pageId":2,"moveFrom":3,"moveTo":1}
 upload_logo:      {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
+
+IMAGE HANDLING: When the user attaches an image (you will see it in your vision input), emit upload_logo immediately — do NOT ask for a URL, do NOT say you can't process images, do NOT ask them to upload manually. The platform extracts and uploads the image automatically. Just emit the action.
 scan_options:     {"type":"scan_options","query":"555-1234","scope":"all"}
 update_option:    {"type":"update_option","field_path":"be_themes_data.phone","option_name":"be_themes_data","array_key":"phone","update_method":"serialized_field","new_value":"555-9999"}
 scan_content:     {"type":"scan_content","query":"old phone"} or {"type":"scan_content","pattern":"phone"}
