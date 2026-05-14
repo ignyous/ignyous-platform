@@ -382,11 +382,18 @@ export function buildSystemPrompt(profile?: SiteProfile): string {
     '',
   ].join('\n'))
 
-  // ── Append live site context ─────────────────────────────────
+  // ── Append live site context (compact — no full JSON dump) ──────
   if (profile) {
+    const pluginList = (profile.active_plugins || []).slice(0, 25).join(', ')
+    const pageList   = (profile.pages || []).slice(0, 12)
+      .map(p => `${p.id}:${p.title}(${p.status})`).join(', ')
+
     sections.push([
       '== LIVE SITE CONTEXT ==',
-      JSON.stringify(profile, null, 2),
+      `Site: ${profile.site_name} | URL: ${profile.site_url}`,
+      `Theme: ${profile.theme} | Builder: ${profile.builder} | WP: ${profile.wp_version}`,
+      `Plugins (${(profile.active_plugins || []).length} active): ${pluginList}`,
+      `Pages: ${pageList}`,
     ].join('\n'))
   }
 

@@ -587,39 +587,34 @@ function DashboardInner() {
     setSending(true)
 
     try {
+      // Trim history to last 12 messages before sending to Claude (full history stays in UI)
+      const MAX_API_MESSAGES = 12
+      const apiHistory = history.length > MAX_API_MESSAGES ? history.slice(-MAX_API_MESSAGES) : history
+
       const activePlugins = (siteInfo?.plugins || []).filter(p => p.active !== false)
       const ctx = {
         site_name:        siteInfo?.site?.name || siteUrl,
         site_url:         cleanUrl,
-        site_description: siteInfo?.site?.description,
         wp_version:       siteInfo?.wordpress?.version,
         theme:            siteInfo?.theme?.name,
         builder:          siteInfo?.builder?.[0]?.name,
-        pages:            pages.map(p => ({
-          id: p.id, title: p.title, slug: p.slug, url: p.link, status: p.status,
-          has_form: (p as any).has_form,
-          has_elementor: (p as any).has_elementor,
-        })),
-        active_plugins:   activePlugins.map(p => ({ name: p.name, slug: p.slug })),
+        // Pages: max 15, only id+title+status (strip large fields)
+        pages:            pages.slice(0, 15).map(p => ({ id: p.id, title: p.title, status: p.status })),
         plugin_count:     activePlugins.length,
-        // Specific plugin detection for common checks
-        has_contact_form_7: activePlugins.some(p => (p.slug||'').includes('contact-form-7') || (p.name||'').toLowerCase().includes('contact form 7')),
+        // Plugin list: names only (not full objects), max 30
+        active_plugins:   activePlugins.slice(0, 30).map(p => p.name || p.slug),
+        // Boolean flags for key plugins (cheaper than listing all slugs)
+        has_elementor:      activePlugins.some(p => (p.slug||'').includes('elementor')),
+        has_contact_form_7: activePlugins.some(p => (p.slug||'').includes('contact-form-7')),
         has_wpforms:        activePlugins.some(p => (p.slug||'').includes('wpforms')),
         has_gravity_forms:  activePlugins.some(p => (p.slug||'').includes('gravityforms')),
         has_woocommerce:    activePlugins.some(p => (p.slug||'').includes('woocommerce')),
-        has_amelia:         activePlugins.some(p => (p.slug||'').includes('amelia')),
         has_yoast:          activePlugins.some(p => (p.slug||'').includes('yoast') || (p.slug||'').includes('rank-math')),
-        seo_score:          scanReport?.scores?.seo,
-        performance_score:  scanReport?.scores?.performance,
-        overall_score:      scanReport?.scores?.overall,
-        meta_description:   scanReport?.seo?.meta_description,
-        load_time_ms:       scanReport?.performance?.load_time_ms,
-        forms_count:        scanReport?.forms?.count || 0,
       }
 
       const res  = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.map(m => ({ role: m.role, content: m.content })), siteContext: ctx, siteUrl: cleanUrl, apiKey }),
+        body: JSON.stringify({ messages: apiHistory.map(m => ({ role: m.role, content: m.content })), siteContext: ctx, siteUrl: cleanUrl, apiKey }),
       })
       const data = await res.json()
 

@@ -414,8 +414,15 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     setMessages(nextMessages)
 
     try {
+      // Trim history sent to API — keep last 12 exchanges max to stay under token limits.
+      // Full history is still stored in localStorage for the UI.
+      const MAX_API_MESSAGES = 12
+      const trimmedMessages = nextMessages.length > MAX_API_MESSAGES
+        ? nextMessages.slice(-MAX_API_MESSAGES)
+        : nextMessages
+
       // Build messages for Claude — include image as vision content block if present
-      const apiMessages = nextMessages.map(m => {
+      const apiMessages = trimmedMessages.map(m => {
         if (m.image && m.role === 'user') {
           return {
             role: 'user',
