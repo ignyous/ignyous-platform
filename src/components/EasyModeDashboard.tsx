@@ -224,6 +224,19 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       .then(d => {
         const raw = d?.data?.pages || d?.pages || []
         setPages(raw)
+        // Build site content index — store text snippets per page so AI can find
+        // content without scanning. Stored in sessionStorage for this session.
+        const index = raw.slice(0, 20).map((p: any) => ({
+          id:    p.id,
+          title: p.title,
+          slug:  p.slug || '',
+          url:   p.link  || '',
+          // Extract short text samples from page content (strip HTML tags)
+          text:  p.content
+            ? p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
+            : '',
+        }))
+        try { sessionStorage.setItem(`ignyous_page_index_${siteKey}`, JSON.stringify(index)) } catch {}
       })
       .catch(() => {})
 
@@ -267,6 +280,11 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     const builder = siteInfo?.builder       || ''
     const activeP = pages.filter((p: any) => p.status === 'publish')
     const draftP  = pages.filter((p: any) => p.status !== 'publish')
+
+    // Load cached page content index (built on connect, text snippets per page)
+    let pageIndex: any[] = []
+    try { pageIndex = JSON.parse(sessionStorage.getItem(`ignyous_page_index_${siteKey}`) || '[]') } catch {}
+
     return {
       site_name:          siteName,
       site_url:           cleanUrl,
@@ -277,25 +295,30 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       plugin_count:       pluginCount,
       plugins:            activePlugins.slice(0, 25).map((p: any) => p.name || p.slug),
       pages:              pages.slice(0, 12).map((p: any) => ({ id: p.id, title: p.title, status: p.status })),
+      // Content index: page titles + text snippets for direct content location
+      page_content_index: pageIndex.slice(0, 10).map((p: any) => ({
+        id: p.id, title: p.title,
+        preview: p.text ? p.text.slice(0, 150) : '',
+      })),
       active_pages:       activeP.length,
       draft_pages:        draftP.length,
       mode:               'easy',
       instruction:   [
-        'You have FULL site context. Use it — do NOT emit scan_site or any scanning action.',
-        'Format responses using markdown: **bold**, bullet lists, and tables where useful.',
-        'Keep answers concise and helpful.',
+        'You have FULL site context including page_content_index with text from each page.',
+        'Use page_content_index to find content BEFORE scanning — if text appears in a page preview, use replace_content directly.',
+        'Do NOT emit scan_site. Do NOT narrate — emit actions immediately.',
       ].join(' '),
     }
   }
 
   // ── Execute AI actions ─────────────────────────────────────────
-  // ── Take a snapshot before any write action ─────────────────────────
+  // ── Snapshots via Next.js API (avoids CORS on direct bridge calls) ───
   async function takeSnapshot(type: string, description: string, extra: Record<string, any> = {}): Promise<string | null> {
     try {
-      const r = await fetch(`${cleanUrl}/wp-json/ignyous/v1/snapshots`, {
+      const r = await fetch('/api/wordpress/snapshots', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Ignyous-Key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ type, description, api_key: apiKey, ...extra }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteUrl: cleanUrl, apiKey, type, description, ...extra }),
         signal: AbortSignal.timeout(10000),
       })
       const d = await r.json()
@@ -303,13 +326,12 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     } catch { return null }
   }
 
-  // ── Restore a snapshot ────────────────────────────────────────────────
   async function restoreSnapshot(snapshotId: string): Promise<string> {
     try {
-      const r = await fetch(`${cleanUrl}/wp-json/ignyous/v1/snapshots/${snapshotId}/restore`, {
+      const r = await fetch('/api/wordpress/snapshots/restore', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Ignyous-Key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ api_key: apiKey }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteUrl: cleanUrl, apiKey, snapshotId }),
         signal: AbortSignal.timeout(15000),
       })
       const d = await r.json()
@@ -424,6 +446,28 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return d.success
           ? `✅ Updated \`${action.field_path}\`\nOld: "${d.old}"\nNew: "${d.new}"`
           : `❌ Update failed: ${d.error}`
+
+      } else if (type === 'scan_theme_css') {
+        const q   = action.query || 'logo'
+        const r   = await fetch(`/api/wordpress/theme-css?siteUrl=${encodeURIComponent(cleanUrl)}&apiKey=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(q)}`)
+        const d   = await r.json()
+        if (!d.success || !d.matches?.length) return `No CSS rules found matching "${q}" in theme files.`
+        const lines = d.matches.map((m: any) =>
+          `**${m.source}** — \`${m.selector}\`\n\`\`\`css\n${m.selector} { ${m.declaration} }\n\`\`\``
+        ).join('\n\n')
+        return `Found ${d.count} CSS rule(s) for "${q}":\n\n${lines}`
+
+      } else if (type === 'update_custom_css') {
+        const snapId = await takeSnapshot('elementor_kit', `Custom CSS: ${action.selector}`)
+        if (snapId) setLastSnapshotId(snapId)
+        const r = await fetch('/api/wordpress/theme-css', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, selector: action.selector, declaration: action.declaration, target: action.target || 'auto' }),
+        })
+        const d = await r.json()
+        if (!d.success) return `❌ CSS update failed: ${d.error || d.message}`
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return `✅ Updated CSS in ${d.target}:\n\`\`\`css\n${d.css_added}\n\`\`\``
 
       } else if (type === 'elementor_logo_size') {
         const snapId = await takeSnapshot('elementor_kit', `Elementor logo size: ${action.width_px ? action.width_px + 'px' : action.scale_percent + '%'}`)
@@ -834,21 +878,6 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                                 ))}
                               </div>
                             )}
-                            {/* Undo button — shown on the last assistant message when a snapshot was taken */}
-                            {msg.role === 'assistant' && index === messages.length - 1 && lastSnapshotId && (
-                              <button
-                                onClick={async () => {
-                                  const result = await restoreSnapshot(lastSnapshotId)
-                                  setLastSnapshotId(null)
-                                  setMessages(prev => [...prev, { role: 'assistant', content: result, ts: new Date() }])
-                                }}
-                                style={{ marginTop: 8, border: `1px solid ${S.border}`, borderRadius: 8, background: 'hsl(220 20% 97%)', color: S.muted, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#fff3cd'; e.currentTarget.style.borderColor = '#ffc107'; e.currentTarget.style.color = '#856404' }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'hsl(220 20% 97%)'; e.currentTarget.style.borderColor = S.border; e.currentTarget.style.color = S.muted }}
-                              >
-                                ↩ Undo last change
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -883,6 +912,27 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
               {/* ── INPUT BAR (flex item, not absolute) ── */}
               <div style={{ flexShrink: 0, padding: '10px 28px 20px', background: S.bg }}>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value = '' }} />
+
+                {/* Undo toolbar — shows only when a snapshot exists */}
+                {lastSnapshotId && (
+                  <div style={{ maxWidth: 844, margin: '0 auto 8px', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10 }}>
+                    <span style={{ fontSize: 12, color: '#92400e', flex: 1 }}>↩ Last change can be undone</span>
+                    <div style={{ position: 'relative', display: 'inline-block' }} className="undo-wrap">
+                      <button
+                        onClick={async () => {
+                          const result = await restoreSnapshot(lastSnapshotId)
+                          setLastSnapshotId(null)
+                          setMessages(prev => [...prev, { role: 'assistant', content: result, ts: new Date() }])
+                        }}
+                        title="Click to restore the site to its state before the last AI change. This will reload the preview."
+                        style={{ border: '1px solid #d97706', borderRadius: 8, background: 'white', color: '#92400e', padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        ↩ Undo last change
+                      </button>
+                    </div>
+                    <button onClick={() => setLastSnapshotId(null)} title="Dismiss" style={{ border: 0, background: 'transparent', color: '#d97706', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>×</button>
+                  </div>
+                )}
 
                 {/* Pending image preview */}
                 {pendingImage && (

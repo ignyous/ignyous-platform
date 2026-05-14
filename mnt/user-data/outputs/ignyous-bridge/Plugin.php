@@ -60,6 +60,7 @@ class IgnyousBridge {
         (new \Ignyous\Api\OptionsController())->register_routes();
         (new \Ignyous\Api\CacheController())->register_routes();
         (new \Ignyous\Api\SnapshotController())->register_routes();
+        (new \Ignyous\Api\ThemeController())->register_routes();
     }
 
     public function add_menu() {
