@@ -35,6 +35,12 @@ class OptionsController {
             'callback'            => [$this, 'replace_content'],
             'permission_callback' => [$this, 'check_permission'],
         ]);
+        // Remove a structural Elementor element (column/container/widget) by search text
+        register_rest_route('ignyous/v1', '/elementor/remove-element', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'remove_elementor_element'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
         // Elementor-specific: set logo width via custom CSS in kit
         register_rest_route('ignyous/v1', '/elementor/logo-size', [
             'methods'             => 'POST',
@@ -616,6 +622,122 @@ class OptionsController {
             'sources_used'   => $sources_used,
             'variants_tried' => count($variants),
         ];
+    }
+
+
+    /**
+     * Remove a structural Elementor element (column, container, widget) by locating
+     * one that contains the given search_text anywhere in its JSON subtree.
+     *
+     * Body: { post_id, search_text, level? }
+     *   post_id     – ID of the page/post to modify
+     *   search_text – text that identifies the element to remove (e.g. "Service 4")
+     *   level       – "column"|"container"|"widget" (default: auto-detect deepest column/container)
+     */
+    public function remove_elementor_element($request) {
+        $body        = $request->get_json_params();
+        $post_id     = (int) ($body['post_id']     ?? 0);
+        $search_text = trim($body['search_text']   ?? '');
+
+        if (!$post_id)     return new \WP_Error('missing_post_id',     'post_id required',    ['status' => 400]);
+        if (!$search_text) return new \WP_Error('missing_search_text', 'search_text required', ['status' => 400]);
+
+        $raw  = get_post_meta($post_id, '_elementor_data', true);
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            return new \WP_Error('no_elementor_data', 'No Elementor data for this post', ['status' => 404]);
+        }
+
+        $result = $this->remove_element_containing_text($data, $search_text);
+        if (!$result['removed']) {
+            return ['success' => false, 'message' => "No element containing \"$search_text\" found in post $post_id"];
+        }
+
+        // Persist
+        update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($result['data'])));
+
+        // Clear all Elementor caches
+        delete_post_meta($post_id, '_elementor_css');
+        delete_post_meta($post_id, '_elementor_page_assets');
+        do_action('elementor/core/files/clear_cache');
+        if (class_exists('\\Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+            \Elementor\Plugin::$instance->files_manager->clear_cache();
+        }
+        $upload_dir = wp_upload_dir();
+        $css_dir    = trailingslashit($upload_dir['basedir']) . 'elementor/css/';
+        if (is_dir($css_dir)) {
+            foreach (glob($css_dir . '*.css') as $file) { @unlink($file); }
+        }
+
+        return [
+            'success'       => true,
+            'post_id'       => $post_id,
+            'page_title'    => get_the_title($post_id),
+            'search_text'   => $search_text,
+            'removed_type'  => $result['removed_type'],
+        ];
+    }
+
+    /**
+     * Recursively walk Elementor elements. When we find an element whose JSON subtree
+     * contains $search_text, remove that element from its parent array.
+     * We prefer removing at the column/container level (not the widget itself) so the
+     * whole "service box" including its wrapper disappears.
+     *
+     * Returns: ['removed' => bool, 'data' => array, 'removed_type' => string]
+     */
+    private function remove_element_containing_text(array $elements, string $needle): array {
+        $lower_needle = strtolower($needle);
+
+        for ($i = 0, $n = count($elements); $i < $n; $i++) {
+            $el = $elements[$i];
+
+            // Does this element's subtree contain the needle?
+            if (stripos(json_encode($el), $needle) === false) continue;
+
+            // It contains the text. Decide whether to remove this element or recurse deeper.
+            // We remove at this level if:
+            //   (a) this is a column/container/inner-section (structural wrapper), OR
+            //   (b) we can't go deeper (no children or children don't narrow it down)
+            $type = $el['elType'] ?? '';
+            $is_structural = in_array($type, ['column', 'container', 'inner-section', 'section'], true);
+
+            // Check if only ONE child subtree contains the needle (can go deeper)
+            $matching_children = 0;
+            $children = $el['elements'] ?? [];
+            foreach ($children as $child) {
+                if (stripos(json_encode($child), $needle) !== false) $matching_children++;
+            }
+
+            if ($is_structural && $matching_children === 0) {
+                // The text is in this structural element itself — remove it
+                $removed_el = array_splice($elements, $i, 1);
+                return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
+            }
+
+            if (!$is_structural || $matching_children > 1) {
+                // This is a widget or text spans multiple children — remove this whole element
+                $removed_el = array_splice($elements, $i, 1);
+                return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
+            }
+
+            // Recurse: only one child subtree has the match
+            if (!empty($children)) {
+                $inner = $this->remove_element_containing_text($children, $needle);
+                if ($inner['removed']) {
+                    // If the child was a column/container, remove it from THIS level instead
+                    // so we take out the whole wrapper, not just an inner widget
+                    if ($is_structural) {
+                        $removed_el = array_splice($elements, $i, 1);
+                        return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
+                    }
+                    $elements[$i]['elements'] = $inner['data'];
+                    return ['removed' => true, 'data' => $elements, 'removed_type' => $inner['removed_type']];
+                }
+            }
+        }
+
+        return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
     }
 
     public function check_permission($request = null) {

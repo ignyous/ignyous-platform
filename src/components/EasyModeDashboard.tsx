@@ -551,6 +551,21 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return result
 
+      } else if (type === 'remove_element') {
+        const snapId = await takeSnapshot('content_remove', `Remove element containing: "${action.search_text}"`, { search_text: action.search_text })
+        if (snapId) setLastSnapshotId(snapId)
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove_element', siteUrl: cleanUrl, apiKey, post_id: action.post_id || action.page_id, search_text: action.search_text }),
+        })
+        const d = await r.json()
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const page = d.page_title ? `on the **${d.page_title}** page` : 'on the specified page'
+          return `Removed ${page}.`
+        }
+        return `Couldn't remove the element: ${d.error || 'Unknown error'}`
+
       } else if (type === 'replace_content') {
         const snapId = await takeSnapshot('content_replace', `Content replace: "${action.find}" → "${action.replace}"`, { find: action.find })
         if (snapId) setLastSnapshotId(snapId)

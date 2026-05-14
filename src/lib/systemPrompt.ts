@@ -40,6 +40,11 @@ create_page:       {"type":"create_page","title":"New","content":"<html>","statu
 replace_content:   {"type":"replace_content","find":"exact old text","replace":"new text","page_id":2,"page_title":"Home"}
   page_id = optional: limits replace to one page. "on the home page" → include page_id from pages list.
   Searches BOTH post_content AND _elementor_data. Tries straight/curly apostrophe variants automatically.
+remove_element:    {"type":"remove_element","post_id":2,"search_text":"Service 4"}
+  Removes an ENTIRE structural block (column, card, service box, team member card, etc.) from an Elementor page.
+  Use this — NOT replace_content — when user says "remove", "delete", "get rid of" a box, card, column, section, or repeating item.
+  search_text = unique text inside the element to identify it (e.g. the title or label of the box to remove).
+  post_id = page ID where the element lives.
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
@@ -59,6 +64,7 @@ OPTIONS BLOCK:
 \`\`\``)
 
   p.push(`CONTENT EDITING:
+• User says "remove", "delete", "get rid of" a box/card/column/section → emit remove_element with the post_id and a search_text that uniquely identifies it. NEVER use replace_content for structural removal.
 • User gives BOTH old AND new text: "change X to Y" → emit replace_content directly.
 • User gives old text only ("rewrite this", "update this", "change this text") → ALWAYS show 2-3 alternatives as options first. NEVER replace without showing options unless user explicitly provided the replacement text.
 • ALWAYS include "✨ Let AI decide" as the last option.

@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { action, siteUrl, apiKey, query, find, replace, scope, page_id } = await req.json()
+  const body = await req.json()
+  const { action, siteUrl, apiKey, query, find, replace, scope, page_id, post_id, search_text } = body
   if (!siteUrl || !apiKey) return NextResponse.json({ error: 'siteUrl and apiKey required' }, { status: 400 })
 
   const base = cleanBase(siteUrl)
@@ -46,7 +47,34 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result?.success) {
-      // Surface the actual bridge error — no more "Check bridge plugin" mystery
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    return NextResponse.json(result)
+  }
+
+  // ── Remove Elementor element ───────────────────────────────────
+  if (action === 'remove_element') {
+    const pid  = post_id || page_id
+    const stxt = search_text || find
+    if (!pid || !stxt) return NextResponse.json({ error: 'post_id and search_text required' }, { status: 400 })
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(`${base}/wp-json/ignyous/v1/elementor/remove-element`, {
+        method: 'POST',
+        headers: authHeaders(apiKey),
+        body: JSON.stringify({ post_id: pid, search_text: stxt, api_key: apiKey }),
+        signal: AbortSignal.timeout(30000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
       const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
       return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
     }
