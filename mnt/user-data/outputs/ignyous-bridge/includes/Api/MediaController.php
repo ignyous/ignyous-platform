@@ -1,7 +1,34 @@
 <?php
 namespace Ignyous\Api;
 
+/**
+ * MediaController — handles image/logo upload and application.
+ *
+ * Theme option names (from source analysis):
+ *   Oshin / Be Themes  → 'be_themes_data'  (global $be_themes_data)
+ *                         confirmed in functions/be-themes-options-config.php:
+ *                         'opt_name' => 'be_themes_data'
+ *   Logo fields: logo, logo_sticky, logo_transparent, logo_transparent_light,
+ *                logo_sidebar, left-strip-logo
+ *                Each field: { url, id, height, width, thumbnail }
+ */
 class MediaController {
+    // ── Theme option registry (add more themes here as their source is analysed) ──
+    private static $KNOWN_THEME_OPTIONS = [
+        'be_themes_data',     // Oshin / Be Themes (Brand Exponents) ✓ confirmed
+        // add more here: 'avada_options', 'woodmart_settings', etc.
+    ];
+
+    // ── Logo field IDs in Oshin/Be — all are {url, id, width, height, thumbnail} arrays ──
+    private static $LOGO_FIELD_IDS = [
+        'logo',                  // main logo (always update this)
+        'logo_sticky',           // sticky header logo
+        'logo_transparent',      // dark transparent logo
+        'logo_transparent_light',// light transparent logo
+        'logo_sidebar',          // sidebar/slidebar logo
+        'left-strip-logo',       // left strip logo
+    ];
+
     public function register_routes() {
         register_rest_route('ignyous/v1', '/media/upload', [
             'methods'             => 'POST',
@@ -40,7 +67,6 @@ class MediaController {
         if (!$this->verify_request($request)) {
             return new \WP_Error('rest_forbidden', 'Invalid or missing API key.', ['status' => 401]);
         }
-
         $body       = $request->get_json_params();
         $base64     = $body['image_base64'] ?? '';
         $media_type = $body['media_type']   ?? 'image/png';
@@ -48,7 +74,7 @@ class MediaController {
         $set_logo   = !empty($body['set_as_logo']);
         $log        = [];
 
-        $log[] = "=== Ignyous Logo Upload Debug ===";
+        $log[] = "=== Ignyous Logo Upload ===";
         $log[] = "File: {$file_name} | Type: {$media_type} | Set as logo: " . ($set_logo ? 'YES' : 'NO');
         $log[] = "Site: " . home_url() . " | Theme: " . wp_get_theme()->get('Name');
         $log[] = "Template: " . get_template() . " | Stylesheet: " . get_stylesheet();
@@ -70,7 +96,7 @@ class MediaController {
 
         if (is_wp_error($attachment_id)) {
             $log[] = "UPLOAD FAILED: " . $attachment_id->get_error_message();
-            return new \WP_Error('upload_failed', $attachment_id->get_error_message(), ['status' => 500]);
+            return ['success' => false, 'error' => $attachment_id->get_error_message(), 'debug_log' => $log];
         }
 
         $url   = wp_get_attachment_url($attachment_id);
@@ -78,8 +104,7 @@ class MediaController {
         $thumb = wp_get_attachment_image_src($attachment_id, 'thumbnail');
 
         $log[] = "Uploaded → ID:{$attachment_id} | URL:{$url}";
-        $log[] = "Dimensions: " . ($meta['width'] ?? '?') . "×" . ($meta['height'] ?? '?') . "px";
-        $log[] = "Thumbnail:  " . ($thumb[0] ?? 'none');
+        $log[] = "Dimensions: " . ($meta['width'] ?? '?') . "x" . ($meta['height'] ?? '?') . "px | Thumb: " . ($thumb[0] ?? 'none');
 
         $updated = [];
         if ($set_logo) {
@@ -92,7 +117,7 @@ class MediaController {
             'id'                => $attachment_id,
             'url'               => $url,
             'message'           => $set_logo
-                ? 'Logo uploaded. Applied to ' . count($updated) . ' location(s). See debug log.'
+                ? 'Logo applied to ' . count($updated) . ' location(s). See debug log.'
                 : 'Image uploaded to Media Library.',
             'locations_updated' => $updated,
             'debug_log'         => $log,
@@ -106,191 +131,147 @@ class MediaController {
         $log[]   = "";
         $log[]   = "=== Applying Logo ===";
 
-        // 1. WordPress standard
-        $old = get_theme_mod('custom_logo', 'not set');
+        // 1. WordPress core custom_logo theme_mod
+        $old_mod = get_theme_mod('custom_logo', 'not set');
         set_theme_mod('custom_logo', $id);
-        $verify    = get_theme_mod('custom_logo');
         $updated[] = 'theme_mod:custom_logo';
-        $log[]     = "[1] theme_mod:custom_logo → {$id} (was:{$old}, verified:{$verify})";
+        $log[] = "[1] theme_mod:custom_logo → {$id} (was: {$old_mod})";
 
+        // 2. site_logo option (FSE / block themes)
         update_option('site_logo', $id);
         $updated[] = 'option:site_logo';
-        $log[]     = "[2] option:site_logo → {$id}";
+        $log[] = "[2] option:site_logo → {$id}";
 
-        // 2. Find the Redux/theme options row —
-        //    Strategy: scan ALL wp_options for large serialized arrays that have a 'logo' sub-array
+        // 3. Theme options — try known names first (fast path), then broad scan
         $log[] = "";
-        $log[] = "=== Scanning ALL wp_options for logo arrays ===";
+        $log[] = "=== Theme Options Scanner ===";
 
-        // Pull ALL non-autoload options that are large enough to be theme options
-        // We can't rely on LIKE because the serialized format might vary
-        $rows = $wpdb->get_results(
-            "SELECT option_name, LENGTH(option_value) as len
-             FROM {$wpdb->options}
-             WHERE LENGTH(option_value) > 500
-               AND option_name NOT LIKE '\_%'
-               AND option_name NOT LIKE '%transient%'
-               AND option_name NOT LIKE '%cache%'
-               AND option_name NOT LIKE '%session%'
-               AND option_name NOT LIKE '%nonce%'
-               AND option_name NOT LIKE 'cron'
-             ORDER BY len DESC
-             LIMIT 60"
-        );
+        $theme_option_name = null;
 
-        $log[] = "Found " . count($rows) . " large options to inspect";
-        $names_with_size = array_slice($rows, 0, 15);
-        $name_labels = [];
-        foreach ($names_with_size as $r) $name_labels[] = $r->option_name . '(' . $r->len . ')';
-        $log[] = "Option names (by size): " . implode(', ', $name_labels);
+        // --- Fast path: check known theme option names from source analysis ---
+        $candidates = array_unique(array_filter(array_merge(
+            self::$KNOWN_THEME_OPTIONS,
+            [get_template() . '_data', get_stylesheet() . '_data']
+        )));
+        $log[] = "Fast path — checking: " . implode(', ', $candidates);
 
-        $found_option = null;
-        // Known plugin option names to skip — these are never theme logo options
-        $skip_options = [
-            'revslider', 'revslider_installedversion', 'revslider_update',
-            'revslider_purchase_code', 'revslider_checked', 'revslider_demo',
-            'wp_user_roles', 'widget_', 'sidebars_widgets', 'nav_menu',
-            'active_plugins', 'rewrite_rules', 'wp_mail_smtp',
-        ];
+        foreach ($candidates as $name) {
+            $val = get_option($name, '__NOTSET__');
+            if ($val === '__NOTSET__') { $log[] = "  [{$name}] not found"; continue; }
+            if (!is_array($val))       { $log[] = "  [{$name}] exists but not array"; continue; }
+            if (!isset($val['logo']) || !is_array($val['logo'])) { $log[] = "  [{$name}] array/" . count($val) . " keys, no logo sub-array"; continue; }
+            $log[] = "  [{$name}] ✅ FOUND logo sub-array! (" . count($val) . " total keys)";
+            $theme_option_name = $name;
+            break;
+        }
 
-        foreach ($rows as $row) {
-            // Skip known plugin options by prefix/name
-            $skip = false;
-            foreach ($skip_options as $prefix) {
-                if (stripos($row->option_name, $prefix) !== false) { $skip = true; break; }
+        // --- Fallback: scan all large options ---
+        if (!$theme_option_name) {
+            $log[] = "Fast path failed. Running broad scan of large wp_options…";
+            $rows = $wpdb->get_results(
+                "SELECT option_name, LENGTH(option_value) as len
+                 FROM {$wpdb->options}
+                 WHERE LENGTH(option_value) > 1000
+                   AND option_name NOT LIKE '\_%'
+                   AND option_name NOT LIKE '%transient%'
+                   AND option_name NOT LIKE '%cache%'
+                 ORDER BY len DESC LIMIT 60"
+            );
+            $skip = ['revslider','wp_user_roles','widget_','sidebars_widgets','nav_menu','active_plugins','rewrite_rules'];
+            foreach ($rows as $row) {
+                $do_skip = false;
+                foreach ($skip as $s) { if (stripos($row->option_name, $s) !== false) { $do_skip = true; break; } }
+                if ($do_skip) continue;
+
+                $val = get_option($row->option_name);
+                if (!is_array($val) || !isset($val['logo']) || !is_array($val['logo'])) continue;
+
+                // Validate: theme indicators
+                $theme_keys = ['last_tab','color_scheme','opt-header-type','body_text','footer_text','h1','h2'];
+                $hits = 0;
+                foreach ($theme_keys as $tk) { if (array_key_exists($tk, $val)) $hits++; }
+                if ($hits === 0) { $log[] = "  [{$row->option_name}] has logo but no theme indicators, skipping"; continue; }
+
+                $log[] = "  [{$row->option_name}] ✅ FOUND via broad scan ({$hits} theme indicators)";
+                $theme_option_name = $row->option_name;
+                break;
             }
-            if ($skip) {
-                $log[] = "  [{$row->option_name}] → skipped (known plugin option)";
-                continue;
-            }
+        }
 
-            // Use get_option() so WordPress handles unserialize safely
-            $val = get_option($row->option_name);
+        // --- Update all logo fields in the found option ---
+        if ($theme_option_name) {
+            $val = get_option($theme_option_name);
+            $log[] = "";
+            $log[] = "Updating logo fields in [{$theme_option_name}]…";
 
-            // Must be a plain PHP array (not stdClass object, not scalar)
-            if (!is_array($val)) {
-                $log[] = "  [{$row->option_name}] → " . gettype($val) . ", skipping";
-                continue;
-            }
+            // Build the new logo field value
+            $new_logo_val = [
+                'url'       => $url,
+                'id'        => (string) $id,
+                'width'     => (string) ($meta['width']  ?? ''),
+                'height'    => (string) ($meta['height'] ?? ''),
+                'thumbnail' => $thumb[0] ?? '',
+            ];
 
-            // Must have a 'logo' key that is itself an array with 'url' and 'id'
-            if (!isset($val['logo']) || !is_array($val['logo'])
-                || !array_key_exists('url', $val['logo'])
-                || !array_key_exists('id', $val['logo'])
-            ) {
-                $log[] = "  [{$row->option_name}] → array/{" . count($val) . " keys}, no logo→{url,id} structure";
-                continue;
-            }
-
-            // False-positive check 1: logo.id must be numeric (WordPress attachment ID)
-            $logo_id_val = $val['logo']['id'];
-            if (!empty($logo_id_val) && !is_numeric($logo_id_val)) {
-                $log[] = "  [{$row->option_name}] → has logo.id='{$logo_id_val}' but it's not numeric — likely a plugin logo, skipping";
-                continue;
-            }
-
-            // False-positive check 2: logo.url must look like an image file (if set)
-            $logo_url_val = $val['logo']['url'];
-            if (!empty($logo_url_val)) {
-                $ext = strtolower(pathinfo(parse_url($logo_url_val, PHP_URL_PATH), PATHINFO_EXTENSION));
-                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', ''])) {
-                    $log[] = "  [{$row->option_name}] → logo.url='{$logo_url_val}' has non-image extension '{$ext}' — skipping";
+            foreach (self::$LOGO_FIELD_IDS as $field) {
+                if (!array_key_exists($field, $val)) {
+                    $log[] = "  [{$field}] — not in option, skipping";
                     continue;
                 }
-            }
+                $old_url = is_array($val[$field]) ? ($val[$field]['url'] ?? '(empty)') : (string)$val[$field];
 
-            // False-positive check 3: the array should look like theme settings.
-            // Theme options (Redux/Kirki/etc.) typically contain typography/color/header keys.
-            $theme_indicators = ['last_tab', 'color_scheme', 'opt-header-type', 'opt-header-color',
-                                  'navigation_text', 'body_text', 'footer_text', 'footer-style',
-                                  'h1', 'h2', 'h3', 'button_font', 'blog_style'];
-            $indicator_count = 0;
-            foreach ($theme_indicators as $indicator) {
-                if (array_key_exists($indicator, $val)) $indicator_count++;
-            }
-            if ($indicator_count === 0) {
-                $top_keys = implode(', ', array_slice(array_keys($val), 0, 6));
-                $log[] = "  [{$row->option_name}] → has logo→{url,id} but 0 theme indicators — likely a plugin, skipping. Keys: {$top_keys}";
-                continue;
-            }
-
-            // All checks passed
-            $found_option  = $row->option_name;
-            $cur_url = $val['logo']['url'] ?? '(empty)';
-            $cur_id  = $val['logo']['id']  ?? '(empty)';
-            $log[] = "";
-            $log[] = "✅ FOUND theme logo array in [{$found_option}] ({$row->len} bytes, {$indicator_count} theme indicators)";
-            $log[] = "   Current: url={$cur_url} | id={$cur_id}";
-            $log[] = "   New:     url={$url} | id={$id}";
-
-                // Also log any other logo-variant keys (logo_sticky, etc.)
-                $logo_keys = [];
-                foreach (array_keys($val) as $k) {
-                    if (is_string($k) && stripos($k, 'logo') !== false && is_array($val[$k])) {
-                        $logo_keys[] = $k;
+                if ($field === 'logo') {
+                    // Always update main logo
+                    $val[$field] = $new_logo_val;
+                    $log[] = "  [{$field}] updated: {$old_url} → {$url}";
+                } else {
+                    // For variants, only update if they already have a value set
+                    // (empty logo_sticky means "use main logo" — don't override that)
+                    $existing_url = is_array($val[$field]) ? ($val[$field]['url'] ?? '') : '';
+                    if (!empty($existing_url)) {
+                        $val[$field] = $new_logo_val;
+                        $log[] = "  [{$field}] updated (had existing value): {$existing_url} → {$url}";
+                    } else {
+                        $log[] = "  [{$field}] skipped (empty = inherits main logo)";
                     }
                 }
-                $log[] = "   Other logo-variant keys: " . (empty($logo_keys) ? 'none' : implode(', ', $logo_keys));
-
-                // Update logo fields directly — no references
-                $val['logo']['url'] = $url;
-                $val['logo']['id']  = (string) $id;
-                if (!empty($meta['width']))  $val['logo']['width']  = (string) $meta['width'];
-                if (!empty($meta['height'])) $val['logo']['height'] = (string) $meta['height'];
-                if (!empty($thumb[0]))       $val['logo']['thumbnail'] = $thumb[0];
-
-                // Force save: delete then re-add to bypass WordPress "no change" optimisation
-                wp_cache_delete($found_option, 'options');
-                delete_option($found_option);
-                add_option($found_option, $val, '', 'yes');
-
-                // Verify
-                wp_cache_delete($found_option, 'options');
-                $check = get_option($found_option);
-                $saved_url = $check['logo']['url'] ?? 'NOT FOUND';
-                $saved_id  = $check['logo']['id']  ?? 'NOT FOUND';
-
-                if ($saved_url === $url) {
-                    $log[]     = "   ✅ VERIFIED SAVED — url={$saved_url}";
-                    $updated[] = "serialized_option:{$found_option}";
-                } else {
-                    $log[] = "   ❌ SAVE FAILED — expected url={$url}, got url={$saved_url}";
-                    // Try update_option as fallback
-                    update_option($found_option, $val);
-                    wp_cache_delete($found_option, 'options');
-                    $check2     = get_option($found_option);
-                    $saved_url2 = $check2['logo']['url'] ?? 'NOT FOUND';
-                    $log[] = "   Retry via update_option: url={$saved_url2}";
-                    if ($saved_url2 === $url) $updated[] = "serialized_option:{$found_option}";
-                }
-
-                break; // Found it — stop scanning
             }
+
+            // Force save: clear cache, delete, re-add
+            wp_cache_delete($theme_option_name, 'options');
+            delete_option($theme_option_name);
+            add_option($theme_option_name, $val, '', 'yes');
+            wp_cache_delete($theme_option_name, 'options');
+
+            // Verify
+            $check     = get_option($theme_option_name);
+            $saved_url = is_array($check) && isset($check['logo']['url']) ? $check['logo']['url'] : 'NOT FOUND';
+            if ($saved_url === $url) {
+                $log[]     = "✅ Verified save — logo.url = {$saved_url}";
+                $updated[] = "theme_option:{$theme_option_name}[logo]";
+            } else {
+                $log[] = "❌ Verification failed — expected {$url}, got {$saved_url}";
+                // Retry with update_option
+                update_option($theme_option_name, $val);
+                wp_cache_delete($theme_option_name, 'options');
+                $check2     = get_option($theme_option_name);
+                $saved_url2 = is_array($check2) && isset($check2['logo']['url']) ? $check2['logo']['url'] : 'NOT FOUND';
+                $log[] = "  Retry update_option → {$saved_url2}";
+                if ($saved_url2 === $url) $updated[] = "theme_option:{$theme_option_name}[logo]";
+            }
+        } else {
+            $log[] = "❌ Could not find theme options in database. Please share this debug log.";
         }
 
-        if (!$found_option) {
-            $log[] = "";
-            $log[] = "❌ No logo array found in any option. Dumping top 20 option names for manual inspection:";
-            foreach (array_slice($rows, 0, 20) as $row) {
-                $val = get_option($row->option_name);
-                $type = gettype($val);
-                $keys = is_array($val) ? 'keys[' . count($val) . ']: ' . implode(',', array_slice(array_keys($val), 0, 8)) : substr((string)$val, 0, 80);
-                $log[] = "   [{$row->option_name}] {$type} — {$keys}";
-            }
-            $log[] = "";
-            $log[] = "ACTION NEEDED: Share this log so we can identify the correct option name.";
-        }
-
-        // 3. Elementor
+        // 4. Elementor
         $kit_id = get_option('elementor_active_kit');
         if ($kit_id) {
             $kit_meta = get_post_meta($kit_id, '_elementor_page_settings', true);
-            $log[] = "[E] Elementor kit {$kit_id}, has custom_logo: " . (is_array($kit_meta) && isset($kit_meta['custom_logo']) ? 'YES' : 'NO');
             if (is_array($kit_meta) && array_key_exists('custom_logo', $kit_meta)) {
                 $kit_meta['custom_logo'] = ['id' => $id, 'url' => $url];
                 update_post_meta($kit_id, '_elementor_page_settings', $kit_meta);
                 $updated[] = 'elementor:kit';
-                $log[] = "    → Updated Elementor kit logo";
+                $log[] = "[E] Elementor kit logo updated";
             }
         }
 
@@ -317,10 +298,7 @@ class MediaController {
         }
         if (empty($xkey)) $xkey = $_SERVER['HTTP_X_IGNYOUS_KEY'] ?? '';
         if (!empty($xkey) && hash_equals($stored, trim($xkey))) return true;
-        if (preg_match('/Bearer\s+(.+)/i', $auth)) {
-            preg_match('/Bearer\s+(.+)/i', $auth, $m);
-            return hash_equals($stored, trim($m[1]));
-        }
+        if (preg_match('/Bearer\s+(.+)/i', $auth, $m)) return hash_equals($stored, trim($m[1]));
         return false;
     }
 }
