@@ -634,13 +634,23 @@ class OptionsController {
      *   search_text – text that identifies the element to remove (e.g. "Service 4")
      *   level       – "column"|"container"|"widget" (default: auto-detect deepest column/container)
      */
+    /**
+     * Remove a structural Elementor element by:
+     *   - element_id: exact Elementor data-id (most precise, from page source)
+     *   - search_text: finds the element whose subtree contains this text
+     *   - nth + search_text: removes the Nth element among siblings matching search_text
+     *
+     * Body: { post_id, search_text?, element_id?, nth? }
+     */
     public function remove_elementor_element($request) {
         $body        = $request->get_json_params();
         $post_id     = (int) ($body['post_id']     ?? 0);
         $search_text = trim($body['search_text']   ?? '');
+        $element_id  = trim($body['element_id']    ?? '');
+        $nth         = (int) ($body['nth']          ?? 0);
 
-        if (!$post_id)     return new \WP_Error('missing_post_id',     'post_id required',    ['status' => 400]);
-        if (!$search_text) return new \WP_Error('missing_search_text', 'search_text required', ['status' => 400]);
+        if (!$post_id) return new \WP_Error('missing_post_id', 'post_id required', ['status' => 400]);
+        if (!$search_text && !$element_id) return new \WP_Error('missing_target', 'search_text or element_id required', ['status' => 400]);
 
         $raw  = get_post_meta($post_id, '_elementor_data', true);
         $data = json_decode($raw, true);
@@ -648,15 +658,20 @@ class OptionsController {
             return new \WP_Error('no_elementor_data', 'No Elementor data for this post', ['status' => 404]);
         }
 
-        $result = $this->remove_element_containing_text($data, $search_text);
-        if (!$result['removed']) {
-            return ['success' => false, 'message' => "No element containing \"$search_text\" found in post $post_id"];
+        // Try element_id first (exact match), then text search
+        if ($element_id) {
+            $result = $this->remove_element_by_id($data, $element_id);
+        } else {
+            $result = $this->remove_element_by_text($data, $search_text, $nth);
         }
 
-        // Persist
+        if (!$result['removed']) {
+            $target = $element_id ?: "\"$search_text\"";
+            return ['success' => false, 'message' => "No element matching $target found in post $post_id"];
+        }
+
         update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($result['data'])));
 
-        // Clear all Elementor caches
         delete_post_meta($post_id, '_elementor_css');
         delete_post_meta($post_id, '_elementor_page_assets');
         do_action('elementor/core/files/clear_cache');
@@ -670,70 +685,99 @@ class OptionsController {
         }
 
         return [
-            'success'       => true,
-            'post_id'       => $post_id,
-            'page_title'    => get_the_title($post_id),
-            'search_text'   => $search_text,
-            'removed_type'  => $result['removed_type'],
+            'success'      => true,
+            'post_id'      => $post_id,
+            'page_title'   => get_the_title($post_id),
+            'search_text'  => $search_text,
+            'element_id'   => $element_id,
+            'removed_type' => $result['removed_type'],
         ];
     }
 
     /**
-     * Recursively walk Elementor elements. When we find an element whose JSON subtree
-     * contains $search_text, remove that element from its parent array.
-     * We prefer removing at the column/container level (not the widget itself) so the
-     * whole "service box" including its wrapper disappears.
-     *
-     * Returns: ['removed' => bool, 'data' => array, 'removed_type' => string]
+     * Remove an element by its exact Elementor data-id.
      */
-    private function remove_element_containing_text(array $elements, string $needle): array {
-        $lower_needle = strtolower($needle);
-
-        for ($i = 0, $n = count($elements); $i < $n; $i++) {
-            $el = $elements[$i];
-
-            // Does this element's subtree contain the needle?
-            if (stripos(json_encode($el), $needle) === false) continue;
-
-            // It contains the text. Decide whether to remove this element or recurse deeper.
-            // We remove at this level if:
-            //   (a) this is a column/container/inner-section (structural wrapper), OR
-            //   (b) we can't go deeper (no children or children don't narrow it down)
-            $type = $el['elType'] ?? '';
-            $is_structural = in_array($type, ['column', 'container', 'inner-section', 'section'], true);
-
-            // Check if only ONE child subtree contains the needle (can go deeper)
-            $matching_children = 0;
-            $children = $el['elements'] ?? [];
-            foreach ($children as $child) {
-                if (stripos(json_encode($child), $needle) !== false) $matching_children++;
-            }
-
-            if ($is_structural && $matching_children === 0) {
-                // The text is in this structural element itself — remove it
-                $removed_el = array_splice($elements, $i, 1);
+    private function remove_element_by_id(array $elements, string $id): array {
+        for ($i = 0; $i < count($elements); $i++) {
+            if (($elements[$i]['id'] ?? '') === $id) {
+                $type = $elements[$i]['elType'] ?? 'element';
+                array_splice($elements, $i, 1);
                 return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
             }
-
-            if (!$is_structural || $matching_children > 1) {
-                // This is a widget or text spans multiple children — remove this whole element
-                $removed_el = array_splice($elements, $i, 1);
-                return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
-            }
-
-            // Recurse: only one child subtree has the match
+            $children = $elements[$i]['elements'] ?? [];
             if (!empty($children)) {
-                $inner = $this->remove_element_containing_text($children, $needle);
+                $inner = $this->remove_element_by_id($children, $id);
                 if ($inner['removed']) {
-                    // If the child was a column/container, remove it from THIS level instead
-                    // so we take out the whole wrapper, not just an inner widget
-                    if ($is_structural) {
-                        $removed_el = array_splice($elements, $i, 1);
-                        return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
-                    }
                     $elements[$i]['elements'] = $inner['data'];
                     return ['removed' => true, 'data' => $elements, 'removed_type' => $inner['removed_type']];
                 }
+            }
+        }
+        return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
+    }
+
+    /**
+     * Remove an element by search text, using a smart "sibling" heuristic.
+     *
+     * The rule: remove at the level where MULTIPLE siblings exist and exactly ONE
+     * of them contains the needle. This correctly handles:
+     *
+     *   Case A — widgets in a shared container (4 image-box widgets, remove 1)
+     *   Case B — each service in its own column (4 columns, each wrapping 1 widget)
+     *
+     * We never remove a parent container when we should be removing a sibling widget.
+     *
+     * $nth: if > 0, remove the Nth element among all matched siblings (1-based).
+     */
+    private function remove_element_by_text(array $elements, string $needle, int $nth = 0): array {
+        // Count how many elements at THIS level contain the needle
+        $match_indices = [];
+        for ($i = 0; $i < count($elements); $i++) {
+            if (stripos(json_encode($elements[$i]), $needle) !== false) {
+                $match_indices[] = $i;
+            }
+        }
+
+        $match_count = count($match_indices);
+
+        if ($match_count === 0) {
+            return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
+        }
+
+        // Multiple siblings contain the needle — remove the Nth one (default: last/first match)
+        if ($match_count > 1) {
+            // If nth specified, use it (1-based). Otherwise remove the last match.
+            $target_idx = $nth > 0 ? ($match_indices[$nth - 1] ?? end($match_indices)) : end($match_indices);
+            $type = $elements[$target_idx]['elType'] ?? 'element';
+            array_splice($elements, $target_idx, 1);
+            return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
+        }
+
+        // Exactly ONE element at this level contains the needle
+        $idx      = $match_indices[0];
+        $el       = $elements[$idx];
+        $children = $el['elements'] ?? [];
+
+        // Count how many children narrow it down further
+        $child_match_count = 0;
+        foreach ($children as $c) {
+            if (stripos(json_encode($c), $needle) !== false) $child_match_count++;
+        }
+
+        // If there are multiple elements at this level (siblings exist), this element
+        // is the target — remove it. It's one card among many cards.
+        if (count($elements) > 1) {
+            $type = $el['elType'] ?? 'element';
+            array_splice($elements, $idx, 1);
+            return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
+        }
+
+        // Only one element at this level — it's a wrapper. Recurse into children.
+        if (!empty($children)) {
+            $inner = $this->remove_element_by_text($children, $needle, $nth);
+            if ($inner['removed']) {
+                $elements[$idx]['elements'] = $inner['data'];
+                return ['removed' => true, 'data' => $elements, 'removed_type' => $inner['removed_type']];
             }
         }
 

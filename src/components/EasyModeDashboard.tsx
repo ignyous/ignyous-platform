@@ -552,11 +552,17 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return result
 
       } else if (type === 'remove_element') {
-        const snapId = await takeSnapshot('content_remove', `Remove element containing: "${action.search_text}"`, { search_text: action.search_text })
+        const snapId = await takeSnapshot('content_remove', `Remove element: "${action.search_text || action.element_id}"`, { search_text: action.search_text, element_id: action.element_id })
         if (snapId) setLastSnapshotId(snapId)
         const r = await fetch('/api/scan/content', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'remove_element', siteUrl: cleanUrl, apiKey, post_id: action.post_id || action.page_id, search_text: action.search_text }),
+          body: JSON.stringify({
+            action: 'remove_element', siteUrl: cleanUrl, apiKey,
+            post_id:     action.post_id || action.page_id,
+            search_text: action.search_text || null,
+            element_id:  action.element_id  || null,
+            nth:         action.nth          || 0,
+          }),
         })
         const d = await r.json()
         if (d.success) {

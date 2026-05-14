@@ -55,16 +55,18 @@ export async function POST(req: NextRequest) {
 
   // ── Remove Elementor element ───────────────────────────────────
   if (action === 'remove_element') {
-    const pid  = post_id || page_id
-    const stxt = search_text || find
-    if (!pid || !stxt) return NextResponse.json({ error: 'post_id and search_text required' }, { status: 400 })
+    const pid        = post_id || page_id
+    const stxt       = search_text || find
+    const element_id = body.element_id || null
+    const nth        = body.nth        || 0
+    if (!pid || (!stxt && !element_id)) return NextResponse.json({ error: 'post_id and (search_text or element_id) required' }, { status: 400 })
 
     let rawStatus = 0, rawText = '', result: any = null
     try {
       const r = await fetch(`${base}/wp-json/ignyous/v1/elementor/remove-element`, {
         method: 'POST',
         headers: authHeaders(apiKey),
-        body: JSON.stringify({ post_id: pid, search_text: stxt, api_key: apiKey }),
+        body: JSON.stringify({ post_id: pid, search_text: stxt, element_id, nth, api_key: apiKey }),
         signal: AbortSignal.timeout(30000),
       })
       rawStatus = r.status
