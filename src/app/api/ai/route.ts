@@ -215,17 +215,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: 'No response from AI. Please try again.' })
     }
 
-    const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
-    const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
+    const actionMatch  = raw.match(/```action\\n([\\s\\S]*?)\\n```/)
+    const optionsMatch = raw.match(/```options\\n([\\s\\S]*?)\\n```/)
 
     let action: any  = null
     let options: any = null
+    let findContext: { find: string; page_id?: number; page_title?: string } | null = null
     try { if (actionMatch?.[1])  action  = JSON.parse(actionMatch[1])  } catch { /* ignore bad JSON */ }
     try { if (optionsMatch?.[1]) options = JSON.parse(optionsMatch[1]) } catch { /* ignore bad JSON */ }
 
+    // If options present, try to extract the find text from user's message (quoted text)
+    if (options && !findContext) {
+      const q = String(lastUserMsg).match(/["""‘’'\u201C\u201D]([^"""‘’'\u201C\u201D]{3,200})["""‘’'\u201C\u201D]/)
+      if (q) findContext = { find: q[1] }
+    }
+
     const text = raw
-      .replace(/```action[\s\S]*?```/g, '')
-      .replace(/```options[\s\S]*?```/g, '')
+      .replace(/```action[\\s\\S]*?```/g, '')
+      .replace(/```options[\\s\\S]*?```/g, '')
       .trim()
 
     // ── Activity log ────────────────────────────────────────────
@@ -249,7 +256,7 @@ export async function POST(req: NextRequest) {
       console.error('[logActivity]', logErr?.message)
     }
 
-    return NextResponse.json({ text, action, options, routineUsed: false })
+    return NextResponse.json({ text, action, options, findContext, routineUsed: false })
 
   } catch (err: any) {
     const detail = err?.message ?? String(err)

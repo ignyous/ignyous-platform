@@ -10,6 +10,9 @@ interface Message {
   content: string
   image?: { base64: string; mediaType: string; name: string }
   options?: Array<{ label: string; value?: string }>
+  findText?: string        // original text being replaced (for option buttons)
+  findPageId?: number      // page scope for the replace
+  findPageTitle?: string
   ts: Date
 }
 
@@ -661,10 +664,13 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         : ''
 
       setMessages(prev => [...prev, {
-        role:    'assistant',
-        content: finalText + warningText,
-        options: data.options || undefined,
-        ts:      new Date(),
+        role:         'assistant',
+        content:      finalText + warningText,
+        options:      data.options || undefined,
+        findText:     data.findContext?.find       || undefined,
+        findPageId:   data.findContext?.page_id    || undefined,
+        findPageTitle:data.findContext?.page_title || undefined,
+        ts:           new Date(),
       }])
     } catch (err: any) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Something went wrong: ${err?.message || err}`, ts: new Date() }])
@@ -929,8 +935,26 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                             {msg.options && msg.options.length > 0 && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                                 {msg.options.map((opt, oi) => (
-                                  <button key={oi} onClick={() => {
+                                  <button key={oi} onClick={async () => {
                                     const val = opt.value || opt.label
+                                    // If we have a findText, execute replace directly — no chat round-trip
+                                    if (msg.findText) {
+                                      setMessages(prev => [...prev, { role: 'user', content: opt.label, ts: new Date() }])
+                                      setSending(true)
+                                      const result = await executeAction({
+                                        type:       'replace_content',
+                                        find:       msg.findText,
+                                        replace:    val,
+                                        page_id:    msg.findPageId    || null,
+                                        page_title: msg.findPageTitle || '',
+                                      }, null)
+                                      setMessages(prev => [...prev, { role: 'assistant', content: result || '✅ Done', ts: new Date() }])
+                                      setSending(false)
+                                      setLastSnapshotId(null)
+                                      setTimeout(() => setPreviewKey(k => k + 1), 800)
+                                      return
+                                    }
+                                    // Fallback: send as chat message
                                     send(val)
                                   }} style={{ textAlign: 'left', background: S.primaryLight, color: S.primaryDark, border: `1px solid ${S.border}`, borderRadius: 12, padding: '9px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                                     {opt.label}

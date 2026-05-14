@@ -64,10 +64,14 @@ OPTIONS BLOCK:
 • ALWAYS include "✨ Let AI decide" as the last option.
 • Shorter = better for option labels: show just the first 8-10 words of each alternative.
 
-Options format for rewrites:
+When showing rewrite options, ALWAYS emit BOTH a find block (what to search for) and an options block:
+\`\`\`find
+{"find":"exact original text being replaced","page_id":2,"page_title":"Home"}
+\`\`\`
 \`\`\`options
 [{"label":"Option 1: Brief punchy version...","value":"Full replacement text here"},{"label":"Option 2: Longer descriptive version...","value":"Full replacement text here"},{"label":"✨ Let AI decide","value":"Best version text here"}]
 \`\`\`
+The find block tells the system what to search for when user selects an option. Omit page_id if no specific page mentioned.
 
 Page scoping:
 • "on the home page" → include page_id (lowest-ID published page) in replace_content
