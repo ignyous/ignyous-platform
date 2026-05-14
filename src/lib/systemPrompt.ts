@@ -155,6 +155,59 @@ Home Page ID: ${homePageId ?? 'unknown'} (always use this when user says "home p
 Pages: ${pageList}
 Page Content Index (what's on each page):
 ${pageIndexStr}`)
+
+    // Content Graph — structural awareness of sections/widgets on each page
+    const cg = (profile as any).content_graph
+    if (cg?.pages?.length) {
+      const pageStructures = cg.pages.map((pg: any) => {
+        const fp = pg.is_front_page ? ' (FRONT PAGE)' : ''
+        const secs = (pg.sections || []).map((s: any) => {
+          let line = `    ${s.position || '?'}. [${s.type}] ${s.label}`
+          if (s.item_count > 0) line += ` (${s.item_count} items)`
+          if (s.items?.length) {
+            line += ': ' + s.items.map((i: any) => `"${i.title}"`).join(', ')
+          }
+          if (s.element_id) line += ` [id:${s.element_id}]`
+          return line
+        }).join('\n')
+        return `  [${pg.id}] ${pg.title}${fp} (${pg.builder}):\n${secs || '    (no sections detected)'}`
+      }).join('\n')
+
+      let graphBlock = `== SITE STRUCTURE (Content Graph) ==\n${pageStructures}`
+
+      // Global content locations
+      const phones = cg.global_content?.phones
+      if (phones?.length) {
+        graphBlock += '\n\nPhone numbers found:\n' + phones.map((p: any) =>
+          `  ${p.value} → ${p.found_in.map((l: any) => l.page_title || l.location || 'unknown').join(', ')}`
+        ).join('\n')
+      }
+
+      // Capabilities
+      if (cg.capabilities) {
+        const caps = cg.capabilities
+        graphBlock += '\n\nCapabilities: ' + [
+          caps.can_edit_text       ? 'text✓' : 'text✗',
+          caps.can_remove_elements ? 'remove-elements✓' : 'remove✗',
+          caps.can_reorder_elements? 'reorder✓' : 'reorder✗',
+          caps.can_edit_forms      ? 'forms✓' : 'forms✗',
+          caps.can_edit_seo        ? 'seo✓' : 'seo✗',
+          caps.can_clear_cache     ? 'cache✓' : 'cache✗',
+        ].join(' | ')
+      }
+
+      p.push(graphBlock)
+
+      // When content graph is present, add structural editing rules
+      p.push(`STRUCTURAL EDITING (content graph is loaded):
+• You know every section, widget, and element ID on every page. Use this knowledge directly.
+• "remove the 4th service box" → look at the content graph, find the services section, identify the 4th item by title, emit remove_element with that title as search_text and the page_id.
+• "swap the 1st and 3rd service" → you know their titles from the graph. Emit reorder actions.
+• "change the hero heading" → you know the current heading from the graph. Emit replace_content with the exact text.
+• NEVER ask "what is the title of the 4th box" — you already have it in the content graph.
+• NEVER ask for the page ID — you have it in the graph.
+• If the user references a section type (services, testimonials, pricing) → match it from the graph.`)
+    }
   }
 
   return p.join('\n\n')

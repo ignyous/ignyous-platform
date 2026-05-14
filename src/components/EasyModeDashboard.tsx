@@ -158,6 +158,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const [lastSnapshotId, setLastSnapshotId]   = useState<string | null>(null)
   const [siteInfo, setSiteInfo]           = useState<any>(null)
   const [pages, setPages]               = useState<any[]>([])
+  const [contentGraph, setContentGraph] = useState<any>(null)
   const [sites, setSites]               = useState<SiteEntry[]>([])
   const [showSiteDrop, setShowSiteDrop] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -307,6 +308,25 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       .then(r => r.ok ? setSiteStatus('live') : setSiteStatus('offline'))
       .catch(() => setSiteStatus('offline'))
 
+    // Auto-scan content graph (builds site intelligence)
+    // Use cached version from DB memory first, then refresh if stale
+    const cachedGraph = siteMemory?.contentGraph
+    const graphAge    = siteMemory?.contentGraphScannedAt ? (Date.now() - new Date(siteMemory.contentGraphScannedAt).getTime()) / 3600000 : 999
+    if (cachedGraph && graphAge < 24) {
+      setContentGraph(cachedGraph)
+    } else {
+      // Trigger fresh scan
+      fetch('/api/content-graph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteUrl: cleanUrl, apiKey }),
+        signal: AbortSignal.timeout(30000),
+      })
+        .then(r => r.json())
+        .then(d => { if (d.success && d.contentGraph) setContentGraph(d.contentGraph) })
+        .catch(() => {})
+    }
+
     setTimeout(() => inputRef.current?.focus(), 250)
   }, [siteUrl, apiKey, cleanUrl, siteKey])
 
@@ -364,6 +384,19 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       active_pages:       activeP.length,
       draft_pages:        draftP.length,
       mode:               'easy',
+      // Content graph — full structural awareness of every page's sections/widgets
+      content_graph:      contentGraph ? {
+        pages:          (contentGraph.pages || []).slice(0, 10).map((p: any) => ({
+          id: p.id, title: p.title, is_front_page: p.is_front_page, builder: p.builder,
+          sections: (p.sections || []).map((s: any) => ({
+            element_id: s.element_id, type: s.type, label: s.label,
+            item_count: s.item_count, items: s.items?.slice(0, 8),
+            preview: s.preview?.slice(0, 80),
+          })),
+        })),
+        global_content: contentGraph.global_content || {},
+        capabilities:   contentGraph.capabilities   || {},
+      } : null,
       instruction: [
         'You have FULL site context including page_content_index with text previews from each page.',
         'Use page_content_index to locate content directly — if text appears in a preview, use replace_content immediately.',

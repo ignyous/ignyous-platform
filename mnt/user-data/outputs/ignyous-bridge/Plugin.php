@@ -66,6 +66,7 @@ class IgnyousBridge {
         (new \Ignyous\Api\MediaResizeController())->register_routes();
         (new \Ignyous\Api\OptionsController())->register_routes();
         (new \Ignyous\Api\CacheController())->register_routes();
+        (new \Ignyous\Api\ContentGraphScanner())->register_routes();
         (new \Ignyous\Api\SnapshotController())->register_routes();
         (new \Ignyous\Api\ThemeController())->register_routes();
     }
