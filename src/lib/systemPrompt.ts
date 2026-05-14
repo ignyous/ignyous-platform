@@ -136,13 +136,25 @@ If 1 form → act directly. If multiple → show options. After creating, embed 
 NO HALLUCINATION: NEVER claim a change was made without an action block in this response. When user says "use" or "yes", emit the actual action — not just acknowledgement.`)
 
   if (profile) {
-    const pluginNames = (profile.plugins || []).filter(p => p.active).slice(0, 20).map(p => p.name || p.slug).join(', ')
-    const pageList    = (profile.pages || []).slice(0, 12).map(p => `${p.id}:${p.title}(${p.status})`).join(' | ')
+    const pluginNames  = (profile.plugins || []).filter(p => p.active).slice(0, 20).map(p => p.name || p.slug).join(', ')
+    const publishedPages = (profile.pages || []).filter(p => p.status === 'publish')
+    const homePageId   = publishedPages.length ? publishedPages.reduce((min: any, p: any) => p.id < min.id ? p : min, publishedPages[0])?.id : null
+    const pageList     = (profile.pages || []).slice(0, 15).map((p: any) => `${p.id}:${p.title}(${p.status})`).join(' | ')
+
+    // Page content index — text snippets from each page so AI knows what's on each page
+    const pageIndex    = ((profile as any).page_content_index || []).slice(0, 10)
+    const pageIndexStr = pageIndex.length
+      ? pageIndex.map((p: any) => `  [${p.id}] ${p.title}: ${p.preview || p.text || '(no preview)'}`.slice(0, 120)).join('\n')
+      : '  (not yet scanned — will build on next load)'
+
     p.push(`== LIVE SITE CONTEXT ==
 Site: ${profile.site_name} | ${profile.site_url}
 WP: ${profile.wp_version} | Theme: ${profile.theme} | Builder: ${builder}
 Plugins (${(profile.active_plugins||[]).length}): ${pluginNames}
-Pages: ${pageList}`)
+Home Page ID: ${homePageId ?? 'unknown'} (always use this when user says "home page", "homepage", or "main page")
+Pages: ${pageList}
+Page Content Index (what's on each page):
+${pageIndexStr}`)
   }
 
   return p.join('\n\n')

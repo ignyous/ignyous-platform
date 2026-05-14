@@ -257,20 +257,42 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: 'pages', method: 'GET' }),
     })
       .then(r => r.json())
-      .then(d => {
+      .then(async d => {
         const raw = d?.data?.pages || d?.pages || []
         setPages(raw)
-        // Build site content index — text snippets per page for fast content location
-        const index = raw.slice(0, 20).map((p: any) => ({
-          id:    p.id,
-          title: p.title,
-          slug:  p.slug || '',
-          url:   p.link  || '',
-          text:  p.content
-            ? p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
-            : '',
+
+        // Build site content index — fetch each page's text content for AI context
+        // Uses cached version first, then fetches fresh if stale/missing
+        let existingIndex: any[] = []
+        try { existingIndex = JSON.parse(sessionStorage.getItem(`ignyous_page_index_${siteKey}`) || '[]') } catch {}
+
+        const index = await Promise.all(raw.slice(0, 15).map(async (p: any) => {
+          // Use cached entry if available and page title matches
+          const cached = existingIndex.find((c: any) => c.id === p.id)
+          if (cached?.preview) return cached
+
+          // If page has content in the listing response, use it
+          let preview = ''
+          if (p.content) {
+            preview = p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)
+          } else {
+            // Fetch individual page content from bridge
+            try {
+              const pr = await fetch('/api/wordpress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: `pages/${p.id}`, method: 'GET' }),
+                signal: AbortSignal.timeout(8000),
+              })
+              const pd = await pr.json()
+              const raw_content = pd?.data?.content || pd?.content || ''
+              preview = raw_content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)
+            } catch { preview = '' }
+          }
+          return { id: p.id, title: p.title, slug: p.slug || '', url: p.link || '', preview }
         }))
-        // Save to app DB (persists across sessions) + sessionStorage (instant local access)
+
+        // Persist across sessions
         saveMemory({ page_content_index: index })
         try { sessionStorage.setItem(`ignyous_page_index_${siteKey}`, JSON.stringify(index)) } catch {}
       })
@@ -337,7 +359,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       pages:              pages.slice(0, 12).map((p: any) => ({ id: p.id, title: p.title, status: p.status })),
       page_content_index: pageIndex.slice(0, 10).map((p: any) => ({
         id: p.id, title: p.title,
-        preview: (p.text || '').slice(0, 150),
+        preview: (p.preview || p.text || '').slice(0, 200),
       })),
       active_pages:       activeP.length,
       draft_pages:        draftP.length,
