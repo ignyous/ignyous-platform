@@ -342,6 +342,11 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return null
 
       } else if (type === 'update_page' || type === 'create_page' || type === 'update_site_options') {
+        // Snapshot before page changes
+        if (type === 'update_page' && action.pageId) {
+          const snapId = await takeSnapshot('post_content', `Page update: ID ${action.pageId}${action.title ? ' – ' + action.title : ''}`, { post_id: action.pageId })
+          if (snapId) setLastSnapshotId(snapId)
+        }
         await fetch('/api/wordpress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...action, siteUrl: cleanUrl, apiKey }) })
         await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
         return null
@@ -422,6 +427,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           : `❌ Update failed: ${d.error}`
 
       } else if (type === 'elementor_logo_size') {
+        const snapId = await takeSnapshot('elementor_kit', `Elementor logo size: ${action.width_px ? action.width_px + 'px' : action.scale_percent + '%'}`)
+        if (snapId) setLastSnapshotId(snapId)
         const r = await fetch('/api/wordpress/elementor-logo-size', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ siteUrl: cleanUrl, apiKey, widthPx: action.width_px, scalePercent: action.scale_percent }),
@@ -623,7 +630,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             <button style={{ border: 0, borderRadius: 9, background: S.sidebarAccent, color: S.primaryDark, height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 600, cursor: 'default', textAlign: 'left' }}>
               <NavIcon>▱</NavIcon> Chat
             </button>
-            <button onClick={() => { setMessages([]); try { localStorage.removeItem(`ignyous_chat_${siteKey}`) } catch {} }} style={{ border: 0, borderRadius: 9, background: 'transparent', color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' as const, width: '100%' }}>
+            <button onClick={() => { setMessages([]); try { sessionStorage.removeItem(`ignyous_chat_${siteKey}`) } catch {} }} style={{ border: 0, borderRadius: 9, background: 'transparent', color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' as const, width: '100%' }}>
               <NavIcon>＋</NavIcon> New Chat
             </button>
             <Link href="/overview" style={{ textDecoration: 'none', borderRadius: 9, color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500 }}>
@@ -631,6 +638,9 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             </Link>
             <Link href="/activity" style={{ textDecoration: 'none', borderRadius: 9, color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500 }}>
               <NavIcon>↺</NavIcon> History
+            </Link>
+            <Link href="/backups" style={{ textDecoration: 'none', borderRadius: 9, color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500 }}>
+              <NavIcon>📦</NavIcon> Backups
             </Link>
             <Link href="/settings" style={{ textDecoration: 'none', borderRadius: 9, color: 'hsl(224 15% 38%)', height: 36, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', fontSize: 13, fontWeight: 500 }}>
               <NavIcon>⚙</NavIcon> Settings
