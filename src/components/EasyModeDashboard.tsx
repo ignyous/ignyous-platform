@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import ReactMarkdown from 'react-markdown'
@@ -177,7 +177,27 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const displayUser = session?.user?.name || session?.user?.email?.split('@')[0] || userName || 'Account'
   const userInitial = displayUser[0]?.toUpperCase() || 'A'
 
-  // ── Session chat — persists through mode switches, clears on page reload ──
+  // ── Site memory: load from app DB on mount ────────────────────
+  const [siteMemory, setSiteMemory] = useState<Record<string, any> | null>(null)
+
+  useEffect(() => {
+    if (!cleanUrl) return
+    // Load persisted site knowledge from our app DB
+    fetch(`/api/sites/memory?siteUrl=${encodeURIComponent(cleanUrl)}`)
+      .then(r => r.json())
+      .then(d => { if (d.memory) setSiteMemory(d.memory) })
+      .catch(() => {})
+  }, [cleanUrl])
+
+  // Save memory to DB (deep-merges, doesn't overwrite unrelated keys)
+  const saveMemory = useCallback(async (updates: Record<string, any>) => {
+    setSiteMemory(prev => ({ ...(prev || {}), ...updates }))
+    await fetch('/api/sites/memory', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteUrl: cleanUrl, memory: updates }),
+    }).catch(() => {})
+  }, [cleanUrl])
   useEffect(() => {
     if (!siteKey || messages.length === 0) return
     try {
@@ -203,8 +223,21 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         if (d.profile) setSiteInfo(d.profile)
         else if (d.site) setSiteInfo(d)
         else setSiteInfo(d)
-        // Seed known plugin knowledge to the site DB when we detect those plugins
-        const plugins = (d.profile?.plugins || d.plugins || []).map((p: any) => p.slug || '')
+
+        const profile = d.profile || d
+        const plugins = (profile?.plugins || []).map((p: any) => p.slug || '')
+
+        // Save site profile to app DB memory (persists across sessions)
+        saveMemory({
+          builder:           profile?.builder || profile?.site?.builder || '',
+          theme:             profile?.theme?.name || profile?.site?.theme || '',
+          wp_version:        profile?.wordpress?.version || profile?.site?.wp_version || '',
+          logo_attachment_id: profile?.logo?.id || profile?.site?.logo_id || null,
+          elementor_kit_id:  profile?.elementor_kit_id || null,
+          active_plugins:    plugins.slice(0, 40),
+        })
+
+        // Seed Elementor plugin knowledge to WordPress DB
         if (plugins.some((s: string) => s.includes('elementor'))) {
           fetch('/api/wordpress/plugin-knowledge', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -224,18 +257,18 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       .then(d => {
         const raw = d?.data?.pages || d?.pages || []
         setPages(raw)
-        // Build site content index — store text snippets per page so AI can find
-        // content without scanning. Stored in sessionStorage for this session.
+        // Build site content index — text snippets per page for fast content location
         const index = raw.slice(0, 20).map((p: any) => ({
           id:    p.id,
           title: p.title,
           slug:  p.slug || '',
           url:   p.link  || '',
-          // Extract short text samples from page content (strip HTML tags)
           text:  p.content
             ? p.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
             : '',
         }))
+        // Save to app DB (persists across sessions) + sessionStorage (instant local access)
+        saveMemory({ page_content_index: index })
         try { sessionStorage.setItem(`ignyous_page_index_${siteKey}`, JSON.stringify(index)) } catch {}
       })
       .catch(() => {})
@@ -276,36 +309,39 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
 
   // ── Build rich siteContext for AI (includes pages) ─────────────
   function buildSiteContext() {
-    const theme   = siteInfo?.theme?.name   || siteInfo?.site?.theme  || ''
-    const builder = siteInfo?.builder       || ''
+    const theme   = siteInfo?.theme?.name || siteInfo?.site?.theme || siteMemory?.theme || ''
+    const builder = siteInfo?.builder || siteMemory?.builder || ''
     const activeP = pages.filter((p: any) => p.status === 'publish')
     const draftP  = pages.filter((p: any) => p.status !== 'publish')
 
-    // Load cached page content index (built on connect, text snippets per page)
+    // Page content index: sessionStorage (instant) → DB memory (persisted) → live pages
     let pageIndex: any[] = []
     try { pageIndex = JSON.parse(sessionStorage.getItem(`ignyous_page_index_${siteKey}`) || '[]') } catch {}
+    if (!pageIndex.length && siteMemory?.page_content_index) pageIndex = siteMemory.page_content_index
 
     return {
       site_name:          siteName,
       site_url:           cleanUrl,
-      wp_version:         wpVersion,
-      theme:              theme,
-      builder:            builder,
-      logo_attachment_id: siteInfo?.logo?.id || siteInfo?.site?.logo_id || null,
+      wp_version:         siteInfo?.wordpress?.version || siteMemory?.wp_version || '',
+      theme,
+      builder,
+      logo_attachment_id: siteInfo?.logo?.id || siteMemory?.logo_attachment_id || null,
       plugin_count:       pluginCount,
       plugins:            activePlugins.slice(0, 25).map((p: any) => p.name || p.slug),
+      // DB-persisted knowledge about this site's specific config
+      known_options:      siteMemory?.known_options || {},
+      theme_css_rules:    siteMemory?.theme_css_rules || {},
       pages:              pages.slice(0, 12).map((p: any) => ({ id: p.id, title: p.title, status: p.status })),
-      // Content index: page titles + text snippets for direct content location
       page_content_index: pageIndex.slice(0, 10).map((p: any) => ({
         id: p.id, title: p.title,
-        preview: p.text ? p.text.slice(0, 150) : '',
+        preview: (p.text || '').slice(0, 150),
       })),
       active_pages:       activeP.length,
       draft_pages:        draftP.length,
       mode:               'easy',
-      instruction:   [
-        'You have FULL site context including page_content_index with text from each page.',
-        'Use page_content_index to find content BEFORE scanning — if text appears in a page preview, use replace_content directly.',
+      instruction: [
+        'You have FULL site context including page_content_index with text previews from each page.',
+        'Use page_content_index to locate content directly — if text appears in a preview, use replace_content immediately.',
         'Do NOT emit scan_site. Do NOT narrate — emit actions immediately.',
       ].join(' '),
     }
@@ -452,6 +488,14 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         const r   = await fetch(`/api/wordpress/theme-css?siteUrl=${encodeURIComponent(cleanUrl)}&apiKey=${encodeURIComponent(apiKey)}&query=${encodeURIComponent(q)}`)
         const d   = await r.json()
         if (!d.success || !d.matches?.length) return `No CSS rules found matching "${q}" in theme files.`
+
+        // Persist discovered CSS rules to site memory so we don't re-scan next time
+        if (d.matches.length > 0) {
+          const cssRules = siteMemory?.theme_css_rules || {}
+          cssRules[q]    = d.matches
+          saveMemory({ theme_css_rules: cssRules })
+        }
+
         const lines = d.matches.map((m: any) =>
           `**${m.source}** — \`${m.selector}\`\n\`\`\`css\n${m.selector} { ${m.declaration} }\n\`\`\``
         ).join('\n\n')
