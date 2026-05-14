@@ -19,33 +19,30 @@ export async function POST(req: NextRequest) {
 
   // ── Scan action ────────────────────────────────────────────
   if (action === 'scan' || !action) {
-    const result = await bridgeCall(cleanUrl, apiKey, 'scan/content', 'POST', {
-      query: query || '',
-      pattern: pattern || '',
-      scope: scope || 'all',
-    })
+    // content/find is a GET endpoint — call directly with fetch
+    const cleanBase = cleanUrl.replace(/^(?!https?:\/\/)/, 'https://')
+    const findUrl   = `${cleanBase}/wp-json/ignyous/v1/content/find?query=${encodeURIComponent(query || '')}&api_key=${encodeURIComponent(apiKey)}`
+    let result: any = null
+    try {
+      const r = await fetch(findUrl, {
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'X-Ignyous-Key': apiKey },
+        signal: AbortSignal.timeout(15000),
+      })
+      result = r.ok ? await r.json() : null
+    } catch {}
 
     if (!result || !result.success) {
-      return NextResponse.json({
-        success: false,
-        error: 'Scanner not available. Make sure the Ignyous AI bridge plugin is updated.',
-      })
+      return NextResponse.json({ success: false, error: 'Scanner not available. Make sure the bridge plugin is updated.' })
     }
-
     return NextResponse.json(result)
   }
 
   // ── Replace action ─────────────────────────────────────────
   if (action === 'replace') {
-    if (!find) {
-      return NextResponse.json({ error: 'find text required' }, { status: 400 })
-    }
+    if (!find) return NextResponse.json({ error: 'find text required' }, { status: 400 })
 
-    const result = await bridgeCall(cleanUrl, apiKey, 'scan/replace', 'POST', {
-      find,
-      replace: replace || '',
-      scope: scope || 'all',
-      targets: targets || [],
+    const result = await bridgeCall(cleanUrl, apiKey, 'content/replace', 'POST', {
+      find, replace: replace || '', scope: scope || 'all', targets: targets || [], api_key: apiKey,
     })
 
     if (!result || !result.success) {

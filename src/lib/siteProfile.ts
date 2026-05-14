@@ -4,11 +4,11 @@
 import { SiteProfile } from './systemPrompt'
 
 export async function bridgeCall(siteUrl: string, apiKey: string, endpoint: string, method = 'GET', body?: any) {
-  const base = siteUrl.replace(/\/$/, '')
+  const base = siteUrl.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
   try {
     const res = await fetch(`${base}/wp-json/ignyous/v1/${endpoint}`, {
       method,
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'X-Ignyous-Key': apiKey, 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(15000),
     })
