@@ -27,12 +27,11 @@ function detectPlugin(plugins: any[], ...slugParts: string[]): string | undefine
 }
 
 export async function buildSiteProfile(siteUrl: string, apiKey: string): Promise<SiteProfile | null> {
-  // Parallel fetch: site info, pages, plugins, forms
-  const [siteRes, pagesRes, pluginsRes, formsRes] = await Promise.all([
+  // Parallel fetch: site info, pages, plugins (forms endpoint removed — not implemented)
+  const [siteRes, pagesRes, pluginsRes] = await Promise.all([
     bridgeCall(siteUrl, apiKey, 'site'),
     bridgeCall(siteUrl, apiKey, 'pages'),
     bridgeCall(siteUrl, apiKey, 'plugins'),
-    bridgeCall(siteUrl, apiKey, 'forms'),
   ])
 
   if (!siteRes?.data?.site) return null
@@ -40,7 +39,7 @@ export async function buildSiteProfile(siteUrl: string, apiKey: string): Promise
   const site    = siteRes.data.site
   const pages   = (pagesRes?.data?.pages || []) as any[]
   const plugins = (pluginsRes?.data?.plugins || []) as any[]
-  const forms   = (formsRes?.data?.forms || []) as any[]
+  const forms   = [] as any[]  // Detect from plugins list only, no separate bridge call
   const active  = plugins.filter((p: any) => p.active)
   const activeSlugs = active.map((p: any) => p.slug || '')
 

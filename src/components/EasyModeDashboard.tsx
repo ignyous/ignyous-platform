@@ -268,19 +268,18 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
     const activeP = pages.filter((p: any) => p.status === 'publish')
     const draftP  = pages.filter((p: any) => p.status !== 'publish')
     return {
-      site_name:     siteName,
-      site_url:      cleanUrl,
-      wp_version:    wpVersion,
-      theme:         theme,
-      active_theme:  theme,
-      builder:       builder,
-      plugin_count:  pluginCount,
-      plugins:       activePlugins.map((p: any) => ({ name: p.name, slug: p.slug })),
-      pages:         pages.map((p: any) => ({ id: p.id, title: p.title, status: p.status, link: p.link })),
-      page_count:    pages.length,
-      active_pages:  activeP.length,
-      draft_pages:   draftP.length,
-      mode:          'easy',
+      site_name:          siteName,
+      site_url:           cleanUrl,
+      wp_version:         wpVersion,
+      theme:              theme,
+      builder:            builder,
+      logo_attachment_id: siteInfo?.logo?.id || siteInfo?.site?.logo_id || null,
+      plugin_count:       pluginCount,
+      plugins:            activePlugins.slice(0, 25).map((p: any) => p.name || p.slug),
+      pages:              pages.slice(0, 12).map((p: any) => ({ id: p.id, title: p.title, status: p.status })),
+      active_pages:       activeP.length,
+      draft_pages:        draftP.length,
+      mode:               'easy',
       instruction:   [
         'You have FULL site context. Use it — do NOT emit scan_site or any scanning action.',
         'Format responses using markdown: **bold**, bullet lists, and tables where useful.',
@@ -443,7 +442,23 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         })
         const d = await r.json()
         if (!d.success) return `❌ Resize failed: ${d.error}`
-        return `✅ ${d.message}\nResized copy: [${d.new_size}](${d.new_url}) (ID: ${d.new_id})\nOriginal preserved: ID ${d.original_id}`
+
+        let result = `✅ ${d.message}\nResized copy: [${d.new_size}](${d.new_url}) (ID: ${d.new_id})\nOriginal preserved: ID ${d.original_id}`
+
+        // Auto-set the resized copy as logo if this was for logo scaling
+        if (action.set_as_logo !== false && (action.for_logo || action.scale_percent)) {
+          const logoRes = await fetch('/api/wordpress/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteUrl: cleanUrl, apiKey, imageBase64: null, setAsLogo: true, existingAttachmentId: d.new_id }),
+          }).then(r => r.json()).catch(() => null)
+          // Simpler: just update theme_mod via update-option
+          const setRes = await fetch('/api/wordpress/update-option', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteUrl: cleanUrl, apiKey, field_path: 'site_logo', option_name: 'site_logo', update_method: 'option', new_value: d.new_id }),
+          }).then(r => r.json()).catch(() => null)
+          if (setRes?.success) result += '\n✅ Resized copy set as active logo'
+        }
+        return result
 
       } else if (type === 'replace_content') {
         const snapId = await takeSnapshot('content_replace', `Content replace: "${action.find}" → "${action.replace}"`, { find: action.find })
@@ -839,9 +854,25 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                       </div>
                     ))}
                     {sending && (
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: S.muted, fontSize: 14 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 16, background: 'hsl(248 79% 94%)', color: S.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><SparkIcon small /></div>
-                        <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: '18px 18px 18px 5px', padding: '12px 15px' }}>Thinking…</div>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 16, background: 'hsl(248 79% 94%)', color: S.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <SparkIcon small />
+                        </div>
+                        <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: '18px 18px 18px 5px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: S.primary, letterSpacing: '.02em' }}>Thinking</span>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            {[0, 1, 2].map(i => (
+                              <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: S.primary, opacity: 0.7,
+                                animation: `ignyousBounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+                            ))}
+                          </div>
+                          <style>{`
+                            @keyframes ignyousBounce {
+                              0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+                              30% { transform: translateY(-5px); opacity: 1; }
+                            }
+                          `}</style>
+                        </div>
                       </div>
                     )}
                     <div ref={bottomRef} />
