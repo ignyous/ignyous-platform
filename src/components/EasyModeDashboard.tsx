@@ -641,10 +641,13 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       const aiText    = data.text || (data.error ? `⚠️ Error: ${data.error}` : 'Something went wrong.')
       const finalText = actionResult || aiText
 
-      // Hallucination guard: if AI says it made a change but emitted no action block, warn the user
+      // Hallucination guard: warn when AI narrates instead of acting
       const claimsChange = !data.action && /\b(updated|changed|replaced|modified|applied|done|complete|i've made|i have updated)\b/i.test(aiText)
+      const narrates     = !data.action && /\b(i need to scan|let me scan|let me find|let me check|i'll look|i need the page|i need to find|scanning the site|first i need)\b/i.test(aiText)
       const warningText  = claimsChange
-        ? `\n\n⚠️ *Note: No action was actually executed. Ask me again and I'll make sure to apply the change.*`
+        ? `\n\n⚠️ *No action was executed. Say "do it" to try again.*`
+        : narrates
+        ? `\n\n⚠️ *The AI tried to scan instead of acting. The page IDs and content are already in context — just say "go ahead" or rephrase as "replace [exact text] with [new text]".*`
         : ''
 
       setMessages(prev => [...prev, {
