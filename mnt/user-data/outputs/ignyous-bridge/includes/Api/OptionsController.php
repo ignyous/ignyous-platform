@@ -452,7 +452,6 @@ class OptionsController {
         return ['success' => true, 'query' => $query, 'count' => count($unique), 'matches' => array_values($unique)];
     }
 
-     */
     private function get_quote_variants($str) {
         $variants   = [$str];
         $map = [
@@ -577,20 +576,44 @@ class OptionsController {
 
         // Flush Elementor CSS cache if any Elementor posts updated
         if (!empty($elementor_updated_ids)) {
+            // Method 1: action hook (standard)
             do_action('elementor/core/files/clear_cache');
+
+            // Method 2: direct call if Elementor is loaded (more reliable on SiteGround)
+            if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+                \Elementor\Plugin::$instance->files_manager->clear_cache();
+            }
+
+            // Method 3: delete per-post CSS meta for each updated post
+            foreach ($elementor_updated_ids as $pid) {
+                delete_post_meta($pid, '_elementor_css');
+                delete_post_meta($pid, '_elementor_page_assets');
+            }
+
+            // Method 4: clear global Elementor CSS files from uploads
+            $upload_dir = wp_upload_dir();
+            $css_dir    = trailingslashit($upload_dir['basedir']) . 'elementor/css/';
+            if (is_dir($css_dir)) {
+                foreach (glob($css_dir . '*.css') as $file) {
+                    @unlink($file);
+                }
+            }
         }
 
         $scope_label  = $page_id ? "page ID {$page_id}" : 'all pages';
+        $page_title   = $page_id ? get_the_title($page_id) : null;
         $sources_used = array_unique(array_column($updated, 'type'));
 
         return [
-            'success'       => true,
-            'find'          => $find,
-            'replace'       => $replace,
-            'updated_count' => count($updated),
-            'updated'       => $updated,
-            'scope'         => $scope_label,
-            'sources_used'  => $sources_used,
+            'success'        => true,
+            'find'           => $find,
+            'replace'        => $replace,
+            'updated_count'  => count($updated),
+            'updated'        => $updated,
+            'scope'          => $scope_label,
+            'page_id'        => $page_id ?: null,
+            'page_title'     => $page_title,
+            'sources_used'   => $sources_used,
             'variants_tried' => count($variants),
         ];
     }

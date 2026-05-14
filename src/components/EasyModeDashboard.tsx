@@ -561,14 +561,16 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         const d = await r.json()
         if (d.success) {
           await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
-          const where   = action.page_id ? `on ${action.page_title || 'the specified page'}` : 'site-wide'
-          const sources = d.sources_used?.length ? ` (via ${d.sources_used.join(', ')})` : ''
+          // Use page_title from bridge response first, then fallback to action context
+          const pageName = d.page_title || action.page_title || null
+          const where    = pageName ? `on the **${pageName}** page` : (action.page_id ? 'on the specified page' : 'across the site')
+          const via      = d.sources_used?.length === 1 && d.sources_used[0] === 'post_content' ? '' : ''  // don't surface internal detail
           if (d.updated_count === 0) {
-            // Save to memory that this site uses Elementor data storage (for future context)
             saveMemory({ content_replace_note: 'Elementor stores text in _elementor_data — check apostrophe encoding' })
-            return `❌ Found 0 instances of "${action.find}" ${where}. The text may use different quote characters (curly vs straight apostrophe). Try copying the exact text from the live page.`
+            return `Couldn't find "${action.find}" ${where}. The text may use different quote characters — try copying it directly from the live page.`
           }
-          return `✅ Replaced ${d.updated_count} instance${d.updated_count !== 1 ? 's' : ''} of "${action.find}" ${where}${sources}.`
+          const count = d.updated_count === 1 ? 'one spot' : `${d.updated_count} spots`
+          return `Updated ${count} ${where}.`
         }
         return `❌ Replace failed: ${d.error || 'Unknown error'}`
       }
