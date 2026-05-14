@@ -679,22 +679,38 @@ class OptionsController {
         ];
     }
 
-    public function check_permission() {
+    public function check_permission($request = null) {
         $stored = get_option('ignyous_bridge_api_key', '');
         if (empty($stored)) return false;
-        $auth = '';
-        if (function_exists('getallheaders')) {
-            foreach (getallheaders() as $k => $v) { if (strtolower($k) === 'authorization') { $auth = $v; break; } }
-        }
-        if (empty($auth)) $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-        // Also check X-Ignyous-Key
+
+        // 1. X-Ignyous-Key header (most reliable on SiteGround nginx)
         $xkey = '';
         if (function_exists('getallheaders')) {
             foreach (getallheaders() as $k => $v) { if (strtolower($k) === 'x-ignyous-key') { $xkey = $v; break; } }
         }
         if (empty($xkey)) $xkey = $_SERVER['HTTP_X_IGNYOUS_KEY'] ?? '';
         if (!empty($xkey) && hash_equals($stored, trim($xkey))) return true;
-        if (preg_match('/Bearer\s+(.+)/i', $auth, $m)) return hash_equals($stored, trim($m[1]));
+
+        // 2. Authorization: Bearer header
+        $auth = '';
+        if (function_exists('getallheaders')) {
+            foreach (getallheaders() as $k => $v) { if (strtolower($k) === 'authorization') { $auth = $v; break; } }
+        }
+        if (empty($auth)) $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        if (preg_match('/Bearer\s+(.+)/i', $auth, $m) && hash_equals($stored, trim($m[1]))) return true;
+
+        // 3. api_key in JSON body (last resort)
+        if ($request instanceof \WP_REST_Request) {
+            $body = $request->get_json_params();
+            if (!empty($body['api_key']) && hash_equals($stored, $body['api_key'])) return true;
+        }
+        // Also try raw POST body
+        $raw = file_get_contents('php://input');
+        if ($raw) {
+            $decoded = @json_decode($raw, true);
+            if (!empty($decoded['api_key']) && hash_equals($stored, $decoded['api_key'])) return true;
+        }
+
         return false;
     }
 }

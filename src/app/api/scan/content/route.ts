@@ -1,60 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { bridgeCall } from '@/lib/siteProfile'
 
-// POST: scan for content or replace content
+function cleanBase(url: string) { return url.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://') }
+function authHeaders(key: string) { return { 'Authorization': `Bearer ${key}`, 'X-Ignyous-Key': key, 'Content-Type': 'application/json' } }
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { action, siteUrl, apiKey, query, pattern, find, replace, scope, targets, page_id } = await req.json()
+  const { action, siteUrl, apiKey, query, find, replace, scope, page_id } = await req.json()
+  if (!siteUrl || !apiKey) return NextResponse.json({ error: 'siteUrl and apiKey required' }, { status: 400 })
 
-  if (!siteUrl || !apiKey) {
-    return NextResponse.json({ error: 'siteUrl and apiKey required' }, { status: 400 })
-  }
+  const base = cleanBase(siteUrl)
 
-  const cleanUrl = siteUrl.replace(/\/$/, '')
-
-  // ── Scan action ────────────────────────────────────────────
+  // ── Scan ──────────────────────────────────────────────────────
   if (action === 'scan' || !action) {
-    // content/find is a GET endpoint — call directly with fetch
-    const cleanBase = cleanUrl.replace(/^(?!https?:\/\/)/, 'https://')
-    const findUrl   = `${cleanBase}/wp-json/ignyous/v1/content/find?query=${encodeURIComponent(query || '')}&api_key=${encodeURIComponent(apiKey)}`
-    let result: any = null
+    const url = `${base}/wp-json/ignyous/v1/content/find?query=${encodeURIComponent(query || '')}&api_key=${encodeURIComponent(apiKey)}`
     try {
-      const r = await fetch(findUrl, {
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'X-Ignyous-Key': apiKey },
-        signal: AbortSignal.timeout(15000),
-      })
-      result = r.ok ? await r.json() : null
-    } catch {}
-
-    if (!result || !result.success) {
-      return NextResponse.json({ success: false, error: 'Scanner not available. Make sure the bridge plugin is updated.' })
+      const r = await fetch(url, { headers: authHeaders(apiKey), signal: AbortSignal.timeout(15000) })
+      const d = await r.json()
+      if (!r.ok || !d.success) return NextResponse.json({ success: false, error: `Bridge ${r.status}: ${d?.message || 'scanner unavailable'}` })
+      return NextResponse.json(d)
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
     }
-    return NextResponse.json(result)
   }
 
-  // ── Replace action ─────────────────────────────────────────
+  // ── Replace ───────────────────────────────────────────────────
   if (action === 'replace') {
     if (!find) return NextResponse.json({ error: 'find text required' }, { status: 400 })
 
-    const result = await bridgeCall(cleanUrl, apiKey, 'content/replace', 'POST', {
-      find, replace: replace || '', scope: scope || 'all', targets: targets || [],
-      page_id: page_id || 0, api_key: apiKey,
-    })
-
-    if (!result || !result.success) {
-      return NextResponse.json({
-        success: false,
-        error: 'Replace failed. Check bridge plugin.',
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(`${base}/wp-json/ignyous/v1/content/replace`, {
+        method: 'POST',
+        headers: authHeaders(apiKey),
+        body: JSON.stringify({ find, replace: replace || '', scope: scope || 'all', page_id: page_id || 0, api_key: apiKey }),
+        signal: AbortSignal.timeout(30000),
       })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error reaching bridge: ${e.message}` })
     }
 
+    if (!result?.success) {
+      // Surface the actual bridge error — no more "Check bridge plugin" mystery
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
     return NextResponse.json(result)
   }
 
-  return NextResponse.json({ error: 'Unknown action. Use scan or replace.' }, { status: 400 })
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
