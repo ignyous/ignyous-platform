@@ -34,7 +34,9 @@ class AdminPages {
         $key      = get_option('ignyous_bridge_api_key', '');
         $rest_url = rest_url('ignyous/v1/verify');
         $log      = get_option('ignyous_activity_log', []);
-        $last     = !empty($log) ? max(array_column($log, 'time')) : null;
+        $last_raw = !empty($log) ? max(array_column($log, 'time')) : null;
+        // time may be a Unix int OR a datetime string depending on how it was logged
+        $last_str = $last_raw ? (is_numeric($last_raw) ? date('Y-m-d H:i:s', (int)$last_raw) : substr((string)$last_raw, 0, 19)) : null;
         ?>
         <div class="wrap"><h1>⚡ Ignyous Bridge — Settings</h1>
         <form method="post"><<?php wp_nonce_field('ignyous_settings'); ?>
@@ -50,7 +52,7 @@ class AdminPages {
             <tr><th>Status</th><td>
                 <?php if ($key): ?>
                     <span style="color:#16a34a;font-weight:600">✅ Configured</span>
-                    <?php if ($last): ?> — Last request: <?php echo esc_html(date('Y-m-d H:i:s', $last)); ?><?php endif; ?>
+                    <?php if ($last_str): ?> — Last request: <?php echo esc_html($last_str); ?><?php endif; ?>
                 <?php else: ?>
                     <span style="color:#dc2626;font-weight:600">⚠️ No API key set</span>
                 <?php endif; ?>
@@ -73,7 +75,8 @@ class AdminPages {
         <?php foreach ($log as $e):
             $status = $e['status'] ?? 200;
             $color  = $status >= 400 ? '#dc2626' : ($status >= 300 ? '#d97706' : '#16a34a');
-            $dt     = isset($e['time']) ? date('Y-m-d H:i:s', $e['time']) : '—';
+            $raw_t  = $e['time'] ?? null;
+            $dt     = $raw_t ? (is_numeric($raw_t) ? date('Y-m-d H:i:s', (int)$raw_t) : substr((string)$raw_t, 0, 19)) : '—';
         ?>
         <tr>
             <td style="white-space:nowrap"><?php echo esc_html($dt); ?></td>
@@ -120,7 +123,8 @@ class AdminPages {
         <thead><tr><th>Date/Time</th><th>Type</th><th>Description</th><th>Details</th><th>Actions</th></tr></thead>
         <tbody>
         <?php foreach ($snaps as $snap):
-            $dt      = isset($snap['timestamp']) ? date('Y-m-d H:i:s', $snap['timestamp']) : '—';
+            $raw_ts  = $snap['timestamp'] ?? null;
+            $dt      = $raw_ts ? (is_numeric($raw_ts) ? date('Y-m-d H:i:s', (int)$raw_ts) : substr((string)$raw_ts, 0, 19)) : '—';
             $type    = $snap['type'] ?? 'general';
             $data    = $snap['data'] ?? [];
             $details = [];
