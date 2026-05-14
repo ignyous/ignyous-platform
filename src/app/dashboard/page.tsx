@@ -1296,6 +1296,7 @@ function DashboardInner() {
   const visibleIssues = issues.filter(i => !dismissedIssues.includes(i.title))
 
   return (
+    <AppLayout onSwitchToEasy={() => switchModeTemp('easy')}>
     <div style={{ background: C.bg }}>
       
       {showThemes && <ThemeBrowser onSelect={onThemeSelect} onClose={() => setShowThemes(false)} currentTheme={siteInfo?.theme?.name}/>}
@@ -1812,19 +1813,18 @@ function DashboardInner() {
 
       </div>{/* end main layout */}
     </div>
+    </AppLayout>
   )
 }
 
 export default function DashboardPage() {
   return (
-    <AppLayout onSwitchToEasy={() => switchModeTemp('easy')}>
-      <Suspense fallback={
-        <div style={{ minHeight: '100vh', background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: 44, height: 44, border: '3px solid #E2DDD8', borderTopColor: '#E8651A', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
-        </div>
-      }>
-        <DashboardInner/>
-      </Suspense>
-    </AppLayout>
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: '#F0EDE8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 44, height: 44, border: '3px solid #E2DDD8', borderTopColor: '#E8651A', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}/>
+      </div>
+    }>
+      <DashboardInner/>
+    </Suspense>
   )
 }

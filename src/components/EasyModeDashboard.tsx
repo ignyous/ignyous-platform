@@ -150,8 +150,9 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const [messages, setMessages]           = useState<Message[]>([])
   const [input, setInput]                 = useState('')
   const [sending, setSending]             = useState(false)
-  const [previewKey, setPreviewKey]       = useState(0)
-  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
+  const [previewKey, setPreviewKey]           = useState(0)
+  const [previewDevice, setPreviewDevice]     = useState<'desktop' | 'mobile'>('desktop')
+  const [lastSnapshotId, setLastSnapshotId]   = useState<string | null>(null)
   const [siteInfo, setSiteInfo]           = useState<any>(null)
   const [pages, setPages]               = useState<any[]>([])
   const [sites, setSites]               = useState<SiteEntry[]>([])
@@ -176,11 +177,11 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const displayUser = session?.user?.name || session?.user?.email?.split('@')[0] || userName || 'Account'
   const userInitial = displayUser[0]?.toUpperCase() || 'A'
 
-  // ── Save chat to sessionStorage (session-only, not persisted across reloads) ──
+  // ── Session chat — persists through mode switches, clears on page reload ──
   useEffect(() => {
     if (!siteKey || messages.length === 0) return
     try {
-      const toSave = messages.slice(-60).map(m => ({ role: m.role, content: m.content, ts: m.ts.getTime() }))
+      const toSave = messages.slice(-60).map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content), ts: m.ts.getTime() }))
       sessionStorage.setItem(`ignyous_chat_${siteKey}`, JSON.stringify(toSave))
     } catch {}
   }, [messages, siteKey])
@@ -189,8 +190,11 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   useEffect(() => {
     if (!siteUrl || !apiKey) return
 
-    // Chat starts clean on every page load (session-only memory)
-    // sessionStorage is cleared automatically when the tab/window closes
+    // Restore chat from this session (e.g. after switching modes)
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(`ignyous_chat_${siteKey}`) || '[]')
+      if (saved.length > 0) setMessages(saved.map((m: any) => ({ ...m, ts: new Date(m.ts) })))
+    } catch {}
 
     // Fetch site profile
     fetch('/api/scan/profile?siteUrl=' + encodeURIComponent(cleanUrl) + '&apiKey=' + encodeURIComponent(apiKey))
@@ -286,6 +290,39 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   }
 
   // ── Execute AI actions ─────────────────────────────────────────
+  // ── Take a snapshot before any write action ─────────────────────────
+  async function takeSnapshot(type: string, description: string, extra: Record<string, any> = {}): Promise<string | null> {
+    try {
+      const r = await fetch(`${cleanUrl}/wp-json/ignyous/v1/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ignyous-Key': apiKey, 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ type, description, api_key: apiKey, ...extra }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const d = await r.json()
+      return d.snapshot_id || null
+    } catch { return null }
+  }
+
+  // ── Restore a snapshot ────────────────────────────────────────────────
+  async function restoreSnapshot(snapshotId: string): Promise<string> {
+    try {
+      const r = await fetch(`${cleanUrl}/wp-json/ignyous/v1/snapshots/${snapshotId}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ignyous-Key': apiKey, 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ api_key: apiKey }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const d = await r.json()
+      if (d.success) {
+        setPreviewKey(k => k + 1)
+        await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+        return `↩️ Restored: ${d.description}`
+      }
+      return `❌ Restore failed: ${d.message || d.error}`
+    } catch (e: any) { return `❌ Restore error: ${e.message}` }
+  }
+
   async function executeAction(action: any, capturedImage?: { base64: string; mediaType: string; name: string } | null): Promise<string | null> {
     const type = action.type
     try {
@@ -366,7 +403,14 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return `Found **${d.count}** match${d.count !== 1 ? 'es' : ''} for "${action.query}":\n\n${lines}`
 
       } else if (type === 'update_option') {
-        // Update a specific DB option field (from a previous scan_options result)
+        // Snapshot before change
+        const snapId = await takeSnapshot(
+          action.update_method === 'serialized_field' ? 'serialized_field' : 'option',
+          `Option update: ${action.field_path}`,
+          { option_name: action.option_name, array_key: action.array_key }
+        )
+        if (snapId) setLastSnapshotId(snapId)
+
         const r = await fetch('/api/wordpress/update-option', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ siteUrl: cleanUrl, apiKey, ...action }),
@@ -395,6 +439,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return `✅ ${d.message}\nResized copy: [${d.new_size}](${d.new_url}) (ID: ${d.new_id})\nOriginal preserved: ID ${d.original_id}`
 
       } else if (type === 'replace_content') {
+        const snapId = await takeSnapshot('content_replace', `Content replace: "${action.find}" → "${action.replace}"`, { find: action.find })
+        if (snapId) setLastSnapshotId(snapId)
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
         const d = await r.json()
         if (d.success) {
@@ -762,6 +808,21 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                                   </button>
                                 ))}
                               </div>
+                            )}
+                            {/* Undo button — shown on the last assistant message when a snapshot was taken */}
+                            {msg.role === 'assistant' && index === messages.length - 1 && lastSnapshotId && (
+                              <button
+                                onClick={async () => {
+                                  const result = await restoreSnapshot(lastSnapshotId)
+                                  setLastSnapshotId(null)
+                                  setMessages(prev => [...prev, { role: 'assistant', content: result, ts: new Date() }])
+                                }}
+                                style={{ marginTop: 8, border: `1px solid ${S.border}`, borderRadius: 8, background: 'hsl(220 20% 97%)', color: S.muted, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#fff3cd'; e.currentTarget.style.borderColor = '#ffc107'; e.currentTarget.style.color = '#856404' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'hsl(220 20% 97%)'; e.currentTarget.style.borderColor = S.border; e.currentTarget.style.color = S.muted }}
+                              >
+                                ↩ Undo last change
+                              </button>
                             )}
                           </div>
                         </div>
