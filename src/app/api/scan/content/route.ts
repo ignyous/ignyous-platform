@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { action, siteUrl, apiKey, query, pattern, find, replace, scope, targets } = await req.json()
+  const { action, siteUrl, apiKey, query, pattern, find, replace, scope, targets, page_id } = await req.json()
 
   if (!siteUrl || !apiKey) {
     return NextResponse.json({ error: 'siteUrl and apiKey required' }, { status: 400 })
@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     if (!find) return NextResponse.json({ error: 'find text required' }, { status: 400 })
 
     const result = await bridgeCall(cleanUrl, apiKey, 'content/replace', 'POST', {
-      find, replace: replace || '', scope: scope || 'all', targets: targets || [], api_key: apiKey,
+      find, replace: replace || '', scope: scope || 'all', targets: targets || [],
+      page_id: page_id || 0, api_key: apiKey,
     })
 
     if (!result || !result.success) {

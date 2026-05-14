@@ -551,11 +551,21 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
       } else if (type === 'replace_content') {
         const snapId = await takeSnapshot('content_replace', `Content replace: "${action.find}" → "${action.replace}"`, { find: action.find })
         if (snapId) setLastSnapshotId(snapId)
-        const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace, page_id: action.page_id || null }),
+        })
         const d = await r.json()
         if (d.success) {
           await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
-          return `✅ Replaced ${d.updated_count ?? 0} instance${d.updated_count !== 1 ? 's' : ''} of "${action.find}" site-wide.`
+          const where   = action.page_id ? `on ${action.page_title || 'the specified page'}` : 'site-wide'
+          const sources = d.sources_used?.length ? ` (via ${d.sources_used.join(', ')})` : ''
+          if (d.updated_count === 0) {
+            // Save to memory that this site uses Elementor data storage (for future context)
+            saveMemory({ content_replace_note: 'Elementor stores text in _elementor_data — check apostrophe encoding' })
+            return `❌ Found 0 instances of "${action.find}" ${where}. The text may use different quote characters (curly vs straight apostrophe). Try copying the exact text from the live page.`
+          }
+          return `✅ Replaced ${d.updated_count} instance${d.updated_count !== 1 ? 's' : ''} of "${action.find}" ${where}${sources}.`
         }
         return `❌ Replace failed: ${d.error || 'Unknown error'}`
       }
@@ -919,7 +929,10 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
                             {msg.options && msg.options.length > 0 && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                                 {msg.options.map((opt, oi) => (
-                                  <button key={oi} onClick={() => send(opt.value || opt.label)} style={{ textAlign: 'left', background: S.primaryLight, color: S.primaryDark, border: `1px solid ${S.border}`, borderRadius: 12, padding: '9px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                                  <button key={oi} onClick={() => {
+                                    const val = opt.value || opt.label
+                                    send(val)
+                                  }} style={{ textAlign: 'left', background: S.primaryLight, color: S.primaryDark, border: `1px solid ${S.border}`, borderRadius: 12, padding: '9px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                                     {opt.label}
                                   </button>
                                 ))}

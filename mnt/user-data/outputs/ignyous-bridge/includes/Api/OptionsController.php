@@ -389,39 +389,72 @@ class OptionsController {
      */
     public function find_content($request) {
         global $wpdb;
-        $query = sanitize_text_field($request->get_param('query') ?? '');
+        $query   = sanitize_text_field($request->get_param('query') ?? '');
+        $page_id = (int) ($request->get_param('page_id') ?? 0);
         if (strlen($query) < 2) return new \WP_Error('too_short', 'query too short', ['status' => 400]);
 
-        $like    = '%' . $wpdb->esc_like($query) . '%';
         $results = [];
+        $variants = $this->get_quote_variants($query);
 
-        // Search post content
-        $posts = $wpdb->get_results($wpdb->prepare(
-            "SELECT ID, post_title, post_type, post_status, post_content
-             FROM {$wpdb->posts}
-             WHERE post_content LIKE %s AND post_status IN ('publish','draft') LIMIT 20",
-            $like
-        ));
-        foreach ($posts as $p) {
-            $results[] = [
-                'source'       => 'post_content',
-                'post_id'      => (int) $p->ID,
-                'post_title'   => $p->post_title,
-                'post_type'    => $p->post_type,
-                'post_status'  => $p->post_status,
-                'context'      => $this->extract_context($p->post_content, $query),
-                'update_url'   => admin_url("post.php?post={$p->ID}&action=edit"),
-                'confidence'   => 80,
-                'update_method' => 'post_content',
-            ];
+        foreach ($variants as $variant) {
+            $like = '%' . $wpdb->esc_like($variant) . '%';
+
+            // 1. Search post_content
+            $where  = $page_id ? $wpdb->prepare("AND ID = %d", $page_id) : '';
+            $posts  = $wpdb->get_results($wpdb->prepare(
+                "SELECT ID, post_title, post_type, post_status, post_content
+                 FROM {$wpdb->posts}
+                 WHERE post_content LIKE %s AND post_status IN ('publish','draft') {$where} LIMIT 20",
+                $like
+            ));
+            foreach ($posts as $p) {
+                $results[] = [
+                    'source' => 'post_content', 'post_id' => (int) $p->ID,
+                    'post_title' => $p->post_title, 'post_type' => $p->post_type,
+                    'context' => $this->extract_context($p->post_content, $variant),
+                    'confidence' => 80, 'found_variant' => $variant,
+                ];
+            }
+
+            // 2. Search _elementor_data post meta
+            $meta_where = $page_id ? $wpdb->prepare("AND pm.post_id = %d", $page_id) : '';
+            $meta_rows  = $wpdb->get_results($wpdb->prepare(
+                "SELECT pm.post_id, pm.meta_value, p.post_title
+                 FROM {$wpdb->postmeta} pm
+                 JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = '_elementor_data' AND pm.meta_value LIKE %s
+                   AND p.post_status IN ('publish','draft') {$meta_where} LIMIT 20",
+                $like
+            ));
+            foreach ($meta_rows as $r) {
+                // Skip if we already found this page in post_content
+                $already = false;
+                foreach ($results as $res) { if ($res['post_id'] === (int) $r->post_id) { $already = true; break; } }
+                if (!$already) {
+                    $results[] = [
+                        'source' => 'elementor_data', 'post_id' => (int) $r->post_id,
+                        'post_title' => $r->post_title, 'post_type' => 'page',
+                        'context' => $this->extract_context($r->meta_value, $variant),
+                        'confidence' => 90, 'found_variant' => $variant,
+                    ];
+                }
+            }
         }
 
-        return ['success' => true, 'query' => $query, 'count' => count($results), 'matches' => $results];
+        // Deduplicate by post_id
+        $seen = [];
+        $unique = array_filter($results, function($r) use (&$seen) {
+            if (in_array($r['post_id'], $seen)) return false;
+            $seen[] = $r['post_id'];
+            return true;
+        });
+
+        return ['success' => true, 'query' => $query, 'count' => count($unique), 'matches' => array_values($unique)];
     }
 
     /**
-     * Replace content across posts, pages, and options.
-     * Body: { find, replace, scope: 'all'|'posts'|'options' }
+     * Replace content across posts. Searches both post_content AND _elementor_data.
+     * Body: { find, replace, scope, page_id? }
      */
     public function replace_content($request) {
         global $wpdb;
@@ -429,32 +462,94 @@ class OptionsController {
         $find    = $body['find']    ?? '';
         $replace = $body['replace'] ?? '';
         $scope   = $body['scope']   ?? 'all';
+        $page_id = (int) ($body['page_id'] ?? 0);
 
         if (strlen($find) < 2) return new \WP_Error('too_short', 'find must be at least 2 chars', ['status' => 400]);
 
-        $updated = [];
+        $updated  = [];
+        $variants = $this->get_quote_variants($find);
+        $where    = $page_id ? $wpdb->prepare("AND ID = %d", $page_id) : '';
 
         if (in_array($scope, ['all', 'posts'])) {
-            // Update post content
-            $posts = $wpdb->get_results($wpdb->prepare(
-                "SELECT ID, post_content FROM {$wpdb->posts}
-                 WHERE post_content LIKE %s AND post_status IN ('publish','draft') LIMIT 100",
-                '%' . $wpdb->esc_like($find) . '%'
-            ));
-            foreach ($posts as $p) {
-                $new_content = str_ireplace($find, $replace, $p->post_content);
-                $wpdb->update($wpdb->posts, ['post_content' => $new_content], ['ID' => $p->ID]);
-                $updated[] = ['type' => 'post', 'id' => $p->ID];
+            // Try each quote variant
+            foreach ($variants as $variant) {
+                $like  = '%' . $wpdb->esc_like($variant) . '%';
+
+                // 1. Replace in post_content
+                $posts = $wpdb->get_results($wpdb->prepare(
+                    "SELECT ID, post_content FROM {$wpdb->posts}
+                     WHERE post_content LIKE %s AND post_status IN ('publish','draft') {$where} LIMIT 100",
+                    $like
+                ));
+                foreach ($posts as $p) {
+                    $new = str_replace($variant, $replace, $p->post_content);
+                    if ($new !== $p->post_content) {
+                        $wpdb->update($wpdb->posts, ['post_content' => $new], ['ID' => $p->ID]);
+                        $updated[] = ['type' => 'post_content', 'id' => (int) $p->ID];
+                    }
+                }
+
+                // 2. Replace in _elementor_data post meta
+                $meta_where = $page_id ? $wpdb->prepare("AND pm.post_id = %d", $page_id) : '';
+                $meta_rows  = $wpdb->get_results($wpdb->prepare(
+                    "SELECT pm.post_id, pm.meta_value
+                     FROM {$wpdb->postmeta} pm
+                     JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                     WHERE pm.meta_key = '_elementor_data' AND pm.meta_value LIKE %s
+                       AND p.post_status IN ('publish','draft') {$meta_where} LIMIT 100",
+                    $like
+                ));
+                foreach ($meta_rows as $r) {
+                    // Skip if already updated this post via post_content
+                    $already = false;
+                    foreach ($updated as $u) { if ($u['id'] === (int) $r->post_id) { $already = true; break; } }
+                    if ($already) continue;
+
+                    $new = str_replace($variant, $replace, $r->meta_value);
+                    if ($new !== $r->meta_value) {
+                        update_post_meta($r->post_id, '_elementor_data', wp_slash($new));
+                        // Also clear Elementor CSS cache for this post
+                        delete_post_meta($r->post_id, '_elementor_css');
+                        $updated[] = ['type' => 'elementor_data', 'id' => (int) $r->post_id];
+                    }
+                }
             }
         }
 
+        // Flush Elementor CSS if any Elementor posts were updated
+        $has_elementor = !empty(array_filter($updated, function($u) { return $u['type'] === 'elementor_data'; }));
+        if ($has_elementor) do_action('elementor/core/files/clear_cache');
+
+        $scope_label = $page_id ? "page ID {$page_id}" : 'all pages';
         return [
             'success'       => true,
             'find'          => $find,
             'replace'       => $replace,
             'updated_count' => count($updated),
             'updated'       => $updated,
+            'scope'         => $scope_label,
+            'sources_used'  => array_unique(array_column($updated, 'type')),
         ];
+    }
+
+    /**
+     * Return variants of a string with different apostrophe/quote encodings.
+     * Elementor may store text with curly quotes, HTML entities, or straight quotes.
+     */
+    private function get_quote_variants($str) {
+        $variants = [$str];
+        // Straight → curly
+        $curly = str_replace("'", "\u{2019}", $str);
+        if ($curly !== $str) $variants[] = $curly;
+        // Curly → straight
+        $straight = str_replace(["\u{2019}", "\u{2018}", "\u{201C}", "\u{201D}"], ["'", "'", '"', '"'], $str);
+        if ($straight !== $str) $variants[] = $straight;
+        // HTML entity
+        $entity = str_replace("'", '&#039;', $str);
+        if ($entity !== $str) $variants[] = $entity;
+        $entity2 = str_replace("'", '&apos;', $str);
+        if ($entity2 !== $str) $variants[] = $entity2;
+        return array_unique($variants);
     }
 
     public function check_permission() {

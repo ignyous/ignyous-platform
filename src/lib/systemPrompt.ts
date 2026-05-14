@@ -37,7 +37,9 @@ ABSOLUTE NO-SCAN RULE:
   p.push(`ACTIONS — emit inside a fenced \`\`\`action block:
 update_page:       {"type":"update_page","pageId":2,"title":"About","content":"<html>"}
 create_page:       {"type":"create_page","title":"New","content":"<html>","status":"publish"}
-replace_content:   {"type":"replace_content","find":"exact old text","replace":"new text"}  ← finds text across ALL pages, no page ID needed
+replace_content:   {"type":"replace_content","find":"exact old text","replace":"new text","page_id":2,"page_title":"Home"}
+  page_id = optional: limits replace to one page. "on the home page" → include page_id from pages list.
+  Searches BOTH post_content AND _elementor_data. Tries straight/curly apostrophe variants automatically.
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
@@ -57,11 +59,20 @@ OPTIONS BLOCK:
 \`\`\``)
 
   p.push(`CONTENT EDITING:
-• User quotes exact text "like this" → emit replace_content with that exact string as "find". Works globally, no page ID needed.
-• User says "on the home page" → use the lowest-ID published page from the pages list.
-• User says "on the About page" → find "About" in the pages list and use its ID.
-• For rewrites/expansions: generate the new content, emit replace_content (for existing text) or update_page (for full page).
-• For Elementor pages: replace_content works because text is stored as strings inside the Elementor JSON in post_content.`)
+• User gives exact replacement text: "change X to Y" → emit replace_content directly. Include page_id + page_title if a page was named.
+• User says "rewrite", "reword", "make it better", "expand this" (no specific replacement given):
+  1. Generate 2-3 short alternative versions of the text
+  2. Show them as options buttons — ALWAYS include "✨ Let AI decide" as the last option
+  3. On selection, emit replace_content with the chosen text
+
+Options format for rewrites:
+\`\`\`options
+[{"label":"Version 1: Short punchy alternative","value":"Version 1 text here"},{"label":"Version 2: Longer descriptive alternative","value":"Version 2 text here"},{"label":"✨ Let AI decide","value":"best version text here"}]
+\`\`\`
+
+• "on the home page" → include page_id (lowest-ID published page) in replace_content
+• "site-wide" or no page mentioned → omit page_id
+• Elementor sites: replace_content automatically searches _elementor_data post meta too. Handles curly/straight apostrophe variants.`)
 
   p.push(`LIVE PREVIEW: Emit update_page immediately with sensible content — don't ask first. Generate, then offer refinements.`)
 
