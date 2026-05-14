@@ -212,17 +212,35 @@ class OptionsController {
                 return ['success' => true, 'updated' => $name, 'old' => $old, 'new' => $new_value];
 
             case 'serialized_field':
-                $name     = $body['option_name'] ?? '';
-                $arr_key  = $body['array_key']   ?? '';
+                $name    = $body['option_name'] ?? '';
+                $arr_key = $body['array_key']   ?? '';
                 if (!$name || !$arr_key) return new \WP_Error('missing', 'option_name and array_key required', ['status' => 400]);
-                $raw  = get_option($name);
-                if (!is_serialized($raw)) return new \WP_Error('not_serialized', 'Option is not serialized', ['status' => 400]);
-                $data = @unserialize($raw);
-                if (!is_array($data)) return new \WP_Error('parse_error', 'Could not parse serialized data', ['status' => 400]);
+
+                // get_option() returns an already-unserialized PHP value — do NOT check is_serialized()
+                $data = get_option($name, null);
+                if ($data === null) return new \WP_Error('not_found', "Option '{$name}' does not exist", ['status' => 404]);
+                if (!is_array($data)) return new \WP_Error('not_array', "Option '{$name}' is not an array (type: " . gettype($data) . ")", ['status' => 400]);
+
                 $old = $this->get_nested($data, $arr_key);
                 $this->set_nested($data, $arr_key, $new_value);
-                update_option($name, $data);
-                return ['success' => true, 'updated' => $field_path, 'old' => $old, 'new' => $new_value];
+
+                // Force save: clear cache, delete, re-add (bypasses WP "no change" skip)
+                wp_cache_delete($name, 'options');
+                delete_option($name);
+                add_option($name, $data, '', 'yes');
+                wp_cache_delete($name, 'options');
+
+                // Verify
+                $saved = get_option($name);
+                $saved_val = $this->get_nested($saved, $arr_key);
+                if ($saved_val != $new_value) {
+                    // Fallback to update_option
+                    update_option($name, $data);
+                    wp_cache_delete($name, 'options');
+                    $saved = get_option($name);
+                    $saved_val = $this->get_nested($saved, $arr_key);
+                }
+                return ['success' => true, 'updated' => $field_path, 'old' => $old, 'new' => $saved_val];
 
             case 'post_meta':
                 $post_id  = (int) ($body['post_id']  ?? 0);
