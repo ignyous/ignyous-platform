@@ -2,13 +2,18 @@
 namespace Ignyous\Api;
 
 /**
- * OptionsController — general-purpose DB scanner and updater.
+ * OptionsController — general-purpose DB scanner, updater, and plugin knowledge store.
  *
  * Endpoints:
- *   GET  /ignyous/v1/options/scan?query=<text>        — find where text is stored, with confidence
- *   POST /ignyous/v1/options/update                    — update a specific option field
+ *   GET  /ignyous/v1/options/scan?query=<text>   — find where text is stored, confidence-scored
+ *   POST /ignyous/v1/options/update               — update a specific option field
+ *   POST /ignyous/v1/elementor/logo-size          — set Elementor logo width via kit custom CSS
+ *   GET  /ignyous/v1/plugin-knowledge             — retrieve stored plugin knowledge map
+ *   POST /ignyous/v1/plugin-knowledge             — save/merge plugin knowledge
  */
 class OptionsController {
+    const KNOWLEDGE_OPTION = 'ignyous_plugin_knowledge';
+
     public function register_routes() {
         register_rest_route('ignyous/v1', '/options/scan', [
             'methods'             => 'GET',
@@ -30,7 +35,94 @@ class OptionsController {
             'callback'            => [$this, 'replace_content'],
             'permission_callback' => [$this, 'check_permission'],
         ]);
+        // Elementor-specific: set logo width via custom CSS in kit
+        register_rest_route('ignyous/v1', '/elementor/logo-size', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'set_elementor_logo_size'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
+        // Plugin knowledge store
+        register_rest_route('ignyous/v1', '/plugin-knowledge', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_plugin_knowledge'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
+        register_rest_route('ignyous/v1', '/plugin-knowledge', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'save_plugin_knowledge'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
     }
+
+    // ── Elementor logo sizing ─────────────────────────────────────────────
+    /**
+     * Set logo width for Elementor sites by injecting CSS into the active kit.
+     * Elementor has no native logo-width control (free version).
+     * We write .elementor-site-logo img { max-width: Xpx !important; } into custom_css.
+     *
+     * Body: { width_px: 180 }  (or scale_percent: 50)
+     */
+    public function set_elementor_logo_size($request) {
+        $body       = $request->get_json_params();
+        $width_px   = (int) ($body['width_px']     ?? 0);
+        $scale_pct  = (float) ($body['scale_percent'] ?? 0);
+
+        $kit_id = get_option('elementor_active_kit');
+        if (!$kit_id) return new \WP_Error('no_kit', 'Elementor active kit not found', ['status' => 404]);
+
+        // If scale_percent, get current logo dimensions to calculate target width
+        if ($scale_pct > 0 && !$width_px) {
+            $logo_id = get_theme_mod('custom_logo');
+            if ($logo_id) {
+                $meta = wp_get_attachment_metadata($logo_id);
+                $orig_w = (int) ($meta['width'] ?? 0);
+                if ($orig_w) $width_px = (int) round($orig_w * $scale_pct / 100);
+            }
+        }
+
+        if (!$width_px) return new \WP_Error('missing', 'width_px or scale_percent required', ['status' => 400]);
+
+        $settings = get_post_meta($kit_id, '_elementor_page_settings', true);
+        if (!is_array($settings)) $settings = [];
+
+        $existing_css = $settings['custom_css'] ?? '';
+        // Remove any existing ignyous logo-size rule
+        $existing_css = preg_replace('/\/\*\s*ignyous-logo-size\s*\*\/.*?\/\*\s*end-ignyous-logo-size\s*\*\//s', '', $existing_css);
+        $existing_css = trim($existing_css);
+
+        $new_rule = "\n/* ignyous-logo-size */\n.elementor-site-logo img { max-width: {$width_px}px !important; }\n/* end-ignyous-logo-size */";
+        $settings['custom_css'] = $existing_css . $new_rule;
+
+        update_post_meta($kit_id, '_elementor_page_settings', $settings);
+
+        // Flush Elementor CSS cache so the new CSS is generated
+        delete_post_meta($kit_id, '_elementor_css');
+        do_action('elementor/core/files/clear_cache');
+
+        return [
+            'success'    => true,
+            'kit_id'     => $kit_id,
+            'width_px'   => $width_px,
+            'css_added'  => $new_rule,
+            'message'    => "Logo max-width set to {$width_px}px via Elementor kit custom CSS.",
+        ];
+    }
+
+    // ── Plugin knowledge store ────────────────────────────────────────────
+    public function get_plugin_knowledge($request) {
+        $knowledge = get_option(self::KNOWLEDGE_OPTION, []);
+        return ['success' => true, 'knowledge' => $knowledge];
+    }
+
+    public function save_plugin_knowledge($request) {
+        $body      = $request->get_json_params();
+        $new_data  = $body['knowledge'] ?? [];
+        $existing  = get_option(self::KNOWLEDGE_OPTION, []);
+        $merged    = array_merge($existing, $new_data); // merge by plugin slug key
+        update_option(self::KNOWLEDGE_OPTION, $merged);
+        return ['success' => true, 'saved_keys' => array_keys($new_data), 'total_plugins_known' => count($merged)];
+    }
+
 
     /**
      * Scan wp_options for a query string.

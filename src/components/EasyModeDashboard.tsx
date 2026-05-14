@@ -199,6 +199,14 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         if (d.profile) setSiteInfo(d.profile)
         else if (d.site) setSiteInfo(d)
         else setSiteInfo(d)
+        // Seed known plugin knowledge to the site DB when we detect those plugins
+        const plugins = (d.profile?.plugins || d.plugins || []).map((p: any) => p.slug || '')
+        if (plugins.some((s: string) => s.includes('elementor'))) {
+          fetch('/api/wordpress/plugin-knowledge', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteUrl: cleanUrl, apiKey }),
+          }).catch(() => {})
+        }
       })
       .catch(() => {})
 
@@ -368,6 +376,23 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         return d.success
           ? `✅ Updated \`${action.field_path}\`\nOld: "${d.old}"\nNew: "${d.new}"`
           : `❌ Update failed: ${d.error}`
+
+      } else if (type === 'elementor_logo_size') {
+        const r = await fetch('/api/wordpress/elementor-logo-size', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, widthPx: action.width_px, scalePercent: action.scale_percent }),
+        })
+        const d = await r.json()
+        return d.success ? `✅ ${d.message}` : `❌ Elementor logo size failed: ${d.message || d.error}`
+
+      } else if (type === 'resize_image') {
+        const r = await fetch('/api/wordpress/resize-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, attachment_id: action.attachment_id, width: action.width, height: action.height, scale_percent: action.scale_percent }),
+        })
+        const d = await r.json()
+        if (!d.success) return `❌ Resize failed: ${d.error}`
+        return `✅ ${d.message}\nResized copy: [${d.new_size}](${d.new_url}) (ID: ${d.new_id})\nOriginal preserved: ID ${d.original_id}`
 
       } else if (type === 'replace_content') {
         const r = await fetch('/api/scan/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'replace', siteUrl: cleanUrl, apiKey, find: action.find, replace: action.replace }) })
