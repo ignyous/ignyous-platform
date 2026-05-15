@@ -744,16 +744,13 @@ class OptionsController {
             }
         }
 
-        $match_count = count($match_indices);
-
-        if ($match_count === 0) {
+        if (count($match_indices) === 0) {
             return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
         }
 
-        // Multiple siblings contain the needle — remove the Nth one (default: last/first match)
-        if ($match_count > 1) {
-            // If nth specified, use it (1-based). Otherwise remove the last match.
-            $target_idx = $nth > 0 ? ($match_indices[$nth - 1] ?? end($match_indices)) : end($match_indices);
+        // Multiple matches at this level — these ARE the candidates (e.g., 4 service widgets)
+        if (count($match_indices) > 1) {
+            $target_idx = $nth > 0 ? ($match_indices[min($nth - 1, count($match_indices) - 1)]) : end($match_indices);
             $type = $elements[$target_idx]['elType'] ?? 'element';
             array_splice($elements, $target_idx, 1);
             return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
@@ -764,22 +761,16 @@ class OptionsController {
         $el       = $elements[$idx];
         $children = $el['elements'] ?? [];
 
-        // Count how many children narrow it down further
-        $child_match_count = 0;
+        // KEY RULE: if any children ALSO contain the needle, ALWAYS recurse.
+        // This prevents removing a whole section (hero, services, CTA) when
+        // we should be removing a widget INSIDE it.
+        $child_has_needle = false;
         foreach ($children as $c) {
-            if (stripos(json_encode($c), $needle) !== false) $child_match_count++;
+            if (stripos(json_encode($c), $needle) !== false) { $child_has_needle = true; break; }
         }
 
-        // If there are multiple elements at this level (siblings exist), this element
-        // is the target — remove it. It's one card among many cards.
-        if (count($elements) > 1) {
-            $type = $el['elType'] ?? 'element';
-            array_splice($elements, $idx, 1);
-            return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
-        }
-
-        // Only one element at this level — it's a wrapper. Recurse into children.
-        if (!empty($children)) {
+        if ($child_has_needle && !empty($children)) {
+            // Go deeper — the target is inside this container
             $inner = $this->remove_element_by_text($children, $needle, $nth);
             if ($inner['removed']) {
                 $elements[$idx]['elements'] = $inner['data'];
@@ -787,7 +778,11 @@ class OptionsController {
             }
         }
 
-        return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
+        // No children contain the needle — this element IS the target (text is in its own settings).
+        // OR recursion failed. Remove this element.
+        $type = $el['elType'] ?? 'element';
+        array_splice($elements, $idx, 1);
+        return ['removed' => true, 'data' => $elements, 'removed_type' => $type];
     }
 
 
