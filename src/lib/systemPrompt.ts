@@ -55,6 +55,14 @@ site_wide_replace: {"type":"site_wide_replace","find":"845-876-6586","replace":"
   Replaces text across ALL storage: posts, Elementor data, wp_options, widgets, menus, theme mods.
   Use for phone numbers, emails, addresses, business names — anything that appears in multiple places.
   Preferred over replace_content when user says "everywhere", "site-wide", "change my phone/email".
+reorder_element:   {"type":"reorder_element","post_id":2,"mode":"swap","source":"Service 1","target":"Service 3"}
+  Reorders elements within an Elementor container.
+  mode="swap": swap two elements' positions. Provide source and target (search text identifying each).
+  mode="move": move one element to a new position. Provide source and target_position (1-based).
+  Examples:
+    "swap 1st and 3rd service" → {"mode":"swap","source":"Service 1","target":"Service 3","post_id":2}
+    "move Service 3 to first position" → {"mode":"move","source":"Service 3","target_position":1,"post_id":2}
+  Use the content graph to get the exact item titles — never ask the user for them.
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64

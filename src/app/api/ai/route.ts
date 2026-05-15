@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
     const KNOWN_ACTIONS = ['replace_content','remove_element','update_page','create_page','update_seo',
       'update_element','upload_logo','scan_theme_css','update_custom_css','elementor_logo_size',
       'resize_image','scan_options','scan_content','scan_site','clear_cache',
-      'site_wide_replace','site_wide_search','update_logo']
+      'site_wide_replace','site_wide_search','update_logo','reorder_element']
 
     const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
     const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)
@@ -236,11 +236,13 @@ export async function POST(req: NextRequest) {
     // Fallback: if no ```action block matched, look for action JSON in ANY code fence
     if (!action) {
       const allFences = [...raw.matchAll(/```(?:json|action|)\n([\s\S]*?)\n```/g)]
+      console.log(`[ai-route] No \`\`\`action block found. Checking ${allFences.length} code fences for action JSON...`)
       for (const m of allFences) {
         try {
           const parsed = JSON.parse(m[1])
           if (parsed?.type && KNOWN_ACTIONS.includes(parsed.type)) {
             action = parsed
+            console.log(`[ai-route] Fallback parser found action: ${parsed.type}`, JSON.stringify(parsed))
             break
           }
         } catch {}
@@ -252,6 +254,8 @@ export async function POST(req: NextRequest) {
       const quoted = String(lastUserMsg).match(/["\u201C\u201D'\u2018\u2019]([^"'\u201C\u201D\u2018\u2019]{3,200})["\u201C\u201D'\u2018\u2019]/)
       if (quoted) findContext = { find: quoted[1] }
     }
+
+    console.log(`[ai-route] Parsed: action=${action?.type || 'NONE'}, options=${options?.length || 0}, findContext=${findContext?.find || 'none'}`)
 
     // Strip all recognized code fences from the displayed text
     let text = raw

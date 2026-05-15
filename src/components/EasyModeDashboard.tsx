@@ -627,9 +627,50 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         if (d.success) {
           await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
           const page = d.page_title ? `on the **${d.page_title}** page` : 'on the specified page'
+          // Re-scan this page's content graph so AI has updated structure
+          const pageId = action.post_id || action.page_id
+          if (pageId) {
+            fetch('/api/content-graph', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ siteUrl: cleanUrl, apiKey, pageId }),
+            }).then(r => r.json()).then(d2 => { if (d2.success) setContentGraph((prev: any) => ({ ...prev, ...d2 })) }).catch(() => {})
+          }
           return `Removed ${page}.`
         }
         return `Couldn't remove the element: ${d.error || 'Unknown error'}`
+
+      } else if (type === 'reorder_element') {
+        const snapId = await takeSnapshot('content_reorder', `Reorder: ${action.mode || 'swap'} "${action.source}" ↔ "${action.target}"`, action)
+        if (snapId) setLastSnapshotId(snapId)
+        console.log('[reorder_element] action:', JSON.stringify(action))
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reorder_element', siteUrl: cleanUrl, apiKey,
+            post_id:         action.post_id || action.page_id,
+            mode:            action.mode    || 'swap',
+            source:          action.source  || '',
+            target:          action.target  || '',
+            source_position: action.source_position || 0,
+            target_position: action.target_position || 0,
+          }),
+        })
+        const d = await r.json()
+        console.log('[reorder_element] response:', JSON.stringify(d))
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const page = d.page_title ? `on the **${d.page_title}** page` : ''
+          // Re-scan this page's content graph
+          const rpid = action.post_id || action.page_id
+          if (rpid) {
+            fetch('/api/content-graph', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ siteUrl: cleanUrl, apiKey, pageId: rpid }),
+            }).then(r => r.json()).then(d2 => { if (d2.success) setContentGraph((prev: any) => ({ ...prev, ...d2 })) }).catch(() => {})
+          }
+          return `Reordered ${page}.`
+        }
+        return `Couldn't reorder: ${d.error || d.message || 'Unknown error'}`
 
       } else if (type === 'site_wide_replace') {
         // Replace content across ALL storage: posts, Elementor data, options, widgets, menus, theme mods
@@ -648,7 +689,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             .map((loc: any) => loc.title || loc.name || loc.key || loc.location || 'unknown')
             .slice(0, 5)
           const where = details.length ? `: ${details.join(', ')}` : ''
-          return `Updated ${d.total_replaced} location${d.total_replaced !== 1 ? 's' : ''}${where}.`
+          const swVerify = d.verification?.verified === false ? `\n\n⚠️ ${d.verification.message}` : (d.verification?.verified ? ' ✓ Verified live.' : '')
+          return `Updated ${d.total_replaced} location${d.total_replaced !== 1 ? 's' : ''}${where}.${swVerify}`
         }
         return `Couldn't complete the replacement: ${d.error || 'Unknown error'}`
 
@@ -671,7 +713,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             return `Couldn't find "${action.find}" ${where}. The text may use different quote characters — try copying it directly from the live page.`
           }
           const count = d.updated_count === 1 ? 'one spot' : `${d.updated_count} spots`
-          return `Updated ${count} ${where}.`
+          const verifySuffix = d.verification?.verified === false ? `\n\n⚠️ ${d.verification.message}` : (d.verification?.verified ? ' ✓ Verified live.' : '')
+          return `Updated ${count} ${where}.${verifySuffix}`
         }
         return `❌ Replace failed: ${d.error || 'Unknown error'}`
       }
@@ -746,6 +789,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
 
       let actionResult: string | null = null
       if (data.action) {
+        console.log('[action-pipeline] Parsed action from AI:', JSON.stringify(data.action))
+        console.log('[action-pipeline] Content graph loaded:', !!contentGraph, contentGraph ? `(${contentGraph.pages?.length} pages)` : '')
         actionResult = await executeAction(data.action, imageToSend)
         // Refresh preview after any action that changes the site
         const noRefreshTypes = ['scan_options', 'scan_content', 'scan_site']
@@ -784,15 +829,38 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   }
 
   const statusBadge = (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-      background: siteStatus === 'live' ? '#dcfce7' : siteStatus === 'offline' ? '#fee2e2' : '#f3f4f6',
-      color: siteStatus === 'live' ? '#16a34a' : siteStatus === 'offline' ? '#dc2626' : '#6b7280',
-      border: `1px solid ${siteStatus === 'live' ? '#86efac' : siteStatus === 'offline' ? '#fca5a5' : '#e5e7eb'}`,
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: siteStatus === 'live' ? '#16a34a' : siteStatus === 'offline' ? '#dc2626' : '#9ca3af', display: 'inline-block' }}/>
-      {siteStatus === 'live' ? 'Live' : siteStatus === 'offline' ? 'Offline' : '…'}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+        background: siteStatus === 'live' ? '#dcfce7' : siteStatus === 'offline' ? '#fee2e2' : '#f3f4f6',
+        color: siteStatus === 'live' ? '#16a34a' : siteStatus === 'offline' ? '#dc2626' : '#6b7280',
+        border: `1px solid ${siteStatus === 'live' ? '#86efac' : siteStatus === 'offline' ? '#fca5a5' : '#e5e7eb'}`,
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: siteStatus === 'live' ? '#16a34a' : siteStatus === 'offline' ? '#dc2626' : '#9ca3af', display: 'inline-block' }}/>
+        {siteStatus === 'live' ? 'Live' : siteStatus === 'offline' ? 'Offline' : '…'}
+      </span>
+      <span
+        onClick={() => {
+          if (contentGraph) return // already scanned
+          setContentGraph(null)
+          fetch('/api/content-graph', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteUrl: cleanUrl, apiKey }),
+          }).then(r => r.json()).then(d => { if (d.success) setContentGraph(d.contentGraph) }).catch(() => {})
+        }}
+        title={contentGraph ? `Scanned: ${contentGraph.pages?.length || 0} pages, ${contentGraph.pages?.reduce((sum: number, p: any) => sum + (p.sections?.length || 0), 0) || 0} sections` : 'Click to scan'}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          cursor: contentGraph ? 'default' : 'pointer',
+          background: contentGraph ? '#dbeafe' : '#f3f4f6',
+          color: contentGraph ? '#2563eb' : '#9ca3af',
+          border: `1px solid ${contentGraph ? '#93c5fd' : '#e5e7eb'}`,
+      }}>
+        {contentGraph ? `📊 ${contentGraph.pages?.length || 0} pages` : '⏳ Scanning…'}
+      </span>
     </span>
   )
 

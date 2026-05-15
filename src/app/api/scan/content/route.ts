@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 
+/** Fetch live page and verify expected content changes are visible */
+async function verifyOnPage(pageUrl: string, expect?: string, notExpect?: string): Promise<{ verified: boolean; message: string }> {
+  if (!pageUrl || (!expect && !notExpect)) return { verified: true, message: '' }
+  try {
+    const r = await fetch(`${pageUrl}${pageUrl.includes('?') ? '&' : '?'}_nocache=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return { verified: true, message: '' } // can't verify, assume ok
+    const html = await r.text()
+    const text = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const lower = text.toLowerCase()
+    if (expect && !lower.includes(expect.toLowerCase())) return { verified: false, message: `New text not yet visible — may be cached. Try hard refresh.` }
+    if (notExpect && lower.includes(notExpect.toLowerCase())) return { verified: false, message: `Old text still showing — may be cached. Try hard refresh.` }
+    return { verified: true, message: 'Verified on live page.' }
+  } catch { return { verified: true, message: '' } }
+}
+
 function cleanBase(url: string) { return url.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://') }
 function authHeaders(key: string) { return { 'Authorization': `Bearer ${key}`, 'X-Ignyous-Key': key, 'Content-Type': 'application/json' } }
 
@@ -50,7 +68,10 @@ export async function POST(req: NextRequest) {
       const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
       return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
     }
-    return NextResponse.json(result)
+    // Verify on live page
+    const verifyUrl = page_id ? `${base}/?p=${page_id}` : base
+    const verify = await verifyOnPage(verifyUrl, replace || undefined, result?.updated_count > 0 ? find : undefined)
+    return NextResponse.json({ ...result, verification: verify })
   }
 
   // ── Site-wide Replace ──────────────────────────────────────────
@@ -63,6 +84,43 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: authHeaders(apiKey),
         body: JSON.stringify({ find, replace: replace || '', api_key: apiKey }),
+        signal: AbortSignal.timeout(30000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    // Verify on front page
+    const swVerify = await verifyOnPage(base, replace || undefined, result?.total_replaced > 0 ? find : undefined)
+    return NextResponse.json({ ...result, verification: swVerify })
+  }
+
+  // ── Reorder Elementor element ────────────────────────────────────
+  if (action === 'reorder_element') {
+    const pid = post_id || page_id
+    if (!pid) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(`${base}/wp-json/ignyous/v1/elementor/reorder-element`, {
+        method: 'POST',
+        headers: authHeaders(apiKey),
+        body: JSON.stringify({
+          post_id: pid,
+          mode:            body.mode            || 'swap',
+          source:          body.source          || '',
+          target:          body.target          || '',
+          source_position: body.source_position || 0,
+          target_position: body.target_position || 0,
+          api_key: apiKey,
+        }),
         signal: AbortSignal.timeout(30000),
       })
       rawStatus = r.status

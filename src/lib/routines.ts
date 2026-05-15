@@ -103,6 +103,21 @@ export const ROUTINES: Routine[] = [
 5. After success, re-scan that page's content graph to update the AI's memory.`
   },
 
+  {
+    id: 'reorder_element',
+    name: 'Reorder Page Elements',
+    triggers: ['swap', 'reorder', 'move', 'rearrange', 'switch order', 'put before', 'put after'],
+    description: 'Swap or rearrange elements within a page section',
+    steps: `1. Identify the elements from user's request + content graph.
+   "swap the 1st and 3rd service" → look at Services Section items in the content graph.
+2. Get the exact titles from the graph:
+   Content graph shows: items: ["Service 1", "Service 2", "Service 3"]
+   → source="Service 1", target="Service 3"
+3. Emit reorder_element with mode="swap", source, target, and post_id from the graph.
+4. For "move X to first position" → mode="move", source=X, target_position=1.
+5. After success, note that the content graph will be refreshed on next load.`
+  },
+
   // ─── Ecommerce ──────────────────────────────────────────────────
   {
     id: 'update_pricing',

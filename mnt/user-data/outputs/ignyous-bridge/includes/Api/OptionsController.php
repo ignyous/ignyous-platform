@@ -41,6 +41,12 @@ class OptionsController {
             'callback'            => [$this, 'remove_elementor_element'],
             'permission_callback' => [$this, 'check_permission'],
         ]);
+        // Reorder elements within an Elementor container (swap or move)
+        register_rest_route('ignyous/v1', '/elementor/reorder-element', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'reorder_elementor_element'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
         // Elementor-specific: set logo width via custom CSS in kit
         register_rest_route('ignyous/v1', '/elementor/logo-size', [
             'methods'             => 'POST',
@@ -782,6 +788,172 @@ class OptionsController {
         }
 
         return ['removed' => false, 'data' => $elements, 'removed_type' => ''];
+    }
+
+
+    /**
+     * Reorder elements within an Elementor container.
+     *
+     * Modes:
+     *   "swap"  — swap two elements by their search_text or position
+     *   "move"  — move one element to a new position
+     *
+     * Body: { post_id, mode, source, target?, source_position?, target_position? }
+     */
+    public function reorder_elementor_element($request) {
+        $body     = $request->get_json_params();
+        $post_id  = (int) ($body['post_id'] ?? 0);
+        $mode     = $body['mode']            ?? 'swap';  // "swap" | "move"
+        $source   = $body['source']          ?? '';       // search text for element A
+        $target   = $body['target']          ?? '';       // search text for element B (swap mode)
+        $src_pos  = (int) ($body['source_position'] ?? 0); // 1-based position
+        $tgt_pos  = (int) ($body['target_position'] ?? 0); // 1-based position or new position for move
+
+        if (!$post_id) return new \WP_Error('missing_post_id', 'post_id required', ['status' => 400]);
+
+        $raw  = get_post_meta($post_id, '_elementor_data', true);
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            return new \WP_Error('no_elementor_data', 'No Elementor data for this post', ['status' => 404]);
+        }
+
+        if ($mode === 'swap') {
+            $result = $this->swap_elements($data, $source, $target, $src_pos, $tgt_pos);
+        } else {
+            $result = $this->move_element($data, $source, $src_pos, $tgt_pos);
+        }
+
+        if (!$result['success']) {
+            return ['success' => false, 'message' => $result['message'] ?? 'Reorder failed'];
+        }
+
+        // Persist
+        update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($result['data'])));
+
+        // Clear caches
+        delete_post_meta($post_id, '_elementor_css');
+        delete_post_meta($post_id, '_elementor_page_assets');
+        do_action('elementor/core/files/clear_cache');
+        if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+            \Elementor\Plugin::$instance->files_manager->clear_cache();
+        }
+        $upload_dir = wp_upload_dir();
+        $css_dir    = trailingslashit($upload_dir['basedir']) . 'elementor/css/';
+        if (is_dir($css_dir)) {
+            foreach (glob($css_dir . '*.css') as $file) { @unlink($file); }
+        }
+
+        return [
+            'success'    => true,
+            'post_id'    => $post_id,
+            'page_title' => get_the_title($post_id),
+            'mode'       => $mode,
+            'source'     => $source ?: "position $src_pos",
+            'target'     => $target ?: "position $tgt_pos",
+        ];
+    }
+
+    /**
+     * Swap two sibling elements.
+     * Finds the parent container where both source and target are siblings, then swaps their positions.
+     */
+    private function swap_elements(array $elements, string $source_text, string $target_text, int $src_pos, int $tgt_pos): array {
+        // Recursively find the level where both elements are siblings
+        return $this->swap_recursive($elements, $source_text, $target_text, $src_pos, $tgt_pos);
+    }
+
+    private function swap_recursive(array $elements, string $src, string $tgt, int $src_pos, int $tgt_pos): array {
+        // Find indices of source and target at this level
+        $src_idx = null;
+        $tgt_idx = null;
+
+        for ($i = 0; $i < count($elements); $i++) {
+            $json = json_encode($elements[$i]);
+            if ($src && stripos($json, $src) !== false) $src_idx = $i;
+            if ($tgt && stripos($json, $tgt) !== false) $tgt_idx = $i;
+        }
+
+        // Position-based fallback
+        if ($src_idx === null && $src_pos > 0) $src_idx = $src_pos - 1;
+        if ($tgt_idx === null && $tgt_pos > 0) $tgt_idx = $tgt_pos - 1;
+
+        // Both found at this level — check they are actual siblings (not nested)
+        if ($src_idx !== null && $tgt_idx !== null && $src_idx !== $tgt_idx) {
+            // Verify both are at this level (not deeper matches)
+            if ($src_idx < count($elements) && $tgt_idx < count($elements)) {
+                // Swap
+                $temp = $elements[$src_idx];
+                $elements[$src_idx] = $elements[$tgt_idx];
+                $elements[$tgt_idx] = $temp;
+                return ['success' => true, 'data' => $elements];
+            }
+        }
+
+        // Try recursing into children
+        for ($i = 0; $i < count($elements); $i++) {
+            $children = $elements[$i]['elements'] ?? [];
+            if (empty($children)) continue;
+
+            // Check if both are in the same child container
+            $child_json = json_encode($elements[$i]);
+            $has_src = ($src && stripos($child_json, $src) !== false) || ($src_pos > 0);
+            $has_tgt = ($tgt && stripos($child_json, $tgt) !== false) || ($tgt_pos > 0);
+
+            if ($has_src || $has_tgt) {
+                $inner = $this->swap_recursive($children, $src, $tgt, $src_pos, $tgt_pos);
+                if ($inner['success']) {
+                    $elements[$i]['elements'] = $inner['data'];
+                    return ['success' => true, 'data' => $elements];
+                }
+            }
+        }
+
+        return ['success' => false, 'message' => 'Could not find both elements as siblings at any level'];
+    }
+
+    /**
+     * Move an element to a new position within its parent.
+     */
+    private function move_element(array $elements, string $source_text, int $src_pos, int $new_pos): array {
+        return $this->move_recursive($elements, $source_text, $src_pos, $new_pos);
+    }
+
+    private function move_recursive(array $elements, string $src, int $src_pos, int $new_pos): array {
+        // Find source at this level
+        $src_idx = null;
+        for ($i = 0; $i < count($elements); $i++) {
+            if ($src && stripos(json_encode($elements[$i]), $src) !== false) {
+                $src_idx = $i;
+                break;
+            }
+        }
+        if ($src_idx === null && $src_pos > 0 && $src_pos <= count($elements)) {
+            $src_idx = $src_pos - 1;
+        }
+
+        if ($src_idx !== null && $new_pos > 0 && count($elements) > 1) {
+            // Remove element from current position
+            $el = array_splice($elements, $src_idx, 1)[0];
+            // Insert at new position (1-based → 0-based, clamped)
+            $insert_at = min($new_pos - 1, count($elements));
+            array_splice($elements, $insert_at, 0, [$el]);
+            return ['success' => true, 'data' => $elements];
+        }
+
+        // Recurse into children
+        for ($i = 0; $i < count($elements); $i++) {
+            $children = $elements[$i]['elements'] ?? [];
+            if (empty($children)) continue;
+            if ($src && stripos(json_encode($elements[$i]), $src) === false) continue;
+
+            $inner = $this->move_recursive($children, $src, $src_pos, $new_pos);
+            if ($inner['success']) {
+                $elements[$i]['elements'] = $inner['data'];
+                return ['success' => true, 'data' => $elements];
+            }
+        }
+
+        return ['success' => false, 'message' => 'Could not find element to move'];
     }
 
     public function check_permission($request = null) {
