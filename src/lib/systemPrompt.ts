@@ -83,6 +83,19 @@ update_widgets_batch: {"type":"update_widgets_batch","post_id":2,"updates":[{"el
     {"element_id":"t3","settings":{"testimonial_name":"Lisa R.","testimonial_content":"Best in town!"}}
   ]}
   CRITICAL: When updating multiple similar items (testimonials, team members, services) with DIFFERENT values, ALWAYS use update_widgets_batch — NEVER use replace_content (which would make them all the same).
+
+STYLING CHANGES (background color, text color, fonts):
+• Elementor stores styling in section/container/widget settings.
+• "change the footer background to dark blue" → find the footer section element_id from the content graph → emit update_widget:
+  {"type":"update_widget","post_id":2,"element_id":"footer_id","settings":{"background_background":"classic","background_color":"#1e3a5f"}}
+• "change heading color to red" → update_widget with {"settings":{"title_color":"#dc2626"}}
+• Common Elementor color settings:
+    background_color, background_background ("classic"|"gradient")
+    title_color, text_color, description_color
+    button_background_color, button_text_color
+    border_color
+• If element_id unknown, use search_text to find by content.
+• NEVER say "scanning" — if you have the content graph, you already know the structure. Act directly.
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
@@ -167,7 +180,15 @@ If 1 form → act directly. If multiple → show options. After creating, embed 
 
   p.push(`AFTER CHANGES: Report specifically — "Replaced 'old text' with 'new text' on Home page." Never say "done" without saying what changed.
 
-NO HALLUCINATION: NEVER claim a change was made without an action block in this response. When user says "use" or "yes", emit the actual action — not just acknowledgement.`)
+NO HALLUCINATION: NEVER claim a change was made without an action block in this response. When user says "use" or "yes", emit the actual action — not just acknowledgement.
+
+ANTI-NARRATION RULES:
+• NEVER say "scanning...", "let me scan", "I need to scan", "checking...", "looking into it" — you have the content graph. Use it directly.
+• NEVER say "I'll help you [action_name]" without immediately emitting the action block.
+• NEVER invent action names like "change_colors" — only use the documented action types above.
+• If you can't do something → say so clearly. Don't pretend to scan.
+• The content graph IS your scan. You already know every section, widget, and element ID. ACT on it.
+• When a request maps to a known action type → emit the action block immediately. No preamble, no scanning narrative.`)
 
   if (profile) {
     const pluginNames  = (profile.plugins || []).filter(p => p.active).slice(0, 20).map(p => p.name || p.slug).join(', ')

@@ -278,6 +278,17 @@ class ContentGraphScanner {
                     $section['type']  = 'content';
                     $section['label'] = 'Content Section';
                     $section['item_count'] = count($children);
+
+                    // Footer detection: last section + contains copyright/social/contact keywords
+                    if ($idx === count($elements) - 1 || $idx >= count($elements) - 2) {
+                        $lower_text = strtolower($child_text);
+                        if (strpos($lower_text, 'copyright') !== false || strpos($lower_text, '©') !== false ||
+                            strpos($lower_text, 'all rights') !== false || strpos($lower_text, 'footer') !== false ||
+                            (strpos($lower_text, 'social') !== false && strpos($lower_text, 'follow') !== false)) {
+                            $section['type']  = 'footer';
+                            $section['label'] = 'Footer Section';
+                        }
+                    }
                 }
 
                 // Add text preview for all sections
