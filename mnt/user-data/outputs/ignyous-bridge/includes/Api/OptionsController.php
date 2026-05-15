@@ -41,6 +41,18 @@ class OptionsController {
             'callback'            => [$this, 'remove_elementor_element'],
             'permission_callback' => [$this, 'check_permission'],
         ]);
+        // Update specific widget settings by element ID
+        register_rest_route('ignyous/v1', '/elementor/update-widget', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'update_elementor_widget'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
+        // Batch update multiple widgets in one call
+        register_rest_route('ignyous/v1', '/elementor/update-widgets', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'update_elementor_widgets_batch'],
+            'permission_callback' => [$this, 'check_permission'],
+        ]);
         // Reorder elements within an Elementor container (swap or move)
         register_rest_route('ignyous/v1', '/elementor/reorder-element', [
             'methods'             => 'POST',
@@ -949,6 +961,177 @@ class OptionsController {
         }
 
         return ['success' => false, 'message' => 'Could not find element to move'];
+    }
+
+
+    /**
+     * Update specific settings on an Elementor widget by element ID.
+     *
+     * Body: { post_id, element_id, settings: { field: value, ... } }
+     *
+     * Examples:
+     *   Update testimonial name:  { element_id: "abc123", settings: { testimonial_name: "Jane Doe" } }
+     *   Update image:             { element_id: "abc123", settings: { testimonial_image: { url: "...", id: 45 } } }
+     *   Update heading:           { element_id: "abc123", settings: { title: "New Heading" } }
+     *   Update text editor:       { element_id: "abc123", settings: { editor: "<p>New content</p>" } }
+     *   Update image-box:         { element_id: "abc123", settings: { title_text: "New Title", image: { url: "..." } } }
+     */
+    public function update_elementor_widget($request) {
+        $body       = $request->get_json_params();
+        $post_id    = (int) ($body['post_id']    ?? 0);
+        $element_id = trim($body['element_id']   ?? '');
+        $settings   = $body['settings']          ?? [];
+        $search_text= trim($body['search_text']  ?? '');
+
+        if (!$post_id) return new \WP_Error('missing_post_id', 'post_id required', ['status' => 400]);
+        if (!$element_id && !$search_text) return new \WP_Error('missing_target', 'element_id or search_text required', ['status' => 400]);
+        if (empty($settings)) return new \WP_Error('missing_settings', 'settings required', ['status' => 400]);
+
+        $raw  = get_post_meta($post_id, '_elementor_data', true);
+        $data = json_decode($raw, true);
+        if (!is_array($data)) return new \WP_Error('no_data', 'No Elementor data', ['status' => 404]);
+
+        // Find and update the widget
+        if ($element_id) {
+            $result = $this->update_widget_by_id($data, $element_id, $settings);
+        } else {
+            $result = $this->update_widget_by_text($data, $search_text, $settings);
+        }
+
+        if (!$result['updated']) {
+            return ['success' => false, 'message' => 'Widget not found'];
+        }
+
+        // Persist
+        update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($result['data'])));
+        $this->clear_elementor_caches($post_id);
+
+        return [
+            'success'    => true,
+            'post_id'    => $post_id,
+            'page_title' => get_the_title($post_id),
+            'element_id' => $element_id ?: $search_text,
+            'fields_updated' => array_keys($settings),
+        ];
+    }
+
+    /**
+     * Batch update multiple widgets in one call.
+     *
+     * Body: { post_id, updates: [ { element_id, settings }, { element_id, settings }, ... ] }
+     *
+     * Perfect for: updating 3 testimonials with different names/images each.
+     */
+    public function update_elementor_widgets_batch($request) {
+        $body    = $request->get_json_params();
+        $post_id = (int) ($body['post_id'] ?? 0);
+        $updates = $body['updates'] ?? [];
+
+        if (!$post_id) return new \WP_Error('missing_post_id', 'post_id required', ['status' => 400]);
+        if (empty($updates)) return new \WP_Error('missing_updates', 'updates array required', ['status' => 400]);
+
+        $raw  = get_post_meta($post_id, '_elementor_data', true);
+        $data = json_decode($raw, true);
+        if (!is_array($data)) return new \WP_Error('no_data', 'No Elementor data', ['status' => 404]);
+
+        $results = [];
+        foreach ($updates as $upd) {
+            $eid      = trim($upd['element_id']  ?? '');
+            $stxt     = trim($upd['search_text'] ?? '');
+            $settings = $upd['settings']          ?? [];
+
+            if ((!$eid && !$stxt) || empty($settings)) {
+                $results[] = ['element_id' => $eid ?: $stxt, 'updated' => false, 'reason' => 'missing fields'];
+                continue;
+            }
+
+            if ($eid) {
+                $r = $this->update_widget_by_id($data, $eid, $settings);
+            } else {
+                $r = $this->update_widget_by_text($data, $stxt, $settings);
+            }
+
+            if ($r['updated']) {
+                $data = $r['data'];
+                $results[] = ['element_id' => $eid ?: $stxt, 'updated' => true, 'fields' => array_keys($settings)];
+            } else {
+                $results[] = ['element_id' => $eid ?: $stxt, 'updated' => false, 'reason' => 'not found'];
+            }
+        }
+
+        // Persist once for all updates
+        update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($data)));
+        $this->clear_elementor_caches($post_id);
+
+        $updated_count = count(array_filter($results, fn($r) => $r['updated']));
+
+        return [
+            'success'       => true,
+            'post_id'       => $post_id,
+            'page_title'    => get_the_title($post_id),
+            'updated_count' => $updated_count,
+            'total'         => count($updates),
+            'results'       => $results,
+        ];
+    }
+
+    // ─── Widget Update Helpers ───────────────────────────────────────
+
+    private function update_widget_by_id(array $elements, string $id, array $settings): array {
+        for ($i = 0; $i < count($elements); $i++) {
+            if (($elements[$i]['id'] ?? '') === $id) {
+                // Merge new settings into existing
+                foreach ($settings as $key => $value) {
+                    $elements[$i]['settings'][$key] = $value;
+                }
+                return ['updated' => true, 'data' => $elements];
+            }
+            if (!empty($elements[$i]['elements'])) {
+                $inner = $this->update_widget_by_id($elements[$i]['elements'], $id, $settings);
+                if ($inner['updated']) {
+                    $elements[$i]['elements'] = $inner['data'];
+                    return ['updated' => true, 'data' => $elements];
+                }
+            }
+        }
+        return ['updated' => false, 'data' => $elements];
+    }
+
+    private function update_widget_by_text(array $elements, string $needle, array $settings): array {
+        for ($i = 0; $i < count($elements); $i++) {
+            $el = $elements[$i];
+            if (($el['elType'] ?? '') === 'widget') {
+                $json = json_encode($el);
+                if (stripos($json, $needle) !== false) {
+                    foreach ($settings as $key => $value) {
+                        $elements[$i]['settings'][$key] = $value;
+                    }
+                    return ['updated' => true, 'data' => $elements];
+                }
+            }
+            if (!empty($el['elements'])) {
+                $inner = $this->update_widget_by_text($el['elements'], $needle, $settings);
+                if ($inner['updated']) {
+                    $elements[$i]['elements'] = $inner['data'];
+                    return ['updated' => true, 'data' => $elements];
+                }
+            }
+        }
+        return ['updated' => false, 'data' => $elements];
+    }
+
+    private function clear_elementor_caches(int $post_id) {
+        delete_post_meta($post_id, '_elementor_css');
+        delete_post_meta($post_id, '_elementor_page_assets');
+        do_action('elementor/core/files/clear_cache');
+        if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+            \Elementor\Plugin::$instance->files_manager->clear_cache();
+        }
+        $upload_dir = wp_upload_dir();
+        $css_dir = trailingslashit($upload_dir['basedir']) . 'elementor/css/';
+        if (is_dir($css_dir)) {
+            foreach (glob($css_dir . '*.css') as $file) { @unlink($file); }
+        }
     }
 
     public function check_permission($request = null) {

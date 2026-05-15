@@ -226,6 +226,13 @@ class ContentGraphScanner {
                     $section['label'] = 'Testimonials Section';
                     $testimonials = array_filter($child_widgets, fn($w) => $w['widgetType'] === 'testimonial');
                     $section['item_count'] = count($testimonials) ?: 1;
+                    $section['items'] = array_values(array_map(fn($w) => [
+                        'element_id'  => $w['id'],
+                        'name'        => $w['settings']['testimonial_name'] ?? '(unnamed)',
+                        'content'     => mb_substr($w['settings']['testimonial_content'] ?? '', 0, 60),
+                        'job'         => $w['settings']['testimonial_job'] ?? '',
+                        'has_image'   => !empty($w['settings']['testimonial_image']['url'] ?? ''),
+                    ], $testimonials));
                 }
                 // Pricing
                 elseif (($widget_counts['price-table'] ?? 0) >= 1 || ($widget_counts['price-list'] ?? 0) >= 1 || preg_match('/\$\d+|\d+\.\d{2}|\/month|\/year|pricing/i', $child_text)) {

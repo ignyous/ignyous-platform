@@ -102,6 +102,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, verification: swVerify })
   }
 
+  // ── Update Widget Settings ──────────────────────────────────────
+  if (action === 'update_widget' || action === 'update_widgets_batch') {
+    const pid = post_id || page_id
+    if (!pid) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
+
+    const endpoint = action === 'update_widgets_batch'
+      ? `${base}/wp-json/ignyous/v1/elementor/update-widgets`
+      : `${base}/wp-json/ignyous/v1/elementor/update-widget`
+
+    const payload = action === 'update_widgets_batch'
+      ? { post_id: pid, updates: body.updates || [], api_key: apiKey }
+      : { post_id: pid, element_id: body.element_id || '', search_text: body.search_text || '', settings: body.settings || {}, api_key: apiKey }
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST', headers: authHeaders(apiKey),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    return NextResponse.json(result)
+  }
+
   // ── Reorder Elementor element ────────────────────────────────────
   if (action === 'reorder_element') {
     const pid = post_id || page_id

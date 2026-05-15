@@ -639,6 +639,35 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return `Couldn't remove the element: ${d.error || 'Unknown error'}`
 
+      } else if (type === 'update_widget' || type === 'update_widgets_batch') {
+        const isBatch = type === 'update_widgets_batch'
+        const label = isBatch ? `Batch update ${action.updates?.length || 0} widgets` : `Update widget ${action.element_id || action.search_text}`
+        const snapId = await takeSnapshot('widget_update', label, action)
+        if (snapId) setLastSnapshotId(snapId)
+        console.log(`[${type}] action:`, JSON.stringify(action))
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: type, siteUrl: cleanUrl, apiKey,
+            post_id:     action.post_id || action.page_id,
+            element_id:  action.element_id  || undefined,
+            search_text: action.search_text || undefined,
+            settings:    action.settings    || undefined,
+            updates:     action.updates     || undefined,
+          }),
+        })
+        const d = await r.json()
+        console.log(`[${type}] response:`, JSON.stringify(d))
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const page = d.page_title ? ` on the **${d.page_title}** page` : ''
+          if (isBatch) {
+            return `Updated ${d.updated_count} of ${d.total} widgets${page}.`
+          }
+          return `Updated widget${page}.`
+        }
+        return `Couldn't update: ${d.error || d.message || 'Unknown error'}`
+
       } else if (type === 'reorder_element') {
         const snapId = await takeSnapshot('content_reorder', `Reorder: ${action.mode || 'swap'} "${action.source}" ↔ "${action.target}"`, action)
         if (snapId) setLastSnapshotId(snapId)

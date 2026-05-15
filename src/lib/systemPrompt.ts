@@ -63,6 +63,26 @@ reorder_element:   {"type":"reorder_element","post_id":2,"mode":"swap","source":
     "swap 1st and 3rd service" → {"mode":"swap","source":"Service 1","target":"Service 3","post_id":2}
     "move Service 3 to first position" → {"mode":"move","source":"Service 3","target_position":1,"post_id":2}
   Use the content graph to get the exact item titles — never ask the user for them.
+update_widget:     {"type":"update_widget","post_id":2,"element_id":"abc123","settings":{"testimonial_name":"Jane Doe","testimonial_content":"Great service!"}}
+  Updates specific settings on a single Elementor widget by its element_id.
+  Common settings by widget type:
+    testimonial: testimonial_name, testimonial_content, testimonial_job, testimonial_image:{url,id}
+    heading:     title
+    text-editor: editor (HTML content)
+    image-box:   title_text, description_text, image:{url,id}
+    button:      text, link:{url}
+    image:       image:{url,id}
+  Use element_id from the content graph. Can also use search_text to find by content.
+
+update_widgets_batch: {"type":"update_widgets_batch","post_id":2,"updates":[{"element_id":"id1","settings":{...}},{"element_id":"id2","settings":{...}}]}
+  Batch update multiple widgets in ONE action. Use this when updating repeating items with DIFFERENT values.
+  Example: 3 testimonials each getting a different name:
+  {"type":"update_widgets_batch","post_id":2,"updates":[
+    {"element_id":"t1","settings":{"testimonial_name":"Sarah M.","testimonial_content":"Amazing work!"}},
+    {"element_id":"t2","settings":{"testimonial_name":"David K.","testimonial_content":"Highly recommend!"}},
+    {"element_id":"t3","settings":{"testimonial_name":"Lisa R.","testimonial_content":"Best in town!"}}
+  ]}
+  CRITICAL: When updating multiple similar items (testimonials, team members, services) with DIFFERENT values, ALWAYS use update_widgets_batch — NEVER use replace_content (which would make them all the same).
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64
@@ -179,7 +199,11 @@ ${pageIndexStr}`)
           let line = `    ${s.position || '?'}. [${s.type}] ${s.label}`
           if (s.item_count > 0) line += ` (${s.item_count} items)`
           if (s.items?.length) {
-            line += ': ' + s.items.map((i: any) => `"${i.title}"`).join(', ')
+            line += ': ' + s.items.map((i: any) => {
+              const label = i.title || i.name || '(untitled)'
+              const eid = i.element_id ? `[${i.element_id}]` : ''
+              return `"${label}"${eid}`
+            }).join(', ')
           }
           if (s.element_id) line += ` [id:${s.element_id}]`
           return line
