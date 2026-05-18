@@ -1,6 +1,7 @@
 // src/lib/systemPrompt.ts — compact, non-contradictory
 
 import { buildRoutinePrompt } from './routines'
+import { buildBuilderKnowledge } from './builderKnowledge'
 
 export interface SiteProfile {
   site_url: string; site_name: string; description?: string
@@ -272,6 +273,65 @@ ${pageIndexStr}`)
   // Routines — smart workflows for common tasks
   const cg2 = (profile as any)?.content_graph
   p.push(buildRoutinePrompt(cg2?.capabilities || undefined))
+
+  // Builder knowledge — HOW to make changes for this specific builder/theme
+  const builderName = cg2?.capabilities?.builder_name || profile?.builder || builder || 'gutenberg'
+  const themeFramework = (profile as any)?.content_graph?.site?.theme_framework ||
+    ((profile as any)?.content_graph?.theme?.framework) || null
+  p.push(buildBuilderKnowledge(builderName, themeFramework))
+
+  // Enriched scan data — theme options, global colors, fonts
+  const enriched = (profile as any)?.enriched_scan
+  if (enriched) {
+    const parts: string[] = ['== CURRENT SITE VALUES ==']
+
+    // Theme options
+    if (enriched.theme?.theme_options) {
+      const opts = enriched.theme.theme_options
+      const entries = Object.entries(opts).filter(([k]) => k !== 'all_keys' && k !== 'framework' && k !== 'raw_option_name')
+      if (entries.length > 0) {
+        parts.push('Theme Options (' + (opts.raw_option_name || 'theme settings') + '):')
+        entries.slice(0, 25).forEach(([k, v]) => { parts.push(`  ${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`) })
+      }
+    }
+
+    // Builder global settings
+    if (enriched.builder?.global_colors?.length) {
+      parts.push('Elementor Global Colors:')
+      enriched.builder.global_colors.forEach((c: any) => { parts.push(`  ${c.title}: ${c.color}`) })
+    }
+    if (enriched.builder?.global_fonts?.length) {
+      parts.push('Elementor Global Fonts:')
+      enriched.builder.global_fonts.forEach((f: any) => { parts.push(`  ${f.title}: ${f.family} ${f.weight || ''} ${f.size || ''}`) })
+    }
+    if (enriched.builder?.body_font_family) parts.push(`Body font: ${enriched.builder.body_font_family}`)
+    if (enriched.builder?.heading_color) parts.push(`Heading color: ${enriched.builder.heading_color}`)
+    if (enriched.builder?.body_color) parts.push(`Body text color: ${enriched.builder.body_color}`)
+
+    // WooCommerce
+    if (enriched.woocommerce?.active) {
+      const wc = enriched.woocommerce
+      parts.push(`WooCommerce: ${wc.total_products} products, ${wc.currency}, ${wc.categories?.length || 0} categories`)
+      if (wc.products?.length) {
+        parts.push('Recent products:')
+        wc.products.slice(0, 8).forEach((p: any) => {
+          const sale = p.on_sale ? ` (SALE: ${p.sale_price})` : ''
+          parts.push(`  [${p.id}] ${p.name}: ${wc.currency}${p.price}${sale} - ${p.stock_status}`)
+        })
+      }
+    }
+
+    // Forms
+    if (enriched.forms?.length) {
+      parts.push('Forms:')
+      enriched.forms.forEach((f: any) => {
+        const fields = (f.fields || []).map((fd: any) => fd.label || fd.type).join(', ')
+        parts.push(`  [${f.plugin}] ${f.title} (${f.field_count || 0} fields): ${fields}`)
+      })
+    }
+
+    if (parts.length > 1) p.push(parts.join('\\n'))
+  }
 
   return p.join('\n\n')
 }

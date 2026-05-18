@@ -102,6 +102,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, verification: swVerify })
   }
 
+  // ── CSS Injection / Style Updates ──────────────────────────────
+  if (action === 'update_style' || action === 'inject_css') {
+    const endpoint = action === 'update_style'
+      ? `${base}/wp-json/ignyous/v1/css/update-style`
+      : `${base}/wp-json/ignyous/v1/css/inject`
+
+    const payload = action === 'update_style'
+      ? { post_id: post_id || page_id || 0, element_id: body.element_id || '', target: body.target || '', styles: body.styles || {}, label: body.label || '', api_key: apiKey }
+      : { rules: body.rules || [], raw_css: body.raw_css || '', api_key: apiKey }
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST', headers: authHeaders(apiKey),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    return NextResponse.json(result)
+  }
+
   // ── Update Widget Settings ──────────────────────────────────────
   if (action === 'update_widget' || action === 'update_widgets_batch') {
     const pid = post_id || page_id

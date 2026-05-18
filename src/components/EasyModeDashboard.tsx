@@ -159,6 +159,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const [siteInfo, setSiteInfo]           = useState<any>(null)
   const [pages, setPages]               = useState<any[]>([])
   const [contentGraph, setContentGraph] = useState<any>(null)
+  const [enrichedScan, setEnrichedScan] = useState<any>(null)
   const [sites, setSites]               = useState<SiteEntry[]>([])
   const [showSiteDrop, setShowSiteDrop] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -327,6 +328,26 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         .catch(() => {})
     }
 
+    // Enriched scan — theme options, builder settings, WooCommerce, forms
+    fetch(`${cleanUrl.replace(/\/$/, '')}/wp-json/ignyous/v1/enriched-scan`, {
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'X-Ignyous-Key': apiKey },
+      signal: AbortSignal.timeout(20000),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.success) setEnrichedScan(d) })
+      .catch(() => {
+        // Fallback: try through our API proxy
+        fetch('/api/wordpress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteUrl: cleanUrl, apiKey, endpoint: 'enriched-scan', method: 'GET' }),
+          signal: AbortSignal.timeout(20000),
+        })
+          .then(r => r.json())
+          .then(d => { if (d?.data?.success || d?.success) setEnrichedScan(d?.data || d) })
+          .catch(() => {})
+      })
+
     setTimeout(() => inputRef.current?.focus(), 250)
   }, [siteUrl, apiKey, cleanUrl, siteKey])
 
@@ -396,6 +417,13 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         })),
         global_content: contentGraph.global_content || {},
         capabilities:   contentGraph.capabilities   || {},
+      } : null,
+      // Enriched scan — theme options, builder global settings, WooCommerce, forms
+      enriched_scan: enrichedScan ? {
+        theme:       enrichedScan.theme       || null,
+        builder:     enrichedScan.builder     || null,
+        woocommerce: enrichedScan.woocommerce || null,
+        forms:       enrichedScan.forms       || null,
       } : null,
       instruction: [
         'You have FULL site context including page_content_index with text previews from each page.',
@@ -639,6 +667,35 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return `Couldn't remove the element: ${d.error || 'Unknown error'}`
 
+      } else if (type === 'update_style' || type === 'inject_css') {
+        const label = type === 'update_style'
+          ? `Style: ${action.target || action.element_id || 'element'}`
+          : `CSS: ${action.rules?.length || 0} rules`
+        const snapId = await takeSnapshot('css_change', label, action)
+        if (snapId) setLastSnapshotId(snapId)
+        console.log(`[${type}] action:`, JSON.stringify(action))
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: type, siteUrl: cleanUrl, apiKey,
+            post_id:    action.post_id    || action.page_id || undefined,
+            element_id: action.element_id || undefined,
+            target:     action.target     || undefined,
+            styles:     action.styles     || undefined,
+            label:      action.label      || undefined,
+            rules:      action.rules      || undefined,
+            raw_css:    action.raw_css    || undefined,
+          }),
+        })
+        const d = await r.json()
+        console.log(`[${type}] response:`, JSON.stringify(d))
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const target = d.selector || action.target || action.element_id || ''
+          return `Styled ${target}${d.page_title ? ` on ${d.page_title}` : ''}.`
+        }
+        return `Couldn't apply style: ${d.error || d.message || 'Unknown error'}`
+
       } else if (type === 'update_widget' || type === 'update_widgets_batch') {
         const isBatch = type === 'update_widgets_batch'
         const label = isBatch ? `Batch update ${action.updates?.length || 0} widgets` : `Update widget ${action.element_id || action.search_text}`
@@ -879,7 +936,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
             body: JSON.stringify({ siteUrl: cleanUrl, apiKey }),
           }).then(r => r.json()).then(d => { if (d.success) setContentGraph(d.contentGraph) }).catch(() => {})
         }}
-        title={contentGraph ? `Scanned: ${contentGraph.pages?.length || 0} pages, ${contentGraph.pages?.reduce((sum: number, p: any) => sum + (p.sections?.length || 0), 0) || 0} sections` : 'Click to scan'}
+        title={contentGraph ? `Scanned: ${contentGraph.pages?.length || 0} pages, ${contentGraph.pages?.reduce((sum: number, p: any) => sum + (p.sections?.length || 0), 0) || 0} sections${enrichedScan ? ' + theme/builder data' : ''}` : 'Click to scan'}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
