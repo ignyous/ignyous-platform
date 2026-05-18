@@ -219,7 +219,8 @@ export async function POST(req: NextRequest) {
     const KNOWN_ACTIONS = ['replace_content','remove_element','update_page','create_page','update_seo',
       'update_element','upload_logo','scan_theme_css','update_custom_css','elementor_logo_size',
       'resize_image','scan_options','scan_content','scan_site','clear_cache',
-      'site_wide_replace','site_wide_search','update_logo','reorder_element','update_widget','update_widgets_batch']
+      'site_wide_replace','site_wide_search','update_logo','reorder_element','update_widget','update_widgets_batch',
+      'update_style','inject_css','insert_element','create_element']
 
     const actionMatch  = raw.match(/```action\n([\s\S]*?)\n```/)
     const optionsMatch = raw.match(/```options\n([\s\S]*?)\n```/)

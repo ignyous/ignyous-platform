@@ -97,6 +97,18 @@ STYLING CHANGES (background color, text color, fonts):
     border_color
 • If element_id unknown, use search_text to find by content.
 • NEVER say "scanning" — if you have the content graph, you already know the structure. Act directly.
+
+insert_element:    {"type":"insert_element","post_id":2,"position":"end","element":{...elementor JSON...}}
+  Inserts a new Elementor section/container/widget into a page.
+  position: "end" (after last section), "start" (before first), or a number (1-based index).
+  parent_id: optional element_id to insert INSIDE a specific container.
+  The element JSON must follow Elementor's structure: {id, elType, settings, elements, widgetType?}.
+  For common layouts, use preset patterns:
+    Hero: container with heading + text + button, dark background
+    Services: container with 3-4 image-box widgets
+    Testimonials: container with 3 testimonial widgets
+    CTA: container with heading + button, accent background
+  Generate unique IDs with 7-char hex strings.
 update_seo:        {"type":"update_seo","pageId":2,"title":"...","meta_desc":"..."}
 update_element:    {"type":"update_element","pageId":2,"findByDescription":"hero","updates":{"background_color":"#fff"}}
 upload_logo:       {"type":"upload_logo","setAsLogo":true,"fileName":"logo.png"}  ← NEVER include base64

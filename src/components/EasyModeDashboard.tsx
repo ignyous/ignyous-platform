@@ -667,6 +667,37 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         }
         return `Couldn't remove the element: ${d.error || 'Unknown error'}`
 
+      } else if (type === 'insert_element') {
+        const snapId = await takeSnapshot('insert_element', `Insert ${action.element?.elType || 'element'}`, action)
+        if (snapId) setLastSnapshotId(snapId)
+        console.log('[insert_element] action:', JSON.stringify(action))
+        const r = await fetch('/api/scan/content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'insert_element', siteUrl: cleanUrl, apiKey,
+            post_id:   action.post_id || action.page_id,
+            element:   action.element,
+            position:  action.position  || 'end',
+            parent_id: action.parent_id || null,
+          }),
+        })
+        const d = await r.json()
+        console.log('[insert_element] response:', JSON.stringify(d))
+        if (d.success) {
+          await fetch('/api/cache', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: cleanUrl, apiKey }) })
+          const page = d.page_title ? ` on ${d.page_title}` : ''
+          // Re-scan content graph
+          const pid = action.post_id || action.page_id
+          if (pid) {
+            fetch('/api/content-graph', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ siteUrl: cleanUrl, apiKey, pageId: pid }),
+            }).then(r2 => r2.json()).then(d2 => { if (d2.success) setContentGraph((prev: any) => ({ ...prev, ...d2 })) }).catch(() => {})
+          }
+          return `Added new element${page}.`
+        }
+        return `Couldn't insert element: ${d.error || d.message || 'Unknown error'}`
+
       } else if (type === 'update_style' || type === 'inject_css') {
         const label = type === 'update_style'
           ? `Style: ${action.target || action.element_id || 'element'}`

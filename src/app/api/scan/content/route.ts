@@ -102,6 +102,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, verification: swVerify })
   }
 
+  // ── Insert Elementor Element ─────────────────────────────────────
+  if (action === 'insert_element') {
+    const pid = post_id || page_id
+    if (!pid) return NextResponse.json({ error: 'post_id required' }, { status: 400 })
+
+    let rawStatus = 0, rawText = '', result: any = null
+    try {
+      const r = await fetch(`${base}/wp-json/ignyous/v1/elementor/insert-element`, {
+        method: 'POST', headers: authHeaders(apiKey),
+        body: JSON.stringify({
+          post_id:   pid,
+          element:   body.element   || null,
+          position:  body.position  || 'end',
+          parent_id: body.parent_id || null,
+          api_key:   apiKey,
+        }),
+        signal: AbortSignal.timeout(30000),
+      })
+      rawStatus = r.status
+      rawText   = await r.text()
+      try { result = JSON.parse(rawText) } catch {}
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: `Network error: ${e.message}` })
+    }
+
+    if (!result?.success) {
+      const detail = result?.message || result?.data?.message || rawText.slice(0, 300)
+      return NextResponse.json({ success: false, error: `Bridge HTTP ${rawStatus}: ${detail}` })
+    }
+    return NextResponse.json(result)
+  }
+
   // ── CSS Injection / Style Updates ──────────────────────────────
   if (action === 'update_style' || action === 'inject_css') {
     const endpoint = action === 'update_style'

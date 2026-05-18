@@ -70,6 +70,7 @@ class IgnyousBridge {
         (new \Ignyous\Api\SiteWideController())->register_routes();
         (new \Ignyous\Api\CSSController())->register_routes();
         (new \Ignyous\Api\EnrichedScanner())->register_routes();
+        (new \Ignyous\Api\ElementorSchemaMapper())->register_routes();
         (new \Ignyous\Api\SnapshotController())->register_routes();
         (new \Ignyous\Api\ThemeController())->register_routes();
     }
