@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
+import SiteKnowledgePanel from './SiteKnowledgePanel'
 import ReactMarkdown from 'react-markdown'
 
 interface Message {
@@ -160,6 +161,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
   const [pages, setPages]               = useState<any[]>([])
   const [contentGraph, setContentGraph] = useState<any>(null)
   const [enrichedScan, setEnrichedScan] = useState<any>(null)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [actionLog, setActionLog] = useState<Array<{ ts: Date; type: string; payload: any; result: any }>>([])
   const [sites, setSites]               = useState<SiteEntry[]>([])
   const [showSiteDrop, setShowSiteDrop] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
@@ -909,6 +912,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         console.log('[action-pipeline] Parsed action from AI:', JSON.stringify(data.action))
         console.log('[action-pipeline] Content graph loaded:', !!contentGraph, contentGraph ? `(${contentGraph.pages?.length} pages)` : '')
         actionResult = await executeAction(data.action, imageToSend)
+        // Log to action log for debug panel
+        setActionLog(prev => [...prev, { ts: new Date(), type: data.action.type, payload: data.action, result: actionResult || 'null' }])
         // Refresh preview after any action that changes the site
         const noRefreshTypes = ['scan_options', 'scan_content', 'scan_site']
         if (data.action?.type && !noRefreshTypes.includes(data.action.type)) {
@@ -977,6 +982,19 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           border: `1px solid ${contentGraph ? '#93c5fd' : '#e5e7eb'}`,
       }}>
         {contentGraph ? `📊 ${contentGraph.pages?.length || 0} pages` : '⏳ Scanning…'}
+      </span>
+      <span
+        onClick={() => setShowDebugPanel(true)}
+        title="Open Site Knowledge panel"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          cursor: 'pointer',
+          background: '#1c1c2e',
+          color: '#a78bfa',
+          border: '1px solid #374151',
+      }}>
+        🔍 Debug
       </span>
     </span>
   )
@@ -1432,6 +1450,19 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
           </div>
         </main>
       </div>
+
+      {/* Debug Panel */}
+      {showDebugPanel && (
+        <SiteKnowledgePanel
+          contentGraph={contentGraph}
+          enrichedScan={enrichedScan}
+          siteContext={buildSiteContext()}
+          actionLog={actionLog}
+          siteUrl={cleanUrl}
+          apiKey={apiKey}
+          onClose={() => setShowDebugPanel(false)}
+        />
+      )}
     </div>
   )
 }
