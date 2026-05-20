@@ -140,10 +140,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Routine routing ─────────────────────────────────────────
-    const routineIntent = detectRoutineIntent(String(lastUserMsg))
-    if (routineIntent && siteUrl && apiKey) {
-      return await handleRoutineRequest(routineIntent, siteUrl, apiKey, profile, session, start)
-    }
+    // DISABLED: The old routine pre-processor intercepted requests before Claude could process them.
+    // Now Claude has the content graph, routines, and action whitelist — it handles everything directly.
+    // const routineIntent = detectRoutineIntent(String(lastUserMsg))
+    // if (routineIntent && siteUrl && apiKey) {
+    //   return await handleRoutineRequest(routineIntent, siteUrl, apiKey, profile, session, start)
+    // }
 
     // ── Claude call ─────────────────────────────────────────────
     let system: string
