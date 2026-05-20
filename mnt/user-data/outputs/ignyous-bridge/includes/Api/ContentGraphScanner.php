@@ -51,6 +51,16 @@ class ContentGraphScanner {
             'order'          => 'ASC',
         ]);
 
+        // Filter out internal Elementor pages (Global Styles, Kit previews, etc.)
+        $kit_id = (int) get_option('elementor_active_kit', 0);
+        $pages = array_filter($pages, function($p) use ($kit_id) {
+            if ($p->ID === $kit_id) return false;
+            $title_lower = strtolower($p->post_title);
+            if (in_array($title_lower, ['global styles', 'default kit', 'elementor kit'])) return false;
+            if (get_post_meta($p->ID, '_elementor_template_type', true) === 'kit') return false;
+            return true;
+        });
+
         $page_graphs = [];
         $global_phones  = [];
         $global_emails  = [];
@@ -76,6 +86,9 @@ class ContentGraphScanner {
         $menu_data   = $this->scan_menus();
         $widget_data = $this->scan_widgets();
 
+        // Scan Elementor templates (header, footer, etc.)
+        $templates   = $this->scan_elementor_templates();
+
         // Aggregate phones/emails from widgets
         foreach ($widget_data['phones'] as $ph) {
             $global_phones[$ph['value']][] = ['location' => 'widget', 'context' => $ph['context']];
@@ -98,6 +111,7 @@ class ContentGraphScanner {
                 'forms'  => $global_forms,
             ],
             'menus'        => $menu_data,
+            'templates'    => $templates,
             'capabilities' => $capabilities,
         ];
     }
@@ -207,18 +221,31 @@ class ContentGraphScanner {
                         'subheading' => $this->find_text_widget($child_widgets) ?? '',
                     ];
                 }
-                // Services: 3-6 repeated image-box or icon-box widgets
-                elseif (($widget_counts['image-box'] ?? 0) >= 3 || ($widget_counts['icon-box'] ?? 0) >= 3) {
-                    $box_type = ($widget_counts['image-box'] ?? 0) >= 3 ? 'image-box' : 'icon-box';
-                    $boxes = array_filter($child_widgets, fn($w) => $w['widgetType'] === $box_type);
+                // Services: 3+ repeated image-box, icon-box widgets, OR repeated child containers
+                elseif (
+                    ($widget_counts['image-box'] ?? 0) >= 3 ||
+                    ($widget_counts['icon-box'] ?? 0) >= 3 ||
+                    $this->looks_like_repeated_items($children, $child_text)
+                ) {
+                    // Determine item source: widgets or child containers
+                    $box_type = null;
+                    if (($widget_counts['image-box'] ?? 0) >= 3) $box_type = 'image-box';
+                    elseif (($widget_counts['icon-box'] ?? 0) >= 3) $box_type = 'icon-box';
+
+                    if ($box_type) {
+                        $boxes = array_filter($child_widgets, fn($w) => $w['widgetType'] === $box_type);
+                        $section['items'] = array_values(array_map(fn($w) => [
+                            'element_id'  => $w['id'],
+                            'title'       => $w['settings']['title_text'] ?? $w['settings']['title'] ?? '(untitled)',
+                            'description' => mb_substr($w['settings']['description_text'] ?? $w['settings']['description'] ?? '', 0, 80),
+                        ], $boxes));
+                    } else {
+                        // Items are child containers — extract title from first heading/text inside each
+                        $section['items'] = array_values(array_map(fn($child) => $this->extract_container_item($child), $children));
+                    }
                     $section['type']  = 'services';
                     $section['label'] = 'Services Section';
-                    $section['item_count'] = count($boxes);
-                    $section['items'] = array_values(array_map(fn($w) => [
-                        'element_id'  => $w['id'],
-                        'title'       => $w['settings']['title_text'] ?? $w['settings']['title'] ?? '(untitled)',
-                        'description' => mb_substr($w['settings']['description_text'] ?? $w['settings']['description'] ?? '', 0, 80),
-                    ], $boxes));
+                    $section['item_count'] = count($section['items']);
                 }
                 // Testimonials
                 elseif (($widget_counts['testimonial'] ?? 0) >= 1 || stripos($child_text, 'testimonial') !== false || stripos($child_text, 'review') !== false) {
@@ -239,10 +266,24 @@ class ContentGraphScanner {
                     $section['type']  = 'pricing';
                     $section['label'] = 'Pricing Section';
                 }
-                // Contact form
-                elseif ($this->has_widget_type($child_widgets, 'form') || $this->has_widget_type($child_widgets, 'shortcode') && stripos($child_text, 'form') !== false) {
+                // Contact form — detect Elementor form widgets, shortcode forms, or form keywords
+                elseif (
+                    $this->has_widget_type($child_widgets, 'form') ||
+                    $this->has_widget_type($child_widgets, 'wp-widget-wpforms-widget') ||
+                    $this->has_widget_type($child_widgets, 'shortcode') && stripos($child_text, 'form') !== false ||
+                    stripos($child_text, 'contact us') !== false && stripos($child_text, 'reach') !== false
+                ) {
                     $section['type']  = 'contact';
                     $section['label'] = 'Contact Section';
+                    // Extract Elementor form fields if present
+                    $form_widget = $this->find_first_widget($child_widgets, 'form');
+                    if ($form_widget) {
+                        $fields = $form_widget['settings']['form_fields'] ?? [];
+                        $section['form_fields'] = array_map(fn($f) => [
+                            'label' => $f['field_label'] ?? '', 'type' => $f['field_type'] ?? '',
+                            'required' => !empty($f['required']),
+                        ], is_array($fields) ? $fields : []);
+                    }
                 }
                 // FAQ
                 elseif (($widget_counts['accordion'] ?? 0) >= 1 || ($widget_counts['toggle'] ?? 0) >= 1 || stripos($child_text, 'FAQ') !== false || stripos($child_text, 'frequently asked') !== false) {
@@ -370,6 +411,62 @@ class ContentGraphScanner {
             }
         }
         return null;
+    }
+
+    /**
+     * Detect if children look like repeated service/feature items.
+     * Checks for: 3+ child containers with similar structure, or text with "service" patterns.
+     */
+    private function looks_like_repeated_items(array $children, string $text): bool {
+        // Check for 3+ child containers (typical for service grids)
+        $child_containers = array_filter($children, fn($c) =>
+            in_array($c['elType'] ?? '', ['container', 'column'])
+        );
+        if (count($child_containers) >= 3) {
+            // Check if they have similar structure (same number of child elements)
+            $child_counts = array_map(fn($c) => count($c['elements'] ?? []), $child_containers);
+            $mode = array_count_values($child_counts);
+            arsort($mode);
+            $most_common = key($mode);
+            $same_structure = $mode[$most_common] ?? 0;
+            if ($same_structure >= 3) return true;
+        }
+
+        // Check text for service-like patterns
+        $lower = strtolower($text);
+        if (preg_match('/service \d|feature \d|benefit \d/i', $text)) return true;
+        if (substr_count($lower, 'a short description') >= 2) return true;
+
+        return false;
+    }
+
+    /**
+     * Extract a title and element_id from a child container (for service items that use containers instead of image-box widgets).
+     */
+    private function extract_container_item(array $element): array {
+        $id = $element['id'] ?? '';
+        $title = '(untitled)';
+        $desc = '';
+
+        // Look for a heading or title inside
+        $widgets = $this->collect_widgets([$element]);
+        foreach ($widgets as $w) {
+            $wtype = $w['widgetType'] ?? '';
+            if ($wtype === 'heading' && $title === '(untitled)') {
+                $title = $w['settings']['title'] ?? '(untitled)';
+            } elseif ($wtype === 'image-box') {
+                $title = $w['settings']['title_text'] ?? $title;
+                $desc = mb_substr($w['settings']['description_text'] ?? '', 0, 80);
+            } elseif ($wtype === 'text-editor' && !$desc) {
+                $desc = mb_substr(wp_strip_all_tags($w['settings']['editor'] ?? ''), 0, 80);
+            }
+        }
+
+        return [
+            'element_id'  => $id,
+            'title'       => $title,
+            'description' => $desc,
+        ];
     }
 
     // ─── Text Extraction ─────────────────────────────────────────────
@@ -509,6 +606,58 @@ class ContentGraphScanner {
     }
 
     // ─── Menus & Widgets ─────────────────────────────────────────────
+
+    /**
+     * Scan Elementor templates (header, footer, single, archive, popup).
+     * These are stored as 'elementor_library' post type.
+     */
+    private function scan_elementor_templates(): array {
+        $templates = get_posts([
+            'post_type'      => 'elementor_library',
+            'post_status'    => 'publish',
+            'posts_per_page' => 20,
+        ]);
+
+        $result = [];
+        foreach ($templates as $tpl) {
+            $tpl_type = get_post_meta($tpl->ID, '_elementor_template_type', true) ?: 'unknown';
+
+            // Skip kit/page templates — we want structural templates (header, footer)
+            if (in_array($tpl_type, ['kit', 'page'])) continue;
+
+            $edata = get_post_meta($tpl->ID, '_elementor_data', true);
+            $data  = json_decode($edata ?: '[]', true);
+            $text  = is_array($data) ? $this->extract_text_from_elementor($data, 200) : '';
+
+            $entry = [
+                'id'        => $tpl->ID,
+                'title'     => $tpl->post_title,
+                'type'      => $tpl_type,   // header, footer, single, archive, popup, section
+                'preview'   => mb_substr($text, 0, 150),
+                'sections'  => [],
+            ];
+
+            // Get section structure for header/footer templates
+            if (is_array($data) && in_array($tpl_type, ['header', 'footer', 'section'])) {
+                $entry['sections'] = $this->classify_elementor_sections($data, $tpl->ID);
+
+                // For footer: also extract background info
+                if ($tpl_type === 'footer' && !empty($data)) {
+                    $first = $data[0] ?? [];
+                    $bg = [];
+                    if (!empty($first['settings']['background_color'])) $bg['color'] = $first['settings']['background_color'];
+                    if (!empty($first['settings']['background_background'])) $bg['type'] = $first['settings']['background_background'];
+                    if (!empty($first['settings']['background_image']['url'])) $bg['image'] = $first['settings']['background_image']['url'];
+                    if (!empty($bg)) $entry['background'] = $bg;
+                }
+            }
+
+            $result[] = $entry;
+        }
+
+        return $result;
+    }
+
 
     private function scan_menus(): array {
         $locations = get_nav_menu_locations();

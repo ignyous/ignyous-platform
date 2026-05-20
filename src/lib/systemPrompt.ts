@@ -247,6 +247,20 @@ ${pageIndexStr}`)
 
       let graphBlock = `== SITE STRUCTURE (Content Graph) ==\n${pageStructures}`
 
+      // Elementor templates (header, footer, etc.)
+      const templates = cg.pages ? null : null  // templates are at top level, not inside pages
+      const cgTemplates = (profile as any)?.content_graph?.templates || cg?.templates || []
+      if (cgTemplates.length > 0) {
+        graphBlock += '\n\nElementor Templates (global header/footer):'
+        cgTemplates.forEach((tpl: any) => {
+          let line = `  [${tpl.type}] "${tpl.title}" (post ID: ${tpl.id})`
+          if (tpl.background?.color) line += ` bg:${tpl.background.color}`
+          if (tpl.preview) line += ` — ${tpl.preview.slice(0, 60)}`
+          graphBlock += '\n' + line
+        })
+        graphBlock += '\n  → To change footer/header styles: use update_widget with the template\'s post_id and the section element_id.'
+      }
+
       // Global content locations
       const phones = cg.global_content?.phones
       if (phones?.length) {

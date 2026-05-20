@@ -378,8 +378,8 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
 
   // ── Build rich siteContext for AI (includes pages) ─────────────
   function buildSiteContext() {
-    const theme   = siteInfo?.theme?.name || siteInfo?.site?.theme || siteMemory?.theme || ''
-    const builder = siteInfo?.builder || siteMemory?.builder || ''
+    const theme   = siteInfo?.theme?.name || siteInfo?.site?.theme || siteMemory?.theme || enrichedScan?.theme?.name || ''
+    const builder = siteInfo?.builder || siteMemory?.builder || enrichedScan?.builder?.name || ''
     const activeP = pages.filter((p: any) => p.status === 'publish')
     const draftP  = pages.filter((p: any) => p.status !== 'publish')
 
@@ -420,6 +420,7 @@ export default function EasyModeDashboard({ siteUrl, apiKey, userName, onSwitchM
         })),
         global_content: contentGraph.global_content || {},
         capabilities:   contentGraph.capabilities   || {},
+        templates:      contentGraph.templates      || [],
       } : null,
       // Enriched scan — theme options, builder global settings, WooCommerce, forms
       enriched_scan: enrichedScan ? {
