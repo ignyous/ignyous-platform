@@ -60,9 +60,10 @@ export default function BaselineEditor() {
   const [chat, setChat]     = useState<ChatTurn[]>([])
   const [input1, setInput]  = useState('')
   const [busy, setBusy]     = useState(false)
-  const [tab, setTab]       = useState<'actions' | 'snapshots' | 'state'>('actions')
+  const [tab, setTab]       = useState<'actions' | 'snapshots' | 'blocks' | 'state'>('actions')
   const [actions, setActions]     = useState<any[]>([])
   const [snapshots, setSnapshots] = useState<any[]>([])
+  const [pageBlocks, setPageBlocks] = useState<any[]>([])
   const [lastApply, setLastApply] = useState<ApplyResp | null>(null)
 
   const refreshState = useCallback(async () => {
@@ -74,12 +75,14 @@ export default function BaselineEditor() {
 
   const refreshDebug = useCallback(async () => {
     if (!siteId) return
-    const [aRes, sRes] = await Promise.all([
+    const [aRes, sRes, bRes] = await Promise.all([
       fetch(`/api/baseline/actions?siteId=${siteId}&limit=30`).then(r => r.json()),
       fetch(`/api/baseline/snapshots?siteId=${siteId}&limit=30`).then(r => r.json()),
+      fetch(`/api/baseline/blocks?siteId=${siteId}`).then(r => r.json()).catch(() => ({ blocks: [] })),
     ])
     setActions(aRes.actions || [])
     setSnapshots(sRes.snapshots || [])
+    setPageBlocks(bRes.blocks || [])
   }, [siteId])
 
   useEffect(() => { refreshState(); refreshDebug() }, [refreshState, refreshDebug])
@@ -185,6 +188,9 @@ export default function BaselineEditor() {
                   <li><code>change primary color to #2563eb</code></li>
                   <li><code>set heading font to body</code> <span style={{ color: C.faint }}>(theme font slug)</span></li>
                   <li><code>change home page title to Welcome</code></li>
+                  <li><code>change the heading to Hello there</code> <span style={{ color: C.faint }}>(Phase 2)</span></li>
+                  <li><code>change the second paragraph to Lorem ipsum…</code></li>
+                  <li><code>change the button to Get Started</code></li>
                   <li><code>set featured image on home</code> <span style={{ color: C.faint }}>(after uploading)</span></li>
                   <li><code>set site logo</code></li>
                   <li><code>replace first image on home</code></li>
@@ -206,7 +212,7 @@ export default function BaselineEditor() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: 'calc(100vh - 200px)' }}>
           <div style={card}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-              {(['actions', 'snapshots', 'state'] as const).map(t => (
+              {(['actions', 'snapshots', 'blocks', 'state'] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -221,6 +227,7 @@ export default function BaselineEditor() {
           <div style={{ ...card, flex: 1, overflowY: 'auto' }}>
             {tab === 'actions'   && <ActionsList   rows={actions} />}
             {tab === 'snapshots' && <SnapshotsList rows={snapshots} siteId={siteId!} onChange={() => { refreshState(); refreshDebug() }} />}
+            {tab === 'blocks'    && <BlocksList    rows={pageBlocks} apply={apply} busy={busy} />}
             {tab === 'state'     && <StateDump state={state} lastApply={lastApply} />}
           </div>
         </div>
@@ -425,9 +432,22 @@ function QuickFormPage({ state, apply, busy }: { state: StateResp; apply: (a: Ac
 
 function ChatBubble({ turn }: { turn: ChatTurn }) {
   const bgColor = turn.role === 'user' ? '#EEF3FA' : turn.role === 'result' ? (turn.text.startsWith('✓') ? C.goodBg : turn.text.startsWith('↶') ? '#F0FAF5' : C.badBg) : '#F7F5F2'
+  const candidates: any[] | null = Array.isArray(turn.meta?.candidates) ? turn.meta.candidates : null
   return (
     <div style={{ background: bgColor, padding: 8, borderRadius: 6, fontSize: 13 }}>
       <div>{turn.text}</div>
+      {candidates && candidates.length > 0 && (
+        <div style={{ marginTop: 6, padding: 6, background: '#fff', borderRadius: 4, fontSize: 12 }}>
+          <div style={{ color: C.mute, marginBottom: 4 }}>Candidates — open the Blocks tab to click one:</div>
+          {candidates.slice(0, 8).map((c, i) => (
+            <div key={i} style={{ display: 'flex', gap: 6 }}>
+              <span style={{ color: C.faint, minWidth: 28 }}>{c.path}</span>
+              <span style={{ color: C.mute, minWidth: 80 }}>{(c.type || '').replace(/^core\//,'')}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.text || <em style={{ color: C.faint }}>(no text)</em>}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {turn.meta && (
         <details style={{ marginTop: 4 }}>
           <summary style={{ fontSize: 11, color: C.mute, cursor: 'pointer' }}>debug</summary>
@@ -643,6 +663,86 @@ function QuickFormMedia({ siteId, apply, busy }: { siteId: string; apply: (a: Ac
           </a>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── Phase 2: Blocks pane ──────────────────────────────────────────────────
+function BlocksList({ rows, apply, busy }: { rows: any[]; apply: (a: Action) => void; busy: boolean }) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draft, setDraft]     = useState('')
+
+  if (!rows.length) {
+    return <div style={{ fontSize: 12, color: C.mute }}>No blocks (or page didn't load). Click Refresh.</div>
+  }
+
+  const TEXT_EDITABLE = new Set([
+    'core/heading', 'core/paragraph', 'core/button', 'core/list-item',
+    'core/quote', 'core/preformatted', 'core/verse',
+  ])
+
+  return (
+    <div style={{ fontSize: 12 }}>
+      <div style={{ color: C.mute, marginBottom: 6 }}>{rows.length} blocks on home page · click a row to edit its text</div>
+      {rows.map(b => {
+        const isEditing  = editing === b.path
+        const canEdit    = TEXT_EDITABLE.has(b.type)
+        const indent     = (b.depth || 0) * 12
+        const shortType  = b.type.replace(/^core\//, '')
+        return (
+          <div key={b.path} style={{
+            paddingLeft: indent,
+            borderBottom: `1px solid ${C.border}`,
+            padding: '6px 4px 6px ' + (indent + 4) + 'px',
+            cursor: canEdit ? 'pointer' : 'default',
+            background: isEditing ? '#FFF7EC' : 'transparent',
+          }}
+          onClick={() => {
+            if (!canEdit) return
+            if (isEditing) { setEditing(null); setDraft(''); return }
+            setEditing(b.path); setDraft(b.text || '')
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, color: C.faint, minWidth: 28 }}>{b.path}</span>
+              <span style={{ fontSize: 11, color: C.mute, minWidth: 80 }}>{shortType}</span>
+              <span style={{ flex: 1, color: canEdit ? C.text : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {b.text || <em style={{ color: C.faint }}>(no text)</em>}
+              </span>
+            </div>
+            {isEditing && (
+              <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                <textarea
+                  value={draft}
+                  onChange={e => setDraft(e.target.value)}
+                  rows={3}
+                  style={{ ...input, fontSize: 13 }}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <button
+                    onClick={() => {
+                      apply({
+                        capability: 'blocks.patch',
+                        pageRef: 'home',
+                        target: { kind: 'path', path: b.path },
+                        op: { type: 'set_text', value: draft },
+                        label: `${shortType} ${b.path} → "${draft.slice(0, 40)}${draft.length > 40 ? '…' : ''}"`,
+                      })
+                      setEditing(null)
+                    }}
+                    disabled={busy || draft === b.text}
+                    style={{ ...btn, fontSize: 12 }}
+                  >Save</button>
+                  <button
+                    onClick={() => { setEditing(null); setDraft('') }}
+                    style={{ ...btnGhost, fontSize: 12 }}
+                  >Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

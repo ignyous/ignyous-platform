@@ -35,6 +35,7 @@ class Plugin {
         (new Api\PagesController())->register();
         (new Api\ThemeController())->register();
         (new Api\MediaController())->register();
+        (new Api\BlocksController())->register();
         (new Api\SnapshotController())->register();
         (new Api\ActionLogController())->register();
     }

@@ -1,6 +1,6 @@
-# Ignyous Bridge — Baseline (v3.1.0-phase1)
+# Ignyous Bridge — Baseline (v3.2.0-phase2)
 
-Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media).
+Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media) + Phase 2 (per-block edits via Gutenberg's parser).
 
 ## What it does
 
@@ -12,10 +12,11 @@ Capability controllers, all writing per-change snapshots and a structured action
 | Options    | `GET/PATCH /wp-json/ignyous/v1/options`   | Whitelisted: `site_title`, `tagline`                |
 | Pages      | `GET/PATCH /wp-json/ignyous/v1/pages…`    | Page title, page content (block markup or HTML)     |
 | Theme      | `GET/PATCH /wp-json/ignyous/v1/theme/styles` | `primary_color`, `text_color`, `background_color`, `heading_font`, `body_font` (block themes only) |
-| **Media**  | `POST /media/upload`, `GET /media`, `DELETE /media/{id}` | Upload (base64), list, delete attachments |
-| **Featured image** | `PATCH /pages/{id}/featured-image` | Sets `_thumbnail_id` on a page                    |
-| **Site logo** | `PATCH /options/site_logo`            | Sets/clears Customizer site logo                    |
-| **Replace image** | `PATCH /pages/{id}/replace-first-image` | Swaps the first `<!-- wp:image -->` block's URL  |
+| Media      | `POST /media/upload`, `GET /media`, `DELETE /media/{id}` | Upload (base64), list, delete attachments |
+| Featured image | `PATCH /pages/{id}/featured-image`    | Sets `_thumbnail_id` on a page                    |
+| Site logo  | `PATCH /options/site_logo`                | Sets/clears Customizer site logo                    |
+| Replace image | `PATCH /pages/{id}/replace-first-image` | Swaps the first `<!-- wp:image -->` block's URL  |
+| **Blocks** | `GET /pages/{id}/blocks`, `PATCH /pages/{id}/blocks` | List blocks with paths; patch individual block text/attrs |
 | Snapshots  | `GET /snapshots`, `POST /snapshots/{id}/restore`, `POST /snapshots/restore-change/{change_id}` | List and undo |
 | Actions    | `GET /wp-json/ignyous/v1/actions`         | Last N action-log rows                              |
 

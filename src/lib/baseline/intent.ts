@@ -20,7 +20,18 @@ export type Action =
   | { capability: 'pages.featured_image';  pageRef: string | number; attachmentRef: 'last_uploaded' | 'clear' | number; label: string }
   | { capability: 'options.site_logo';     attachmentRef: 'last_uploaded' | 'clear' | number; label: string }
   | { capability: 'pages.replace_first_image'; pageRef: string | number; attachmentRef: 'last_uploaded' | number; label: string }
+  | { capability: 'blocks.patch';   pageRef: string | number;
+                                    target: BlockTarget;
+                                    op: { type: 'set_text'; value: string } | { type: 'set_attr'; name: string; value: any };
+                                    label: string }
   | { capability: 'undo';           changeId?: string; label: string }
+
+/** How the platform locates a block before it has the page's block tree in hand. */
+export type BlockTarget =
+  | { kind: 'first';      blockType: string }                 // "the heading" → first core/heading
+  | { kind: 'nth';        blockType: string; index: number }  // "the second paragraph" → core/paragraph #1
+  | { kind: 'contains';   blockType: string; text: string }   // "the heading that says X"
+  | { kind: 'path';       path: string }                       // explicit (e.g. from UI click)
 
 export interface ParseResult {
   source: 'regex' | 'ai' | 'none'
@@ -110,7 +121,7 @@ export function parseIntent(text: string): ParseResult {
     const ref = (m[1] || 'home').replace(/\s+page$/i, '').trim() || 'home'
     return { source: 'regex', action: { capability: 'pages.featured_image', pageRef: ref, attachmentRef: 'clear', label: `Remove featured image from ${ref}` } }
   }
-  m = t.match(/^(?:set|change|use|make)\s+(?:the\s+)?featured\s+image(?:\s+(?:of|on|for)\s+(?:the\s+)?(.+?))?\s+(?:to\s+(?:the\s+)?(?:uploaded|new|last)\s+image)?\.?$/i)
+  m = t.match(/^(?:set|change|use|make)\s+(?:the\s+)?featured\s+image(?:\s+(?:of|on|for)\s+(?:the\s+)?(.+?))?(?:\s+to\s+(?:the\s+)?(?:uploaded|new|last)\s+image)?\.?$/i)
   if (m) {
     const ref = (m[1] || 'home').replace(/\s+page$/i, '').trim() || 'home'
     return { source: 'regex', action: { capability: 'pages.featured_image', pageRef: ref, attachmentRef: 'last_uploaded', label: `Featured image on ${ref} → last uploaded` } }
@@ -129,7 +140,74 @@ export function parseIntent(text: string): ParseResult {
     return { source: 'regex', action: { capability: 'pages.replace_first_image', pageRef: ref, attachmentRef: 'last_uploaded', label: `Replace first image on ${ref}` } }
   }
 
-  return { source: 'none', hint: 'Did not match any patterns. Try: "set site title to X", "change primary color to blue", "set featured image on home", "replace first image on home", "set site logo".' }
+  // ─── Block edits (Phase 2) ──
+  // "change the heading to X" / "set the first heading to X"
+  // "make the second paragraph say X" / "change the third paragraph to X"
+  // "change the button text to X" / "set the button to X"
+  // "change the heading that says Welcome to Hello"
+
+  // "change the [N]th [type] to/say X"
+  const ord = '(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th)'
+  const ordToNum = (s: string): number => {
+    const map: Record<string, number> = { first:0,'1st':0, second:1,'2nd':1, third:2,'3rd':2, fourth:3,'4th':3, fifth:4,'5th':4, sixth:5,'6th':5, seventh:6,'7th':6, eighth:7,'8th':7, ninth:8,'9th':8, tenth:9,'10th':9 }
+    return map[s.toLowerCase()] ?? 0
+  }
+  const typeMap: Record<string, string> = {
+    heading: 'core/heading', headline: 'core/heading', title: 'core/heading',
+    paragraph: 'core/paragraph', text: 'core/paragraph',
+    button: 'core/button', cta: 'core/button',
+    quote: 'core/quote',
+  }
+
+  // "the heading that says X" → set to Y :  catches  "change the heading that says 'Welcome' to 'Hello'"
+  m = t.match(/^(?:change|set|update|make)\s+(?:the\s+)?(heading|headline|title|paragraph|text|button|cta|quote)\s+(?:that\s+says|containing|with(?:\s+text)?|matching)\s+["']?(.+?)["']?\s+to\s+(.+?)\.?$/i)
+  if (m) {
+    const blockType = typeMap[m[1].toLowerCase()]
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: { kind: 'contains', blockType, text: stripQuotes(m[2]) },
+        op: { type: 'set_text', value: stripQuotes(m[3]) },
+        label: `${m[1]} containing "${stripQuotes(m[2])}" → "${stripQuotes(m[3])}"`,
+      },
+    }
+  }
+
+  // "change the second paragraph to X"  /  "make the third heading say X"
+  m = t.match(new RegExp(`^(?:change|set|update|make)\\s+(?:the\\s+)?(${ord})\\s+(heading|headline|title|paragraph|text|button|cta|quote)\\s+(?:to\\s+(?:say\\s+)?|say\\s+)(.+?)\\.?$`, 'i'))
+  if (m) {
+    const blockType = typeMap[m[2].toLowerCase()]
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: { kind: 'nth', blockType, index: ordToNum(m[1]) },
+        op: { type: 'set_text', value: stripQuotes(m[3]) },
+        label: `${m[1]} ${m[2]} → "${stripQuotes(m[3])}"`,
+      },
+    }
+  }
+
+  // "change the heading to X"  /  "set the button text to X"
+  m = t.match(/^(?:change|set|update|make)\s+(?:the\s+)?(heading|headline|title|paragraph|text|button|cta|quote)(?:\s+text)?\s+(?:to\s+(?:say\s+)?|say\s+)(.+?)\.?$/i)
+  if (m) {
+    const blockType = typeMap[m[1].toLowerCase()]
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: { kind: 'first', blockType },
+        op: { type: 'set_text', value: stripQuotes(m[2]) },
+        label: `${m[1]} → "${stripQuotes(m[2])}"`,
+      },
+    }
+  }
+
+  return { source: 'none', hint: 'Did not match any patterns. Try: "set site title to X", "change primary color to blue", "change the heading to Welcome", "change the second paragraph to ...", "set featured image on home", "undo".' }
 }
 
 function stripQuotes(s: string): string {

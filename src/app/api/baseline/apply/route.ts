@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { randomUUID } from 'crypto'
 import { bridgeCall, getSiteByIdForUser } from '@/lib/baseline/bridge'
-import type { Action } from '@/lib/baseline/intent'
+import type { Action, BlockTarget } from '@/lib/baseline/intent'
 
 interface ApplyBody {
   siteId: string
@@ -112,6 +112,43 @@ export async function POST(req: NextRequest) {
       primary = r
       break
     }
+    case 'blocks.patch': {
+      const blocksAction = body.action  // preserve type narrowing across awaits below
+      const pageId = await resolvePageId(site, blocksAction.pageRef, tiers)
+      if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
+
+      // Fetch the page's block tree
+      const list = await bridgeCall(site, `pages/${pageId}/blocks`)
+      tiers.push({ tier: 0, capability: 'blocks.list', ok: list.ok, status: list.status, error: list.error, durationMs: list.durationMs, data: { count: list.data?.count } })
+      if (!list.ok) return NextResponse.json({ success: false, changeId, error: 'Could not list blocks.', tiers }, { status: 502 })
+
+      const blocks = (list.data?.blocks as any[]) || []
+      const resolved = resolveBlockTarget(blocks, blocksAction.target)
+
+      if (resolved.kind === 'none') {
+        return NextResponse.json({
+          success: false, changeId,
+          error: `No ${humanizeType(getTargetType(blocksAction.target))} found on this page.`,
+          tiers, candidates: blocks.filter(b => !getTargetType(blocksAction.target) || b.type === getTargetType(blocksAction.target)).map(b => ({ path: b.path, type: b.type, text: b.text })),
+        }, { status: 404 })
+      }
+      if (resolved.kind === 'ambiguous') {
+        return NextResponse.json({
+          success: false, changeId,
+          error: `Ambiguous — multiple ${humanizeType(getTargetType(blocksAction.target))} blocks match. Pick one by clicking it in the Blocks pane, or be more specific.`,
+          tiers, candidates: resolved.matches.map(b => ({ path: b.path, type: b.type, text: b.text })),
+        }, { status: 409 })
+      }
+
+      const r = await bridgeCall(site, `pages/${pageId}/blocks`, {
+        method: 'PATCH',
+        body: { path: resolved.block.path, op: blocksAction.op },
+        ...opts,
+      })
+      tiers.push({ tier: 1, capability: 'blocks.patch', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+      primary = r
+      break
+    }
     case 'undo': {
       // Find the most recent change_id from the bridge action log, then restore it
       const logRes = await bridgeCall(site, 'actions?limit=20')
@@ -162,4 +199,52 @@ async function resolveAttachmentId(site: any, ref: 'last_uploaded' | 'clear' | n
     return first?.id || null
   }
   return null
+}
+
+// ─── Block target resolver ─────────────────────────────────────────────────
+
+type ResolveResult =
+  | { kind: 'one';       block: any }
+  | { kind: 'ambiguous'; matches: any[] }
+  | { kind: 'none' }
+
+function getTargetType(t: BlockTarget): string {
+  return (t as any).blockType || ''
+}
+function humanizeType(t: string): string {
+  if (!t) return 'block'
+  return t.replace(/^core\//, '').replace(/-/g, ' ')
+}
+
+function resolveBlockTarget(blocks: any[], target: BlockTarget): ResolveResult {
+  if (target.kind === 'path') {
+    const hit = blocks.find(b => b.path === target.path)
+    return hit ? { kind: 'one', block: hit } : { kind: 'none' }
+  }
+  const ofType = blocks.filter(b => b.type === target.blockType)
+  if (ofType.length === 0) return { kind: 'none' }
+
+  if (target.kind === 'first') {
+    if (ofType.length === 1) return { kind: 'one', block: ofType[0] }
+    // For "the heading" with multiple, treat as ambiguous unless ALL are at depth 0
+    // (heuristic: a page with one obvious "the heading" usually has one top-level h1/h2)
+    const topLevel = ofType.filter(b => b.depth === 0)
+    if (topLevel.length === 1) return { kind: 'one', block: topLevel[0] }
+    return { kind: 'ambiguous', matches: ofType }
+  }
+
+  if (target.kind === 'nth') {
+    if (target.index >= ofType.length) return { kind: 'none' }
+    return { kind: 'one', block: ofType[target.index] }
+  }
+
+  if (target.kind === 'contains') {
+    const needle = target.text.toLowerCase().trim()
+    const matches = ofType.filter(b => (b.text || '').toLowerCase().includes(needle))
+    if (matches.length === 0) return { kind: 'none' }
+    if (matches.length === 1) return { kind: 'one', block: matches[0] }
+    return { kind: 'ambiguous', matches }
+  }
+
+  return { kind: 'none' }
 }
