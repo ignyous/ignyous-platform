@@ -154,6 +154,19 @@ class BlocksController {
                 $target['innerContent'] = [$val];
                 break;
             }
+            case 'set_style': {
+                $category = isset($op['category']) ? (string) $op['category'] : '';
+                $name     = isset($op['name'])     ? (string) $op['name']     : '';
+                $value    = $op['value'] ?? null;
+                $opError  = $this->setBlockStyle($target, $category, $name, $value);
+                break;
+            }
+            case 'clear_style': {
+                $category = isset($op['category']) ? (string) $op['category'] : '';
+                $name     = isset($op['name'])     ? (string) $op['name']     : '';
+                $opError  = $this->setBlockStyle($target, $category, $name, null);
+                break;
+            }
             default:
                 $opError = 'unknown_op_type';
         }
@@ -291,6 +304,115 @@ class BlocksController {
     }
 
     // -------------------------------------------------------------- helpers
+
+    /**
+     * Whitelisted style fields. Each maps to a sanitizer function name.
+     * Anything not in this map is rejected.
+     */
+    const STYLE_WHITELIST = [
+        'color'      => ['text' => 'color', 'background' => 'color', 'link' => 'color'],
+        'spacing'    => ['padding' => 'spacing_value', 'margin' => 'spacing_value', 'blockGap' => 'spacing_value'],
+        'typography' => ['fontSize' => 'css_length', 'fontWeight' => 'font_weight', 'letterSpacing' => 'css_length', 'lineHeight' => 'css_number_or_length'],
+    ];
+
+    /**
+     * Set or clear a nested style attribute on a block.
+     * Path written to: attrs.style.<category>.<name>.
+     *
+     * Supports padding/margin as either:
+     *   - a string ("24px" / "1.5rem")     → applied as { top, right, bottom, left }
+     *   - an object { top?, right?, bottom?, left? } with valid CSS lengths
+     *
+     * Value of null/empty removes the field (and prunes empty parents).
+     */
+    private function setBlockStyle(array &$block, string $category, string $name, $value): ?string {
+        if (!isset(self::STYLE_WHITELIST[$category][$name])) {
+            return 'style_not_whitelisted:' . $category . '.' . $name;
+        }
+        $sanitizer = self::STYLE_WHITELIST[$category][$name];
+        $clear = ($value === null || $value === '');
+
+        if (!$clear) {
+            $sanitized = $this->sanitizeStyleValue($sanitizer, $value);
+            if ($sanitized === null) return 'invalid_style_value:' . $category . '.' . $name;
+            $value = $sanitized;
+        }
+
+        if (!isset($block['attrs']) || !is_array($block['attrs'])) $block['attrs'] = [];
+        if (!isset($block['attrs']['style']) || !is_array($block['attrs']['style'])) $block['attrs']['style'] = [];
+        if (!isset($block['attrs']['style'][$category]) || !is_array($block['attrs']['style'][$category])) {
+            $block['attrs']['style'][$category] = [];
+        }
+
+        if ($clear) {
+            unset($block['attrs']['style'][$category][$name]);
+            if (empty($block['attrs']['style'][$category])) unset($block['attrs']['style'][$category]);
+            if (empty($block['attrs']['style']))            unset($block['attrs']['style']);
+            if (empty($block['attrs']))                     $block['attrs'] = new \stdClass(); // serialize as {}
+        } else {
+            $block['attrs']['style'][$category][$name] = $value;
+        }
+
+        // For color, Gutenberg ALSO clears any preset (textColor/backgroundColor attr) so the inline style wins.
+        if ($category === 'color' && !$clear) {
+            $presetAttr = $name === 'text' ? 'textColor' : ($name === 'background' ? 'backgroundColor' : null);
+            if ($presetAttr && isset($block['attrs'][$presetAttr])) unset($block['attrs'][$presetAttr]);
+        }
+        return null;
+    }
+
+    /** Returns sanitized value or null if rejected. */
+    private function sanitizeStyleValue(string $kind, $v) {
+        switch ($kind) {
+            case 'color': {
+                if (!is_string($v)) return null;
+                $v = trim($v);
+                if (preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $v)) return strtolower($v);
+                // rgba()/hsla() — accept tight whitelist to avoid CSS injection
+                if (preg_match('/^(rgb|rgba|hsl|hsla)\(\s*[\d.,%\s\/]+\s*\)$/i', $v)) return $v;
+                // CSS var preset slug: var:preset|color|primary
+                if (preg_match('/^var:preset\|color\|[a-z0-9_-]+$/i', $v)) return $v;
+                return null;
+            }
+            case 'css_length': {
+                if (!is_string($v)) return null;
+                $v = trim($v);
+                if (preg_match('/^-?\d+(\.\d+)?(px|em|rem|%|vh|vw)?$/i', $v)) return $v;
+                if (preg_match('/^var:preset\|font-size\|[a-z0-9_-]+$/i', $v)) return $v;
+                return null;
+            }
+            case 'css_number_or_length': {
+                if (is_numeric($v)) return (string) $v;
+                return $this->sanitizeStyleValue('css_length', $v);
+            }
+            case 'spacing_value': {
+                // single string → expand to all-four object that Gutenberg expects
+                if (is_string($v)) {
+                    $clean = $this->sanitizeStyleValue('css_length', $v);
+                    if ($clean === null) return null;
+                    return ['top' => $clean, 'right' => $clean, 'bottom' => $clean, 'left' => $clean];
+                }
+                if (is_array($v)) {
+                    $out = [];
+                    foreach (['top','right','bottom','left'] as $side) {
+                        if (isset($v[$side])) {
+                            $clean = $this->sanitizeStyleValue('css_length', $v[$side]);
+                            if ($clean === null) return null;
+                            $out[$side] = $clean;
+                        }
+                    }
+                    return $out ?: null;
+                }
+                return null;
+            }
+            case 'font_weight': {
+                if (is_numeric($v) && (int) $v >= 100 && (int) $v <= 900) return (string) (int) $v;
+                if (is_string($v) && in_array(strtolower($v), ['normal','bold','lighter','bolder'], true)) return strtolower($v);
+                return null;
+            }
+        }
+        return null;
+    }
 
     private function fail(string $changeId, string $capability, float $started, string $error, array $detail = []): \WP_REST_Response {
         $duration = (int) round((microtime(true) - $started) * 1000);

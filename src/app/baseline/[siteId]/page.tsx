@@ -191,6 +191,10 @@ export default function BaselineEditor() {
                   <li><code>change the heading to Hello there</code> <span style={{ color: C.faint }}>(Phase 2)</span></li>
                   <li><code>change the second paragraph to Lorem ipsum…</code></li>
                   <li><code>change the button to Get Started</code></li>
+                  <li><code>make the heading red</code> <span style={{ color: C.faint }}>(Phase 3)</span></li>
+                  <li><code>change the button background to #2563eb</code></li>
+                  <li><code>set the heading padding to 32px</code></li>
+                  <li><code>set the heading font size to 24px</code></li>
                   <li><code>set featured image on home</code> <span style={{ color: C.faint }}>(after uploading)</span></li>
                   <li><code>set site logo</code></li>
                   <li><code>replace first image on home</code></li>
@@ -732,17 +736,102 @@ function BlocksList({ rows, apply, busy }: { rows: any[]; apply: (a: Action) => 
                     }}
                     disabled={busy || draft === b.text}
                     style={{ ...btn, fontSize: 12 }}
-                  >Save</button>
+                  >Save text</button>
                   <button
                     onClick={() => { setEditing(null); setDraft('') }}
                     style={{ ...btnGhost, fontSize: 12 }}
                   >Cancel</button>
                 </div>
+
+                <BlockStyleControls blockPath={b.path} blockType={b.type} apply={apply} busy={busy} />
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Phase 3: per-block style controls inside BlocksList ───────────────────
+function BlockStyleControls({ blockPath, blockType, apply, busy }: { blockPath: string; blockType: string; apply: (a: Action) => void; busy: boolean }) {
+  const [textColor, setTextColor] = useState('#000000')
+  const [bgColor,   setBgColor]   = useState('#ffffff')
+  const [padding,   setPadding]   = useState('')
+  const [fontSize,  setFontSize]  = useState('')
+
+  const isButton = blockType === 'core/button'
+  const supportsText = ['core/heading','core/paragraph','core/button','core/list-item','core/quote'].includes(blockType)
+  const supportsBg   = ['core/heading','core/paragraph','core/button','core/group','core/cover','core/list-item','core/quote'].includes(blockType)
+  const supportsPad  = ['core/heading','core/paragraph','core/button','core/group','core/list-item','core/quote'].includes(blockType)
+  const supportsFont = ['core/heading','core/paragraph','core/button','core/list-item','core/quote'].includes(blockType)
+
+  const setStyle = (category: 'color'|'spacing'|'typography', name: string, value: any) =>
+    apply({
+      capability: 'blocks.patch',
+      pageRef: 'home',
+      target: { kind: 'path', path: blockPath },
+      op: { type: 'set_style', category, name, value },
+      label: `${blockType.replace(/^core\//,'')} ${category}.${name} → ${typeof value === 'string' ? value : JSON.stringify(value)}`,
+    })
+
+  const clearStyle = (category: 'color'|'spacing'|'typography', name: string) =>
+    apply({
+      capability: 'blocks.patch',
+      pageRef: 'home',
+      target: { kind: 'path', path: blockPath },
+      op: { type: 'clear_style', category, name },
+      label: `clear ${blockType.replace(/^core\//,'')} ${category}.${name}`,
+    })
+
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, marginTop: 4 }
+  const lbl: React.CSSProperties = { color: C.mute, minWidth: 56 }
+  const btnSm: React.CSSProperties = { ...btn, fontSize: 11, padding: '3px 8px' }
+  const btnSmG: React.CSSProperties = { ...btnGhost, fontSize: 11, padding: '3px 8px' }
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${C.border}` }}>
+      <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Block styles</div>
+
+      {supportsText && (
+        <div style={row}>
+          <span style={lbl}>Text color</span>
+          <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} disabled={busy}
+                 style={{ width: 32, height: 22, border: `1px solid ${C.border}`, borderRadius: 4, padding: 0 }} />
+          <button onClick={() => setStyle('color', 'text', textColor)} disabled={busy} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('color', 'text')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
+
+      {supportsBg && (
+        <div style={row}>
+          <span style={lbl}>{isButton ? 'Button bg' : 'Background'}</span>
+          <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} disabled={busy}
+                 style={{ width: 32, height: 22, border: `1px solid ${C.border}`, borderRadius: 4, padding: 0 }} />
+          <button onClick={() => setStyle('color', 'background', bgColor)} disabled={busy} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('color', 'background')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
+
+      {supportsPad && (
+        <div style={row}>
+          <span style={lbl}>Padding</span>
+          <input value={padding} onChange={e => setPadding(e.target.value)} placeholder="24px"
+                 disabled={busy} style={{ ...input, fontSize: 12, padding: '3px 6px', width: 70 }} />
+          <button onClick={() => setStyle('spacing', 'padding', padding)} disabled={busy || !padding} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('spacing', 'padding')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
+
+      {supportsFont && (
+        <div style={row}>
+          <span style={lbl}>Font size</span>
+          <input value={fontSize} onChange={e => setFontSize(e.target.value)} placeholder="18px"
+                 disabled={busy} style={{ ...input, fontSize: 12, padding: '3px 6px', width: 70 }} />
+          <button onClick={() => setStyle('typography', 'fontSize', fontSize)} disabled={busy || !fontSize} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('typography', 'fontSize')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
-# Ignyous Bridge — Baseline (v3.2.0-phase2)
+# Ignyous Bridge — Baseline (v3.3.0-phase3)
 
-Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media) + Phase 2 (per-block edits via Gutenberg's parser).
+Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media) + Phase 2 (per-block content) + Phase 3 (per-block styles).
 
 ## What it does
 
@@ -16,7 +16,7 @@ Capability controllers, all writing per-change snapshots and a structured action
 | Featured image | `PATCH /pages/{id}/featured-image`    | Sets `_thumbnail_id` on a page                    |
 | Site logo  | `PATCH /options/site_logo`                | Sets/clears Customizer site logo                    |
 | Replace image | `PATCH /pages/{id}/replace-first-image` | Swaps the first `<!-- wp:image -->` block's URL  |
-| **Blocks** | `GET /pages/{id}/blocks`, `PATCH /pages/{id}/blocks` | List blocks with paths; patch individual block text/attrs |
+| **Blocks** | `GET /pages/{id}/blocks`, `PATCH /pages/{id}/blocks` | List blocks with paths; ops: `set_text`, `set_attr`, `set_html`, `set_style`, `clear_style` (color/spacing/typography) |
 | Snapshots  | `GET /snapshots`, `POST /snapshots/{id}/restore`, `POST /snapshots/restore-change/{change_id}` | List and undo |
 | Actions    | `GET /wp-json/ignyous/v1/actions`         | Last N action-log rows                              |
 

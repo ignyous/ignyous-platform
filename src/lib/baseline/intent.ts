@@ -22,9 +22,15 @@ export type Action =
   | { capability: 'pages.replace_first_image'; pageRef: string | number; attachmentRef: 'last_uploaded' | number; label: string }
   | { capability: 'blocks.patch';   pageRef: string | number;
                                     target: BlockTarget;
-                                    op: { type: 'set_text'; value: string } | { type: 'set_attr'; name: string; value: any };
+                                    op: BlockOp;
                                     label: string }
   | { capability: 'undo';           changeId?: string; label: string }
+
+export type BlockOp =
+  | { type: 'set_text';     value: string }
+  | { type: 'set_attr';     name: string; value: any }
+  | { type: 'set_style';    category: 'color' | 'spacing' | 'typography'; name: string; value: any }
+  | { type: 'clear_style';  category: 'color' | 'spacing' | 'typography'; name: string }
 
 /** How the platform locates a block before it has the page's block tree in hand. */
 export type BlockTarget =
@@ -53,6 +59,24 @@ function asHex(v: string): string | null {
   if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(v)) return v
   if (COLOR_NAMES[v]) return COLOR_NAMES[v]
   return null
+}
+
+// Shared lookup tables for block-target patterns.
+const ord = '(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th)'
+function ordToNum(s: string): number {
+  const map: Record<string, number> = { first:0,'1st':0, second:1,'2nd':1, third:2,'3rd':2, fourth:3,'4th':3, fifth:4,'5th':4, sixth:5,'6th':5, seventh:6,'7th':6, eighth:7,'8th':7, ninth:8,'9th':8, tenth:9,'10th':9 }
+  return map[s.toLowerCase()] ?? 0
+}
+const TYPE_MAP: Record<string, string> = {
+  heading: 'core/heading', headline: 'core/heading', title: 'core/heading',
+  paragraph: 'core/paragraph', text: 'core/paragraph',
+  button: 'core/button', cta: 'core/button',
+  quote: 'core/quote',
+  group: 'core/group',
+  'list-item': 'core/list-item', 'list item': 'core/list-item', listitem: 'core/list-item',
+}
+function typeMapStyles(s: string): string {
+  return TYPE_MAP[s.toLowerCase().replace(/[\s-]+/g, '-')] || TYPE_MAP[s.toLowerCase()] || ''
 }
 
 export function parseIntent(text: string): ParseResult {
@@ -140,29 +164,111 @@ export function parseIntent(text: string): ParseResult {
     return { source: 'regex', action: { capability: 'pages.replace_first_image', pageRef: ref, attachmentRef: 'last_uploaded', label: `Replace first image on ${ref}` } }
   }
 
+  // ─── Block styles (Phase 3) ──
+  // These must come BEFORE the generic "change the X to Y" so we don't
+  // accidentally interpret "change the heading color to red" as a text edit.
+  //
+  // Patterns:
+  //   "change the heading color to red"           → blocks.patch set_style color.text
+  //   "change the button background to #2563eb"  → blocks.patch set_style color.background
+  //   "change the [nth] [type] background color to X"
+  //   "set the heading padding to 32px"           → blocks.patch set_style spacing.padding
+  //   "set the heading font size to 24px"         → blocks.patch set_style typography.fontSize
+  //   "make the heading red"     (heading/paragraph → text color)
+  //   "make the button red"      (button           → background color)
+
+  // "change the [N]th [type] (text|background) color to X"
+  m = t.match(new RegExp(`^(?:change|set|make)\\s+(?:the\\s+)?(?:(${ord})\\s+)?(heading|headline|title|paragraph|text|button|cta|quote|list[\\s-]?item)\\s+(text\\s+color|background\\s+color|background|color|colour)\\s+(?:to\\s+)(\\S+)\\.?$`, 'i'))
+  if (m) {
+    const blockType = typeMapStyles(m[2])
+    const which = m[3].toLowerCase()
+    const styleName = /background/i.test(which) ? 'background' : 'text'
+    const hex = asHex(m[4])
+    if (!hex) return { source: 'none', hint: `Could not parse color "${m[4]}". Try a hex like #2563eb or a name like blue.` }
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: m[1] ? { kind: 'nth', blockType, index: ordToNum(m[1]) } : { kind: 'first', blockType },
+        op: { type: 'set_style', category: 'color', name: styleName, value: hex },
+        label: `${m[1] ? m[1] + ' ' : ''}${m[2]} ${styleName} color → ${hex}`,
+      },
+    }
+  }
+
+  // "make the [type] red"
+  m = t.match(/^make\s+(?:the\s+)?(heading|headline|title|paragraph|text|button|cta|quote|list[\s-]?item)\s+(\S+)\.?$/i)
+  if (m) {
+    const blockType = typeMapStyles(m[1])
+    const hex = asHex(m[2])
+    if (hex) {
+      // For buttons, "make red" implies background; for text-like blocks, text color
+      const styleName = blockType === 'core/button' ? 'background' : 'text'
+      return {
+        source: 'regex',
+        action: {
+          capability: 'blocks.patch',
+          pageRef: 'home',
+          target: { kind: 'first', blockType },
+          op: { type: 'set_style', category: 'color', name: styleName, value: hex },
+          label: `${m[1]} ${styleName} → ${hex}`,
+        },
+      }
+    }
+  }
+
+  // "set the heading padding to 32px"  /  "change the heading margin to 1rem"
+  m = t.match(new RegExp(`^(?:change|set|make)\\s+(?:the\\s+)?(?:(${ord})\\s+)?(heading|headline|title|paragraph|text|button|cta|quote|list[\\s-]?item|group)\\s+(padding|margin)\\s+(?:to\\s+)(\\S+)\\.?$`, 'i'))
+  if (m) {
+    const blockType = typeMapStyles(m[2])
+    const styleName = m[3].toLowerCase()  // padding | margin
+    const value = m[4]
+    if (!/^-?\d+(\.\d+)?(px|em|rem|%|vh|vw)?$/i.test(value)) {
+      return { source: 'none', hint: `Could not parse spacing value "${value}". Try "24px" or "1.5rem".` }
+    }
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: m[1] ? { kind: 'nth', blockType, index: ordToNum(m[1]) } : { kind: 'first', blockType },
+        op: { type: 'set_style', category: 'spacing', name: styleName, value },
+        label: `${m[1] ? m[1] + ' ' : ''}${m[2]} ${styleName} → ${value}`,
+      },
+    }
+  }
+
+  // "set the heading font size to 24px"
+  m = t.match(new RegExp(`^(?:change|set|make)\\s+(?:the\\s+)?(?:(${ord})\\s+)?(heading|headline|title|paragraph|text|button|cta|quote|list[\\s-]?item)\\s+font[\\s-]?size\\s+(?:to\\s+)(\\S+)\\.?$`, 'i'))
+  if (m) {
+    const blockType = typeMapStyles(m[2])
+    const value = m[3]
+    if (!/^-?\d+(\.\d+)?(px|em|rem|%|vh|vw)?$/i.test(value)) {
+      return { source: 'none', hint: `Could not parse font size "${value}". Try "18px" or "1.25rem".` }
+    }
+    return {
+      source: 'regex',
+      action: {
+        capability: 'blocks.patch',
+        pageRef: 'home',
+        target: m[1] ? { kind: 'nth', blockType, index: ordToNum(m[1]) } : { kind: 'first', blockType },
+        op: { type: 'set_style', category: 'typography', name: 'fontSize', value },
+        label: `${m[1] ? m[1] + ' ' : ''}${m[2]} font size → ${value}`,
+      },
+    }
+  }
+
   // ─── Block edits (Phase 2) ──
   // "change the heading to X" / "set the first heading to X"
   // "make the second paragraph say X" / "change the third paragraph to X"
   // "change the button text to X" / "set the button to X"
   // "change the heading that says Welcome to Hello"
 
-  // "change the [N]th [type] to/say X"
-  const ord = '(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th)'
-  const ordToNum = (s: string): number => {
-    const map: Record<string, number> = { first:0,'1st':0, second:1,'2nd':1, third:2,'3rd':2, fourth:3,'4th':3, fifth:4,'5th':4, sixth:5,'6th':5, seventh:6,'7th':6, eighth:7,'8th':7, ninth:8,'9th':8, tenth:9,'10th':9 }
-    return map[s.toLowerCase()] ?? 0
-  }
-  const typeMap: Record<string, string> = {
-    heading: 'core/heading', headline: 'core/heading', title: 'core/heading',
-    paragraph: 'core/paragraph', text: 'core/paragraph',
-    button: 'core/button', cta: 'core/button',
-    quote: 'core/quote',
-  }
-
   // "the heading that says X" → set to Y :  catches  "change the heading that says 'Welcome' to 'Hello'"
   m = t.match(/^(?:change|set|update|make)\s+(?:the\s+)?(heading|headline|title|paragraph|text|button|cta|quote)\s+(?:that\s+says|containing|with(?:\s+text)?|matching)\s+["']?(.+?)["']?\s+to\s+(.+?)\.?$/i)
   if (m) {
-    const blockType = typeMap[m[1].toLowerCase()]
+    const blockType = TYPE_MAP[m[1].toLowerCase()]
     return {
       source: 'regex',
       action: {
@@ -178,7 +284,7 @@ export function parseIntent(text: string): ParseResult {
   // "change the second paragraph to X"  /  "make the third heading say X"
   m = t.match(new RegExp(`^(?:change|set|update|make)\\s+(?:the\\s+)?(${ord})\\s+(heading|headline|title|paragraph|text|button|cta|quote)\\s+(?:to\\s+(?:say\\s+)?|say\\s+)(.+?)\\.?$`, 'i'))
   if (m) {
-    const blockType = typeMap[m[2].toLowerCase()]
+    const blockType = TYPE_MAP[m[2].toLowerCase()]
     return {
       source: 'regex',
       action: {
@@ -194,7 +300,7 @@ export function parseIntent(text: string): ParseResult {
   // "change the heading to X"  /  "set the button text to X"
   m = t.match(/^(?:change|set|update|make)\s+(?:the\s+)?(heading|headline|title|paragraph|text|button|cta|quote)(?:\s+text)?\s+(?:to\s+(?:say\s+)?|say\s+)(.+?)\.?$/i)
   if (m) {
-    const blockType = typeMap[m[1].toLowerCase()]
+    const blockType = TYPE_MAP[m[1].toLowerCase()]
     return {
       source: 'regex',
       action: {
