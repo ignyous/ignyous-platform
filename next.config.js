@@ -8,6 +8,10 @@ const nextConfig = {
       { protocol: 'https', hostname: 'secure.gravatar.com' },
     ],
   },
+  // Include the WordPress plugin source so the /api/baseline/bridge.zip route can build the zip on demand.
+  outputFileTracingIncludes: {
+    '/api/baseline/bridge.zip': ['./plugin/ignyous-bridge-baseline/**/*'],
+  },
 }
 
 module.exports = nextConfig
