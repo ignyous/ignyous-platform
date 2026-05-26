@@ -17,6 +17,9 @@ export type Action =
   | { capability: 'options.patch';  body: { site_title?: string; tagline?: string };          label: string }
   | { capability: 'pages.patch';    pageRef: string | number; body: { title?: string; content?: string }; label: string }
   | { capability: 'theme.patch';    body: { primary_color?: string; text_color?: string; background_color?: string; heading_font?: string; body_font?: string }; label: string }
+  | { capability: 'pages.featured_image';  pageRef: string | number; attachmentRef: 'last_uploaded' | 'clear' | number; label: string }
+  | { capability: 'options.site_logo';     attachmentRef: 'last_uploaded' | 'clear' | number; label: string }
+  | { capability: 'pages.replace_first_image'; pageRef: string | number; attachmentRef: 'last_uploaded' | number; label: string }
   | { capability: 'undo';           changeId?: string; label: string }
 
 export interface ParseResult {
@@ -98,7 +101,35 @@ export function parseIntent(text: string): ParseResult {
   m = t.match(/(?:set|change|replace|update)\s+(?:the\s+)?(?:home(?:page)?|page)\s+content\s+(?:to|with|=|:)\s+(.+)$/i)
   if (m) return { source: 'regex', action: { capability: 'pages.patch', pageRef: 'home', body: { content: stripQuotes(m[1]) }, label: `Home page content replaced` } }
 
-  return { source: 'none', hint: 'Did not match any Phase 0 patterns. Try: "set site title to X", "change primary color to #2563eb", "set heading font to Inter".' }
+  // ─── Featured image ──
+  // "set featured image of home to the uploaded image"
+  // "set the featured image on the home page"
+  // "remove featured image from home"
+  m = t.match(/^(?:remove|clear)\s+(?:the\s+)?featured\s+image(?:\s+(?:from|of|on)\s+(?:the\s+)?(.+?))?\.?$/i)
+  if (m) {
+    const ref = (m[1] || 'home').replace(/\s+page$/i, '').trim() || 'home'
+    return { source: 'regex', action: { capability: 'pages.featured_image', pageRef: ref, attachmentRef: 'clear', label: `Remove featured image from ${ref}` } }
+  }
+  m = t.match(/^(?:set|change|use|make)\s+(?:the\s+)?featured\s+image(?:\s+(?:of|on|for)\s+(?:the\s+)?(.+?))?\s+(?:to\s+(?:the\s+)?(?:uploaded|new|last)\s+image)?\.?$/i)
+  if (m) {
+    const ref = (m[1] || 'home').replace(/\s+page$/i, '').trim() || 'home'
+    return { source: 'regex', action: { capability: 'pages.featured_image', pageRef: ref, attachmentRef: 'last_uploaded', label: `Featured image on ${ref} → last uploaded` } }
+  }
+
+  // ─── Site logo ──
+  m = t.match(/^(?:remove|clear)\s+(?:the\s+)?(?:site\s+)?logo\.?$/i)
+  if (m) return { source: 'regex', action: { capability: 'options.site_logo', attachmentRef: 'clear', label: 'Remove site logo' } }
+  m = t.match(/^(?:set|change|use|upload|update)\s+(?:the\s+)?(?:site\s+)?logo(?:\s+to\s+(?:the\s+)?(?:uploaded|new|last)\s+image)?\.?$/i)
+  if (m) return { source: 'regex', action: { capability: 'options.site_logo', attachmentRef: 'last_uploaded', label: 'Site logo → last uploaded' } }
+
+  // ─── Replace first image on a page ──
+  m = t.match(/^(?:replace|swap|change)\s+(?:the\s+)?(?:first|main|hero)\s+image(?:\s+(?:on|of|in)\s+(?:the\s+)?(.+?))?(?:\s+(?:with|to)\s+(?:the\s+)?(?:uploaded|new|last)\s+image)?\.?$/i)
+  if (m) {
+    const ref = (m[1] || 'home').replace(/\s+page$/i, '').trim() || 'home'
+    return { source: 'regex', action: { capability: 'pages.replace_first_image', pageRef: ref, attachmentRef: 'last_uploaded', label: `Replace first image on ${ref}` } }
+  }
+
+  return { source: 'none', hint: 'Did not match any patterns. Try: "set site title to X", "change primary color to blue", "set featured image on home", "replace first image on home", "set site logo".' }
 }
 
 function stripQuotes(s: string): string {

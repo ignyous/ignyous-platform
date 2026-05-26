@@ -121,6 +121,32 @@ class SnapshotController {
                 if (is_wp_error($r)) return $r;
                 return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'page_content (' . strlen($val) . ' chars)'];
 
+            case 'post_meta':
+                // target_key format: "{post_id}|{meta_key}"
+                $parts = explode('|', $key, 2);
+                if (count($parts) !== 2) return new \WP_Error('ignyous_bad_meta_key', 'post_meta key must be "post_id|meta_key".', ['status' => 500]);
+                [$postId, $metaKey] = [(int) $parts[0], $parts[1]];
+                if ($val === '' || $val === null || $val === '0') {
+                    delete_post_meta($postId, $metaKey);
+                } else {
+                    update_post_meta($postId, $metaKey, $this->maybeJsonDecode($val));
+                }
+                return ['target_type' => $type, 'target_key' => $key, 'restored_to' => get_post_meta($postId, $metaKey, true)];
+
+            case 'attachment_created':
+                // Undo an upload = delete the attachment we created.
+                $attachId = (int) $key;
+                if (!get_post($attachId)) {
+                    return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'already_gone'];
+                }
+                $deleted = wp_delete_attachment($attachId, true);
+                if (!$deleted) return new \WP_Error('ignyous_attachment_delete_failed', 'Could not delete attachment ' . $attachId, ['status' => 500]);
+                return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'deleted'];
+
+            case 'attachment_deleted':
+                // Hard-deleted bytes are gone — we can't restore the file. Return a noted no-op.
+                return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'cannot_undo_hard_delete', 'note' => 'Attachment file was permanently removed; re-upload required.'];
+
             case 'global_styles':
                 $data = json_decode($val, true);
                 if (!is_array($data)) return new \WP_Error('ignyous_bad_snapshot', 'Snapshot before_value is not valid JSON.', ['status' => 500]);

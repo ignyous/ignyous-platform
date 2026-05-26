@@ -78,6 +78,40 @@ export async function POST(req: NextRequest) {
       primary = r
       break
     }
+    case 'pages.featured_image': {
+      const pageId = await resolvePageId(site, body.action.pageRef, tiers)
+      if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
+      const attachId = await resolveAttachmentId(site, body.action.attachmentRef, tiers)
+      if (attachId === null) return NextResponse.json({ success: false, changeId, error: 'No uploaded image found. Upload one first.', tiers }, { status: 400 })
+      const r = await bridgeCall(site, `pages/${pageId}/featured-image`, { method: 'PATCH', body: { attachment_id: attachId }, ...opts })
+      tiers.push({ tier: 1, capability: 'pages.featured_image', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+      primary = r
+      break
+    }
+    case 'options.site_logo': {
+      const attachId = await resolveAttachmentId(site, body.action.attachmentRef, tiers)
+      if (attachId === null) return NextResponse.json({ success: false, changeId, error: 'No uploaded image found. Upload one first.', tiers }, { status: 400 })
+      const r = await bridgeCall(site, 'options/site_logo', { method: 'PATCH', body: { attachment_id: attachId }, ...opts })
+      tiers.push({ tier: 2, capability: 'options.site_logo', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+      primary = r
+      break
+    }
+    case 'pages.replace_first_image': {
+      const pageId = await resolvePageId(site, body.action.pageRef, tiers)
+      if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
+      const attachId = await resolveAttachmentId(site, body.action.attachmentRef, tiers)
+      if (!attachId) return NextResponse.json({ success: false, changeId, error: 'No uploaded image found. Upload one first.', tiers }, { status: 400 })
+
+      // Need the URL — pull from the media list lookup we just did, or refetch
+      const mediaRes = await bridgeCall(site, 'media?limit=20')
+      const found = ((mediaRes.data?.media as any[]) || []).find(m => m.id === attachId)
+      if (!found?.url) return NextResponse.json({ success: false, changeId, error: 'Attachment exists but URL missing.', tiers }, { status: 500 })
+
+      const r = await bridgeCall(site, `pages/${pageId}/replace-first-image`, { method: 'PATCH', body: { url: found.url, alt: found.alt || '', attachment_id: attachId }, ...opts })
+      tiers.push({ tier: 1, capability: 'pages.replace_first_image', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+      primary = r
+      break
+    }
     case 'undo': {
       // Find the most recent change_id from the bridge action log, then restore it
       const logRes = await bridgeCall(site, 'actions?limit=20')
@@ -102,4 +136,30 @@ export async function POST(req: NextRequest) {
     tiers,
     action: body.action,
   })
+}
+
+// ─── helpers ───────────────────────────────────────────────────────────────
+
+async function resolvePageId(site: any, ref: string | number, tiers: any[]): Promise<number | null> {
+  if (typeof ref === 'number') return ref
+  if (ref === 'home') {
+    const s = await bridgeCall(site, 'site')
+    const id = (s.data?.home_page_id as number) || null
+    tiers.push({ tier: 0, capability: 'resolve.home', ok: s.ok && !!id, status: s.status, durationMs: s.durationMs, data: { home_page_id: id } })
+    return id
+  }
+  // Could expand to slug lookup later
+  return null
+}
+
+async function resolveAttachmentId(site: any, ref: 'last_uploaded' | 'clear' | number, tiers: any[]): Promise<number | null> {
+  if (ref === 'clear') return 0
+  if (typeof ref === 'number') return ref
+  if (ref === 'last_uploaded') {
+    const r = await bridgeCall(site, 'media?limit=1')
+    const first = ((r.data?.media as any[]) || [])[0]
+    tiers.push({ tier: 0, capability: 'resolve.last_uploaded', ok: r.ok && !!first, status: r.status, durationMs: r.durationMs, data: { attachment_id: first?.id } })
+    return first?.id || null
+  }
+  return null
 }

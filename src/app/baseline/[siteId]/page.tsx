@@ -169,6 +169,7 @@ export default function BaselineEditor() {
           <QuickFormText state={state} apply={apply} busy={busy} />
           <QuickFormTheme state={state} apply={apply} busy={busy} />
           <QuickFormPage  state={state} apply={apply} busy={busy} />
+          <QuickFormMedia siteId={siteId!} apply={apply} busy={busy} />
         </div>
 
         {/* Mid — Chat */}
@@ -184,6 +185,9 @@ export default function BaselineEditor() {
                   <li><code>change primary color to #2563eb</code></li>
                   <li><code>set heading font to body</code> <span style={{ color: C.faint }}>(theme font slug)</span></li>
                   <li><code>change home page title to Welcome</code></li>
+                  <li><code>set featured image on home</code> <span style={{ color: C.faint }}>(after uploading)</span></li>
+                  <li><code>set site logo</code></li>
+                  <li><code>replace first image on home</code></li>
                   <li><code>undo</code></li>
                 </ul>
               </div>
@@ -507,6 +511,138 @@ function StateDump({ state, lastApply }: { state: StateResp; lastApply: ApplyRes
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Full site state</summary>
         <pre style={{ overflowX: 'auto', background: '#fff', padding: 6, borderRadius: 4 }}>{JSON.stringify(state, null, 2)}</pre>
       </details>
+    </div>
+  )
+}
+
+// ─── Phase 1: Media pane ───────────────────────────────────────────────────
+function QuickFormMedia({ siteId, apply, busy }: { siteId: string; apply: (a: Action) => void; busy: boolean }) {
+  const [media, setMedia]       = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+  const [lastUploadId, setLastUploadId] = useState<number | null>(null)
+  const [drag, setDrag] = useState(false)
+
+  const refreshMedia = useCallback(async () => {
+    const r = await fetch(`/api/baseline/media?siteId=${siteId}&limit=12`).then(r => r.json())
+    setMedia(r.media || [])
+  }, [siteId])
+
+  useEffect(() => { refreshMedia() }, [refreshMedia])
+
+  const upload = async (file: File) => {
+    setUploading(true); setUploadErr(null)
+    try {
+      const fd = new FormData()
+      fd.append('siteId', siteId)
+      fd.append('file', file)
+      const r = await fetch('/api/baseline/media/upload', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!d.success) {
+        setUploadErr(d.bridge?.data?.error || d.bridge?.error || d.error || 'upload_failed')
+      } else {
+        setLastUploadId(d.bridge?.data?.attachment_id || null)
+        await refreshMedia()
+      }
+    } catch (e: any) {
+      setUploadErr(e?.message || 'network_error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const onFile = (f: File | null) => { if (f) upload(f) }
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontWeight: 600 }}>Images</div>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: C.faint }}>Phase 1</span>
+      </div>
+
+      <div
+        onDragOver={e => { e.preventDefault(); setDrag(true) }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => {
+          e.preventDefault(); setDrag(false)
+          onFile(e.dataTransfer.files?.[0] || null)
+        }}
+        style={{
+          border: `2px dashed ${drag ? C.accent : C.border}`,
+          borderRadius: 6, padding: 16, textAlign: 'center',
+          background: drag ? '#FFF7EC' : '#FAFAF8',
+          fontSize: 13, color: C.mute, marginBottom: 10,
+        }}
+      >
+        {uploading ? 'Uploading…' : drag ? 'Drop to upload' : 'Drop an image here or'}
+        <div style={{ marginTop: 6 }}>
+          <label style={{ ...btnGhost, display: 'inline-block', cursor: 'pointer' }}>
+            Choose file
+            <input
+              type="file" accept="image/*" hidden
+              onChange={e => onFile(e.target.files?.[0] || null)}
+              disabled={uploading || busy}
+            />
+          </label>
+        </div>
+        {uploadErr && (
+          <div style={{ marginTop: 8, fontSize: 12, color: C.bad, background: C.badBg, padding: 6, borderRadius: 4 }}>
+            {uploadErr}
+          </div>
+        )}
+        {lastUploadId && !uploadErr && (
+          <div style={{ marginTop: 8, fontSize: 11, color: C.good }}>
+            Uploaded · attachment #{lastUploadId}
+          </div>
+        )}
+      </div>
+
+      {/* Apply actions — use the most recent upload */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+        <button
+          onClick={() => apply({ capability: 'pages.featured_image', pageRef: 'home', attachmentRef: 'last_uploaded', label: 'Featured image on home → last uploaded' })}
+          disabled={busy || media.length === 0}
+          style={{ ...btnGhost, fontSize: 13 }}
+        >
+          Set as featured image (home)
+        </button>
+        <button
+          onClick={() => apply({ capability: 'options.site_logo', attachmentRef: 'last_uploaded', label: 'Site logo → last uploaded' })}
+          disabled={busy || media.length === 0}
+          style={{ ...btnGhost, fontSize: 13 }}
+        >
+          Set as site logo
+        </button>
+        <button
+          onClick={() => apply({ capability: 'pages.replace_first_image', pageRef: 'home', attachmentRef: 'last_uploaded', label: 'Replace first image on home' })}
+          disabled={busy || media.length === 0}
+          style={{ ...btnGhost, fontSize: 13 }}
+        >
+          Replace first image on home
+        </button>
+        <button
+          onClick={() => apply({ capability: 'pages.featured_image', pageRef: 'home', attachmentRef: 'clear', label: 'Clear featured image on home' })}
+          disabled={busy}
+          style={{ ...btnGhost, fontSize: 12, color: C.mute }}
+        >
+          Clear featured image (home)
+        </button>
+      </div>
+
+      {/* Recent uploads */}
+      <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Recent</div>
+      {media.length === 0 && <div style={{ fontSize: 12, color: C.faint }}>None yet.</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+        {media.slice(0, 6).map(m => (
+          <a key={m.id} href={m.url} target="_blank" rel="noreferrer" title={m.title}>
+            <img
+              src={m.url}
+              alt={m.alt || m.title}
+              style={{ width: '100%', height: 60, objectFit: 'cover', borderRadius: 4, border: `1px solid ${C.border}` }}
+            />
+          </a>
+        ))}
+      </div>
     </div>
   )
 }

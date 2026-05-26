@@ -1,20 +1,20 @@
 <?php
 /**
  * Plugin Name: Ignyous Bridge (Baseline)
- * Description: Minimal, debuggable connector for the Ignyous platform. Edit site title, page content, theme colors & fonts with per-change snapshots and a full action log.
- * Version:     3.0.0-baseline
+ * Description: Minimal, debuggable connector for the Ignyous platform. Edit site title, page content, theme colors & fonts, and media (Phase 1) with per-change snapshots and a full action log.
+ * Version:     3.1.0-phase1
  * Author:      Ignyous AI
  * Author URI:  https://ignyous.ai
  * License:     GPL v2 or later
  * Text Domain: ignyous-bridge
  *
- * Phase 0 of the rebuild. Five capability controllers + Snapshots + ActionLog.
- * Anything not handled here falls through to a future global-CSS controller (Tier 3).
+ * Phase 1 — adds media: upload, list, delete, featured image, site logo, replace first image.
+ * All writes captured by Snapshots before/after for one-click undo.
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('IGNYOUS_BL_VERSION', '3.0.0-baseline');
+define('IGNYOUS_BL_VERSION', '3.1.0-phase1');
 define('IGNYOUS_BL_FILE',    __FILE__);
 define('IGNYOUS_BL_DIR',     plugin_dir_path(__FILE__));
 define('IGNYOUS_BL_URL',     plugin_dir_url(__FILE__));
