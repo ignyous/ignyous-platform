@@ -88,13 +88,13 @@ export default function BaselineEditor() {
   useEffect(() => { refreshState(); refreshDebug() }, [refreshState, refreshDebug])
 
   // ─── Apply an Action ──
-  async function apply(action: Action, intent?: string) {
+  async function apply(action: Action, intent?: string, aiTokens?: number) {
     setBusy(true)
     setChat(c => [...c, { role: 'system', text: `Applying: ${action.label}` }])
     const r = await fetch('/api/baseline/apply', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ siteId, action, intent: intent || action.label }),
+      body:    JSON.stringify({ siteId, action, intent: intent || action.label, aiTokens }),
     })
     const d = await r.json() as ApplyResp
     setLastApply(d)
@@ -122,7 +122,11 @@ export default function BaselineEditor() {
       setChat(c => [...c, { role: 'system', text: `Couldn't parse: ${d.hint || 'no match'}`, meta: d }])
       return
     }
-    await apply(d.action, text)
+    // Surface AI source so the user can see when tokens were used
+    if (d.source === 'ai') {
+      setChat(c => [...c, { role: 'system', text: `AI parsed (${d.cached ? 'cached, 0' : d.aiTokens} tokens): ${d.action.label}`, meta: d }])
+    }
+    await apply(d.action, text, d.aiTokens || 0)
   }
 
   // ─── Undo last ──
@@ -177,7 +181,7 @@ export default function BaselineEditor() {
 
         {/* Mid — Chat */}
         <div style={{ ...card, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)' }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Chat (regex parser, no AI in Phase 0)</div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Chat <span style={{ fontWeight: 400, fontSize: 11, color: C.faint }}>· regex first, Haiku 4.5 fallback</span></div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 4 }}>
             {chat.length === 0 && (
               <div style={{ color: C.mute, fontSize: 13 }}>
@@ -469,7 +473,9 @@ function ActionsList({ rows }: { rows: any[] }) {
       {rows.map(a => (
         <details key={a.id} style={{ background: a.success ? C.goodBg : C.badBg, border: `1px solid ${a.success ? '#B8E5CF' : '#FECACA'}`, borderRadius: 6, padding: 6 }}>
           <summary style={{ cursor: 'pointer' }}>
-            <strong>{a.capability}</strong>{a.success ? ' ✓' : ' ✗'} <span style={{ color: C.mute }}>· {a.duration_ms ?? '?'}ms · {a.created_at?.replace('T',' ').slice(0,19)}</span>
+            <strong>{a.capability}</strong>{a.success ? ' ✓' : ' ✗'}
+            {a.ai_tokens > 0 && <span title={`${a.ai_tokens} AI tokens`} style={{ marginLeft: 4, padding: '0 4px', borderRadius: 3, background: C.warnBg, color: C.warn, fontSize: 10 }}>AI · {a.ai_tokens}t</span>}
+            <span style={{ color: C.mute }}> · {a.duration_ms ?? '?'}ms · {a.created_at?.replace('T',' ').slice(0,19)}</span>
           </summary>
           <div style={{ marginTop: 4 }}>
             {a.intent_raw && <div><em>intent:</em> {a.intent_raw}</div>}
