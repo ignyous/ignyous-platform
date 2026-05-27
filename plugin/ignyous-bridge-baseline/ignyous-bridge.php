@@ -1,20 +1,21 @@
 <?php
 /**
  * Plugin Name: Ignyous Bridge (Baseline)
- * Description: Minimal, debuggable connector. Edit site identity, theme styles, page content, media, per-block content & inline styles (color/spacing/typography) via Gutenberg's parser, with per-change snapshots and full action log.
- * Version:     3.3.0-phase3
+ * Description: Minimal, debuggable connector. Edits flow through theme-specific adapters (Twenty Twenty-Five, Astra, Kadence) when available, with per-block edits via Gutenberg's parser, per-change snapshots and full action log.
+ * Version:     3.5.0-phase5
  * Author:      Ignyous AI
  * Author URI:  https://ignyous.ai
  * License:     GPL v2 or later
  * Text Domain: ignyous-bridge
  *
- * Phase 3 — adds per-block inline styles: text/background color, padding,
- * margin, font size. Whitelisted/sanitized at the bridge.
+ * Phase 5 — theme dispatcher with adapters for Twenty Twenty-Five (and any
+ * block theme via theme.json), Astra (classic, astra-settings option),
+ * and Kadence (block theme, kadence_global_palette + kadence_settings).
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('IGNYOUS_BL_VERSION', '3.3.0-phase3');
+define('IGNYOUS_BL_VERSION', '3.5.0-phase5');
 define('IGNYOUS_BL_FILE',    __FILE__);
 define('IGNYOUS_BL_DIR',     plugin_dir_path(__FILE__));
 define('IGNYOUS_BL_URL',     plugin_dir_url(__FILE__));

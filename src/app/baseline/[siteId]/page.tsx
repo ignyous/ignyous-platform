@@ -297,12 +297,15 @@ function QuickFormText({ state, apply, busy }: { state: StateResp; apply: (a: Ac
 }
 
 function QuickFormTheme({ state, apply, busy }: { state: StateResp; apply: (a: Action) => void; busy: boolean }) {
-  const isBlock = state.theme.data?.is_block_theme
-  const cur     = state.theme.data?.current || {}
-  const fonts   = state.theme.data?.font_families || []
-  const [primary,  setPrimary]  = useState(cur.primary_color || '#000000')
-  const [textCol,  setTextCol]  = useState(cur.text_color    || '#000000')
-  const [bgCol,    setBgCol]    = useState(cur.background_color || '#ffffff')
+  const adapter   = state.theme.data?.adapter
+  const adapterSlug = adapter?.slug || 'unknown'
+  const caps      = adapter?.capabilities || {}
+  const cur       = state.theme.data?.current || {}
+  // font_families only exist for block themes (theme.json presets) — Astra/Kadence take raw family names
+  const fonts     = state.theme.data?.raw?.font_families || state.theme.data?.font_families || []
+  const [primary, setPrimary]   = useState(cur.primary_color || '#000000')
+  const [textCol, setTextCol]   = useState(cur.text_color    || '#000000')
+  const [bgCol,   setBgCol]     = useState(cur.background_color || '#ffffff')
   const [headingFont, setHF]    = useState(cur.heading_font || '')
   const [bodyFont,    setBF]    = useState(cur.body_font    || '')
 
@@ -315,18 +318,27 @@ function QuickFormTheme({ state, apply, busy }: { state: StateResp; apply: (a: A
     setBF(c.body_font    || '')
   }, [state])
 
-  if (!isBlock) {
+  // If the adapter doesn't support ANY of our keys, the form is useless
+  const supportsAnything = caps.primary_color || caps.text_color || caps.background_color || caps.heading_font || caps.body_font
+  if (!supportsAnything) {
     return (
-      <div style={{ ...card, background: C.warnBg, borderColor: '#FDE68A' }}>
+      <div style={card}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>Theme styles</div>
-        <div style={{ fontSize: 13, color: C.warn }}>The active theme is not a block theme. Theme color/font editing requires a block theme (e.g. Twenty Twenty-Five). Phase 0 does not yet fall back to global CSS.</div>
+        <div style={{ fontSize: 12, color: C.warn, background: C.warnBg, padding: 6, borderRadius: 4 }}>
+          {state.theme.data?.raw?.hint || `No theme adapter for "${state.theme.data?.raw?.stylesheet || 'this theme'}" yet. Per-block edits on the Blocks tab still work.`}
+        </div>
       </div>
     )
   }
 
   return (
     <div style={card}>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>Theme styles (Gutenberg global styles)</div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontWeight: 600 }}>Theme styles</div>
+        <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 6px', borderRadius: 3, background: C.text, color: C.white }}>
+          {adapter?.name || adapterSlug}
+        </span>
+      </div>
 
       <label style={label}>Primary color</label>
       <div style={{ display: 'flex', gap: 8 }}>
