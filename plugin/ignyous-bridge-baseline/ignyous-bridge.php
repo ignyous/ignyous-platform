@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Ignyous Bridge (Baseline)
  * Description: Minimal, debuggable connector. Edits flow through theme-specific adapters (Elementor, Astra, Kadence, Twenty Twenty-Five), with per-block edits via Gutenberg's parser, per-change snapshots and full action log.
- * Version:     3.6.1-phase6b
+ * Version:     3.6.2-phase6c
  * Author:      Ignyous AI
  * Author URI:  https://ignyous.ai
  * License:     GPL v2 or later
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('IGNYOUS_BL_VERSION', '3.6.1-phase6b');
+define('IGNYOUS_BL_VERSION', '3.6.2-phase6c');
 define('IGNYOUS_BL_FILE',    __FILE__);
 define('IGNYOUS_BL_DIR',     plugin_dir_path(__FILE__));
 define('IGNYOUS_BL_URL',     plugin_dir_url(__FILE__));

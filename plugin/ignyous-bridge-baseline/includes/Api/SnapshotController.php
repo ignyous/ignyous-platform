@@ -161,6 +161,20 @@ class SnapshotController {
                 }
                 return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'global_styles'];
 
+            case 'elementor_data':
+                // _elementor_data is stored as a JSON STRING (not a PHP array), so we
+                // write it back verbatim with wp_slash — never json-decode it.
+                $r = update_metadata('post', (int) $key, '_elementor_data', wp_slash((string) $val));
+                // Clear Elementor compiled CSS so the restore is visible immediately
+                if (class_exists('\\Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+                    try { \Elementor\Plugin::$instance->files_manager->clear_cache(); } catch (\Throwable $e) {}
+                }
+                if (function_exists('delete_post_meta_by_key')) {
+                    delete_post_meta_by_key('_elementor_css');
+                    delete_post_meta_by_key('_elementor_element_cache');
+                }
+                return ['target_type' => $type, 'target_key' => $key, 'restored_to' => 'elementor_data (' . strlen((string) $val) . ' chars)'];
+
             default:
                 return new \WP_Error('ignyous_unknown_target', 'Cannot restore target_type=' . $type, ['status' => 400]);
         }

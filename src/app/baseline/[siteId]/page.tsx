@@ -241,7 +241,7 @@ export default function BaselineEditor() {
             {tab === 'actions'   && <ActionsList   rows={actions} />}
             {tab === 'snapshots' && <SnapshotsList rows={snapshots} siteId={siteId!} onChange={() => { refreshState(); refreshDebug() }} />}
             {tab === 'blocks'    && <BlocksList    rows={pageBlocks} apply={apply} busy={busy} />}
-            {tab === 'elementor' && <ElementorList rows={elementorEls} info={elementorInfo} />}
+            {tab === 'elementor' && <ElementorList rows={elementorEls} info={elementorInfo} apply={apply} busy={busy} />}
             {tab === 'state'     && <StateDump state={state} lastApply={lastApply} />}
           </div>
         </div>
@@ -860,8 +860,11 @@ function BlockStyleControls({ blockPath, blockType, apply, busy }: { blockPath: 
   )
 }
 
-// ─── Phase 6B: Elementor element tree (read-only) ──────────────────────────
-function ElementorList({ rows, info }: { rows: any[]; info: { built: boolean; version: string | null; hint: string | null } }) {
+// ─── Phase 6B/6C: Elementor element tree (read + click-to-edit text) ───────
+function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built: boolean; version: string | null; hint: string | null }; apply: (a: Action) => void; busy: boolean }) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draft, setDraft]     = useState('')
+
   if (!info.built) {
     return (
       <div style={{ fontSize: 12, color: C.mute }}>
@@ -875,22 +878,34 @@ function ElementorList({ rows, info }: { rows: any[]; info: { built: boolean; ve
     return <div style={{ fontSize: 12, color: C.mute }}>Elementor page, but no elements parsed. Click Refresh.</div>
   }
 
+  // widgets whose primary text we can edit (6C)
+  const TEXT_EDITABLE = new Set(['heading', 'text-editor', 'button', 'icon-box', 'image-box', 'testimonial', 'alert', 'call-to-action'])
   const isWidget = (r: any) => r.elType === 'widget'
+
   return (
     <div style={{ fontSize: 12 }}>
       <div style={{ color: C.mute, marginBottom: 6 }}>
         {rows.length} Elementor elements{info.version ? ` · v${info.version}` : ''}
-        <span style={{ color: C.faint }}> · read-only (editing in 6C/6D)</span>
+        <span style={{ color: C.faint }}> · click a widget to edit its text</span>
       </div>
       {rows.map(r => {
         const indent = (r.depth || 0) * 12
         const structural = !isWidget(r)
+        const canEdit = isWidget(r) && TEXT_EDITABLE.has(r.widgetType) && r.id
+        const key = r.path + (r.id || '')
+        const isEditing = editing === key
         return (
-          <div key={r.path + (r.id || '')} style={{
+          <div key={key} style={{
             paddingLeft: indent + 4,
             padding: '5px 4px 5px ' + (indent + 4) + 'px',
             borderBottom: `1px solid ${C.border}`,
-            background: structural ? '#FAFAF8' : 'transparent',
+            background: isEditing ? '#FFF7EC' : (structural ? '#FAFAF8' : 'transparent'),
+            cursor: canEdit ? 'pointer' : 'default',
+          }}
+          onClick={() => {
+            if (!canEdit) return
+            if (isEditing) { setEditing(null); setDraft(''); return }
+            setEditing(key); setDraft(r.text || '')
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 10, color: C.faint, minWidth: 34 }}>{r.path}</span>
@@ -904,6 +919,28 @@ function ElementorList({ rows, info }: { rows: any[]; info: { built: boolean; ve
               </span>
               {r.id && <span style={{ fontSize: 9, color: C.faint }}>#{r.id}</span>}
             </div>
+            {isEditing && (
+              <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} style={{ ...input, fontSize: 13 }} autoFocus />
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <button
+                    onClick={() => {
+                      apply({
+                        capability: 'elementor.patch',
+                        pageRef: 'home',
+                        target: { kind: 'id', id: r.id },
+                        op: { type: 'set_text', value: draft },
+                        label: `${r.widgetType} #${r.id} → "${draft.slice(0, 40)}${draft.length > 40 ? '…' : ''}"`,
+                      })
+                      setEditing(null)
+                    }}
+                    disabled={busy || draft === r.text}
+                    style={{ ...btn, fontSize: 12 }}
+                  >Save text</button>
+                  <button onClick={() => { setEditing(null); setDraft('') }} style={{ ...btnGhost, fontSize: 12 }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         )
       })}

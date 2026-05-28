@@ -2,6 +2,8 @@
 namespace Ignyous\Baseline\Api;
 
 use Ignyous\Baseline\Auth;
+use Ignyous\Baseline\Snapshots;
+use Ignyous\Baseline\ActionLog;
 
 /**
  * Phase 6B — Read the Elementor element tree of a page.
@@ -50,11 +52,48 @@ class ElementorController {
         'icon_list' => ['text'],                        // icon-list
     ];
 
+    /**
+     * Primary editable text setting per widget type (the one a bare
+     * "change the X to Y" should target). Widgets with a secondary field
+     * (e.g. icon-box description) can be reached with op.field.
+     * Value: [primary_key, is_html].
+     */
+    const PRIMARY_TEXT = [
+        'heading'       => ['title', false],
+        'text-editor'   => ['editor', true],
+        'button'        => ['text', false],
+        'icon-box'      => ['title_text', false],
+        'image-box'     => ['title_text', false],
+        'testimonial'   => ['testimonial_content', false],
+        'alert'         => ['alert_title', false],
+        'call-to-action'=> ['title', false],
+        'icon-list'     => ['__repeater_icon_list', false], // handled specially
+    ];
+
+    /** Which secondary fields are allowed via op.field, per widget (field => is_html). */
+    const ALLOWED_FIELDS = [
+        'heading'     => ['title' => false],
+        'text-editor' => ['editor' => true],
+        'button'      => ['text' => false],
+        'icon-box'    => ['title_text' => false, 'description_text' => true],
+        'image-box'   => ['title_text' => false, 'description_text' => true],
+        'testimonial' => ['testimonial_content' => true, 'testimonial_name' => false, 'testimonial_job' => false],
+        'alert'       => ['alert_title' => false, 'alert_description' => true],
+        'call-to-action' => ['title' => false, 'description' => true],
+    ];
+
     public function register(): void {
         register_rest_route('ignyous/v1', '/pages/(?P<id>\d+)/elementor', [
-            'methods'             => 'GET',
-            'permission_callback' => [Auth::class, 'check'],
-            'callback'            => [$this, 'listElements'],
+            [
+                'methods'             => 'GET',
+                'permission_callback' => [Auth::class, 'check'],
+                'callback'            => [$this, 'listElements'],
+            ],
+            [
+                'methods'             => 'PATCH',
+                'permission_callback' => [Auth::class, 'check'],
+                'callback'            => [$this, 'patchElement'],
+            ],
         ]);
     }
 
@@ -100,6 +139,198 @@ class ElementorController {
             'elements'             => $flat,
         ]);
     }
+
+    // ---------------------------------------------------------------- patch
+
+    public function patchElement(\WP_REST_Request $req) {
+        $postId   = (int) $req['id'];
+        $changeId = Auth::changeId($req);
+        $started  = microtime(true);
+        $body     = $req->get_json_params() ?: [];
+
+        $target = isset($body['target']) && is_array($body['target']) ? $body['target'] : null;
+        $op     = isset($body['op']) && is_array($body['op']) ? $body['op'] : null;
+
+        if (!$target || !$op || empty($op['type'])) {
+            return $this->fail($changeId, 'elementor.patch', $started, 'missing_fields', ['have' => array_keys($body)]);
+        }
+        if ($op['type'] !== 'set_text') {
+            return $this->fail($changeId, 'elementor.patch', $started, 'unsupported_op', ['op' => $op['type']]);
+        }
+
+        $post = get_post($postId);
+        if (!$post) return $this->fail($changeId, 'elementor.patch', $started, 'page_not_found', ['id' => $postId]);
+
+        $rawBefore = get_post_meta($postId, self::DATA_META_KEY, true);
+        $tree = is_string($rawBefore) ? json_decode($rawBefore, true) : $rawBefore;
+        if (!is_array($tree)) {
+            return $this->fail($changeId, 'elementor.patch', $started, 'elementor_data_unparseable');
+        }
+
+        // Locate the element (by id preferred, else by path)
+        $found = $this->locate($tree, $target);
+        if ($found === null) {
+            return $this->fail($changeId, 'elementor.patch', $started, 'element_not_found', ['target' => $target]);
+        }
+        // $found is a reference into $tree
+        $widgetType = isset($found['widgetType']) ? (string) $found['widgetType'] : '';
+        if ($found['elType'] !== 'widget' || $widgetType === '') {
+            return $this->fail($changeId, 'elementor.patch', $started, 'not_a_widget', ['elType' => $found['elType'] ?? null]);
+        }
+
+        // Determine which settings field to write
+        $newText = (string) ($op['value'] ?? '');
+        $field   = isset($op['field']) ? (string) $op['field'] : null;
+        [$writeKey, $isHtml, $fieldErr] = $this->resolveField($widgetType, $field);
+        if ($fieldErr) {
+            return $this->fail($changeId, 'elementor.patch', $started, $fieldErr, ['widgetType' => $widgetType, 'field' => $field]);
+        }
+
+        // Sanitize value: HTML fields get wp_kses_post, plain fields get sanitize_text_field
+        $clean = $isHtml ? wp_kses_post($newText) : sanitize_text_field($newText);
+
+        if (!isset($found['settings']) || !is_array($found['settings'])) $found['settings'] = [];
+        $found['settings'][$writeKey] = $clean;
+
+        // Re-encode the whole tree (must be JSON string, slashed)
+        $jsonAfter = wp_json_encode($tree);
+
+        // Snapshot before/after via dedicated elementor_data restore type
+        $snapId = Snapshots::open($changeId, 'elementor_data', (string) $postId, is_string($rawBefore) ? $rawBefore : wp_json_encode($rawBefore), 'Elementor element text (' . $widgetType . ')');
+        update_metadata('post', $postId, self::DATA_META_KEY, wp_slash($jsonAfter));
+        Snapshots::close($snapId, $jsonAfter);
+
+        $this->clearElementorCache();
+
+        $duration = (int) round((microtime(true) - $started) * 1000);
+        ActionLog::record([
+            'change_id'     => $changeId,
+            'intent_raw'    => Auth::intentRaw($req),
+            'intent_parsed' => ['target' => $target, 'op' => $op],
+            'capability'    => 'elementor.patch',
+            'request'       => ['post_id' => $postId, 'target' => $target, 'op' => $op, 'write_key' => $writeKey],
+            'response'      => ['widget_type' => $widgetType, 'snapshot_id' => $snapId, 'is_html' => $isHtml],
+            'success'       => 1,
+            'duration_ms'   => $duration,
+            'ai_tokens'     => Auth::aiTokens($req),
+        ]);
+
+        return new \WP_REST_Response([
+            'success'     => true,
+            'change_id'   => $changeId,
+            'widget_type' => $widgetType,
+            'write_key'   => $writeKey,
+            'snapshot_id' => $snapId,
+            'preview'     => mb_substr(trim(wp_strip_all_tags($clean)), 0, 120),
+        ]);
+    }
+
+    /**
+     * Resolve which settings key to write for a widget + optional explicit field.
+     * Returns [writeKey, isHtml, errorStringOrNull].
+     */
+    private function resolveField(string $widgetType, ?string $field): array {
+        if ($field !== null && $field !== '') {
+            $allowed = self::ALLOWED_FIELDS[$widgetType] ?? null;
+            if ($allowed === null || !array_key_exists($field, $allowed)) {
+                return [null, false, 'field_not_allowed_for_widget'];
+            }
+            return [$field, (bool) $allowed[$field], null];
+        }
+        $primary = self::PRIMARY_TEXT[$widgetType] ?? null;
+        if ($primary === null) {
+            return [null, false, 'widget_text_not_editable'];
+        }
+        if ($primary[0] === '__repeater_icon_list') {
+            return [null, false, 'repeater_edit_not_supported_in_6c'];
+        }
+        return [$primary[0], (bool) $primary[1], null];
+    }
+
+    /**
+     * Find an element in the tree by target {by:'id',id} or {by:'path',path}.
+     * Returns a REFERENCE to the element array, or null.
+     */
+    private function &locate(array &$tree, array $target) {
+        $null = null;
+        $by = $target['by'] ?? (isset($target['id']) ? 'id' : (isset($target['path']) ? 'path' : null));
+
+        if ($by === 'id') {
+            $id = (string) ($target['id'] ?? '');
+            if ($id === '') return $null;
+            $ref = &$this->findById($tree, $id);
+            return $ref;
+        }
+        if ($by === 'path') {
+            $path = (string) ($target['path'] ?? '');
+            if ($path === '') return $null;
+            $ref = &$this->findByPath($tree, $path);
+            return $ref;
+        }
+        return $null;
+    }
+
+    private function &findById(array &$elements, string $id) {
+        $null = null;
+        foreach ($elements as &$el) {
+            if (!is_array($el)) continue;
+            if (isset($el['id']) && (string) $el['id'] === $id) {
+                return $el;
+            }
+            if (!empty($el['elements']) && is_array($el['elements'])) {
+                $ref = &$this->findById($el['elements'], $id);
+                if ($ref !== null) return $ref;
+            }
+        }
+        return $null;
+    }
+
+    private function &findByPath(array &$elements, string $path) {
+        $null = null;
+        $parts = array_map('intval', explode('.', $path));
+        $current = &$elements;
+        $node = null;
+        foreach ($parts as $depth => $idx) {
+            // Re-index to only count valid elements (parity with flatten which skips invalid)
+            $valid = [];
+            foreach ($current as $k => &$e) {
+                if (is_array($e) && !empty($e['elType'])) $valid[] = &$e;
+            }
+            unset($e);
+            if (!isset($valid[$idx])) return $null;
+            $node = &$valid[$idx];
+            if ($depth === count($parts) - 1) return $node;
+            if (empty($node['elements']) || !is_array($node['elements'])) return $null;
+            $current = &$node['elements'];
+        }
+        return $null;
+    }
+
+    private function clearElementorCache(): void {
+        if (class_exists('\\Elementor\\Plugin') && isset(\Elementor\Plugin::$instance->files_manager)) {
+            try { \Elementor\Plugin::$instance->files_manager->clear_cache(); } catch (\Throwable $e) {}
+        }
+        if (function_exists('delete_post_meta_by_key')) {
+            delete_post_meta_by_key('_elementor_css');
+            delete_post_meta_by_key('_elementor_element_cache');
+        }
+    }
+
+    private function fail(string $changeId, string $capability, float $started, string $error, array $detail = []): \WP_REST_Response {
+        $duration = (int) round((microtime(true) - $started) * 1000);
+        ActionLog::record([
+            'change_id'   => $changeId,
+            'capability'  => $capability,
+            'request'     => $detail,
+            'response'    => ['error' => $error, 'detail' => $detail],
+            'success'     => 0,
+            'error'       => $error,
+            'duration_ms' => $duration,
+        ]);
+        return new \WP_REST_Response(['success' => false, 'change_id' => $changeId, 'error' => $error, 'detail' => $detail], 400);
+    }
+
+    // --------------------------------------------------------------- read helpers
 
     /**
      * Walk the nested element tree, emitting a flat list with dotted paths.

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { randomUUID } from 'crypto'
 import { bridgeCall, getSiteByIdForUser } from '@/lib/baseline/bridge'
-import type { Action, BlockTarget } from '@/lib/baseline/intent'
+import type { Action, BlockTarget, ElementorTarget } from '@/lib/baseline/intent'
 
 interface ApplyBody {
   siteId: string
@@ -117,6 +117,45 @@ export async function POST(req: NextRequest) {
       const pageId = await resolvePageId(site, blocksAction.pageRef, tiers)
       if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
 
+      // ── Elementor detection ──
+      // If this page is built with Elementor and the op is a text edit, route to
+      // the Elementor element tree instead of Gutenberg blocks. (set_style on
+      // Elementor arrives in 6D; for now only set_text is translated.)
+      if (blocksAction.op.type === 'set_text') {
+        const el = await bridgeCall(site, `pages/${pageId}/elementor`)
+        if (el.ok && el.data?.built_with_elementor) {
+          tiers.push({ tier: 0, capability: 'elementor.list', ok: true, status: el.status, durationMs: el.durationMs, data: { count: el.data?.count } })
+          const els = (el.data?.elements as any[]) || []
+          const widgetType = blockTypeToElementorWidget(getTargetType(blocksAction.target))
+          const elTarget = remapTargetToElementor(blocksAction.target, widgetType)
+          const res = resolveElementorTarget(els, elTarget)
+
+          if (res.kind === 'none') {
+            return NextResponse.json({
+              success: false, changeId,
+              error: `No ${widgetType || 'matching'} widget found on this Elementor page.`,
+              tiers, candidates: els.filter(e => e.elType === 'widget' && (!widgetType || e.widgetType === widgetType)).map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })),
+            }, { status: 404 })
+          }
+          if (res.kind === 'ambiguous') {
+            return NextResponse.json({
+              success: false, changeId,
+              error: `Ambiguous — multiple ${widgetType || ''} widgets match. Pick one by clicking it in the Elementor pane, or be more specific.`,
+              tiers, candidates: res.matches.map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })),
+            }, { status: 409 })
+          }
+
+          const r = await bridgeCall(site, `pages/${pageId}/elementor`, {
+            method: 'PATCH',
+            body: { target: { by: 'id', id: res.el.id }, op: { type: 'set_text', value: (blocksAction.op as any).value } },
+            ...opts,
+          })
+          tiers.push({ tier: 1, capability: 'elementor.patch', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+          primary = r
+          break
+        }
+      }
+
       // Fetch the page's block tree
       const list = await bridgeCall(site, `pages/${pageId}/blocks`)
       tiers.push({ tier: 0, capability: 'blocks.list', ok: list.ok, status: list.status, error: list.error, durationMs: list.durationMs, data: { count: list.data?.count } })
@@ -146,6 +185,36 @@ export async function POST(req: NextRequest) {
         ...opts,
       })
       tiers.push({ tier: 1, capability: 'blocks.patch', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
+      primary = r
+      break
+    }
+    case 'elementor.patch': {
+      const elAction = body.action
+      const pageId = await resolvePageId(site, elAction.pageRef, tiers)
+      if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
+
+      // Resolve fuzzy targets (first/nth/contains) to a concrete id; id/path pass through
+      let target = elAction.target
+      if (target.kind !== 'id' && target.kind !== 'path') {
+        const el = await bridgeCall(site, `pages/${pageId}/elementor`)
+        tiers.push({ tier: 0, capability: 'elementor.list', ok: el.ok, status: el.status, durationMs: el.durationMs, data: { count: el.data?.count } })
+        if (!el.ok || !el.data?.built_with_elementor) {
+          return NextResponse.json({ success: false, changeId, error: 'Page is not built with Elementor.', tiers }, { status: 404 })
+        }
+        const els = (el.data?.elements as any[]) || []
+        const res = resolveElementorTarget(els, target)
+        if (res.kind === 'none') return NextResponse.json({ success: false, changeId, error: 'No matching Elementor widget found.', tiers, candidates: els.filter(e => e.elType === 'widget').map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })) }, { status: 404 })
+        if (res.kind === 'ambiguous') return NextResponse.json({ success: false, changeId, error: 'Ambiguous Elementor target — pick one in the Elementor pane.', tiers, candidates: res.matches.map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })) }, { status: 409 })
+        target = { kind: 'id', id: res.el.id }
+      }
+
+      const byKey = target.kind === 'id' ? { by: 'id', id: (target as any).id } : { by: 'path', path: (target as any).path }
+      const r = await bridgeCall(site, `pages/${pageId}/elementor`, {
+        method: 'PATCH',
+        body: { target: byKey, op: elAction.op },
+        ...opts,
+      })
+      tiers.push({ tier: 1, capability: 'elementor.patch', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
       primary = r
       break
     }
@@ -246,5 +315,68 @@ function resolveBlockTarget(blocks: any[], target: BlockTarget): ResolveResult {
     return { kind: 'ambiguous', matches }
   }
 
+  return { kind: 'none' }
+}
+
+// ─── Elementor target resolution (parallel to block resolver) ───────────────
+
+type ElResolveResult =
+  | { kind: 'one';       el: any }
+  | { kind: 'ambiguous'; matches: any[] }
+  | { kind: 'none' }
+
+// Gutenberg block type → Elementor widget type
+const BLOCK_TO_ELEMENTOR: Record<string, string> = {
+  'core/heading':   'heading',
+  'core/paragraph': 'text-editor',
+  'core/button':    'button',
+  'core/list':      'icon-list',
+  'core/image':     'image',
+  'core/quote':     'testimonial',
+}
+function blockTypeToElementorWidget(blockType: string): string {
+  return BLOCK_TO_ELEMENTOR[blockType] || ''
+}
+function remapTargetToElementor(target: BlockTarget, widgetType: string): ElementorTarget {
+  switch (target.kind) {
+    case 'first':    return { kind: 'first', widgetType }
+    case 'nth':      return { kind: 'nth', widgetType, index: target.index }
+    case 'contains': return { kind: 'contains', widgetType, text: target.text }
+    case 'path':     return { kind: 'path', path: target.path }
+    default:         return { kind: 'first', widgetType }
+  }
+}
+
+function resolveElementorTarget(els: any[], target: ElementorTarget): ElResolveResult {
+  if (target.kind === 'id') {
+    const hit = els.find(e => e.id === target.id)
+    return hit ? { kind: 'one', el: hit } : { kind: 'none' }
+  }
+  if (target.kind === 'path') {
+    const hit = els.find(e => e.path === target.path)
+    return hit ? { kind: 'one', el: hit } : { kind: 'none' }
+  }
+  const widgets = els.filter(e => e.elType === 'widget' && (!target.widgetType || e.widgetType === target.widgetType))
+  if (widgets.length === 0) return { kind: 'none' }
+
+  if (target.kind === 'first') {
+    if (widgets.length === 1) return { kind: 'one', el: widgets[0] }
+    // prefer a shallow (top-ish) widget if exactly one is at min depth
+    const minDepth = Math.min(...widgets.map(w => w.depth ?? 0))
+    const shallow = widgets.filter(w => (w.depth ?? 0) === minDepth)
+    if (shallow.length === 1) return { kind: 'one', el: shallow[0] }
+    return { kind: 'ambiguous', matches: widgets }
+  }
+  if (target.kind === 'nth') {
+    if (target.index >= widgets.length) return { kind: 'none' }
+    return { kind: 'one', el: widgets[target.index] }
+  }
+  if (target.kind === 'contains') {
+    const needle = target.text.toLowerCase().trim()
+    const matches = widgets.filter(w => (w.text || '').toLowerCase().includes(needle))
+    if (matches.length === 0) return { kind: 'none' }
+    if (matches.length === 1) return { kind: 'one', el: matches[0] }
+    return { kind: 'ambiguous', matches }
+  }
   return { kind: 'none' }
 }

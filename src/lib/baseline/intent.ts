@@ -24,7 +24,19 @@ export type Action =
                                     target: BlockTarget;
                                     op: BlockOp;
                                     label: string }
+  | { capability: 'elementor.patch'; pageRef: string | number;
+                                    target: ElementorTarget;
+                                    op: { type: 'set_text'; value: string; field?: string };
+                                    label: string }
   | { capability: 'undo';           changeId?: string; label: string }
+
+/** How the platform locates an Elementor element (resolved to id before patch). */
+export type ElementorTarget =
+  | { kind: 'first';    widgetType: string }
+  | { kind: 'nth';      widgetType: string; index: number }
+  | { kind: 'contains'; widgetType: string; text: string }
+  | { kind: 'id';       id: string }
+  | { kind: 'path';     path: string }
 
 export type BlockOp =
   | { type: 'set_text';     value: string }
