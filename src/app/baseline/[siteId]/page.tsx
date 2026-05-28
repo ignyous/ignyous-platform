@@ -60,10 +60,12 @@ export default function BaselineEditor() {
   const [chat, setChat]     = useState<ChatTurn[]>([])
   const [input1, setInput]  = useState('')
   const [busy, setBusy]     = useState(false)
-  const [tab, setTab]       = useState<'actions' | 'snapshots' | 'blocks' | 'state'>('actions')
+  const [tab, setTab]       = useState<'actions' | 'snapshots' | 'blocks' | 'elementor' | 'state'>('actions')
   const [actions, setActions]     = useState<any[]>([])
   const [snapshots, setSnapshots] = useState<any[]>([])
   const [pageBlocks, setPageBlocks] = useState<any[]>([])
+  const [elementorEls, setElementorEls] = useState<any[]>([])
+  const [elementorInfo, setElementorInfo] = useState<{ built: boolean; version: string | null; hint: string | null }>({ built: false, version: null, hint: null })
   const [lastApply, setLastApply] = useState<ApplyResp | null>(null)
 
   const refreshState = useCallback(async () => {
@@ -75,14 +77,17 @@ export default function BaselineEditor() {
 
   const refreshDebug = useCallback(async () => {
     if (!siteId) return
-    const [aRes, sRes, bRes] = await Promise.all([
+    const [aRes, sRes, bRes, eRes] = await Promise.all([
       fetch(`/api/baseline/actions?siteId=${siteId}&limit=30`).then(r => r.json()),
       fetch(`/api/baseline/snapshots?siteId=${siteId}&limit=30`).then(r => r.json()),
       fetch(`/api/baseline/blocks?siteId=${siteId}`).then(r => r.json()).catch(() => ({ blocks: [] })),
+      fetch(`/api/baseline/elementor-elements?siteId=${siteId}`).then(r => r.json()).catch(() => ({ elements: [] })),
     ])
     setActions(aRes.actions || [])
     setSnapshots(sRes.snapshots || [])
     setPageBlocks(bRes.blocks || [])
+    setElementorEls(eRes.elements || [])
+    setElementorInfo({ built: !!eRes.builtWithElementor, version: eRes.elementorVersion || null, hint: eRes.hint || null })
   }, [siteId])
 
   useEffect(() => { refreshState(); refreshDebug() }, [refreshState, refreshDebug])
@@ -220,11 +225,11 @@ export default function BaselineEditor() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: 'calc(100vh - 200px)' }}>
           <div style={card}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-              {(['actions', 'snapshots', 'blocks', 'state'] as const).map(t => (
+              {(['actions', 'snapshots', 'blocks', 'elementor', 'state'] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  style={{ ...btnGhost, flex: 1, background: tab === t ? C.text : 'transparent', color: tab === t ? C.white : C.text, textTransform: 'capitalize' }}
+                  style={{ ...btnGhost, flex: 1, background: tab === t ? C.text : 'transparent', color: tab === t ? C.white : C.text, textTransform: 'capitalize', fontSize: 11, padding: '4px 2px' }}
                 >
                   {t}
                 </button>
@@ -236,6 +241,7 @@ export default function BaselineEditor() {
             {tab === 'actions'   && <ActionsList   rows={actions} />}
             {tab === 'snapshots' && <SnapshotsList rows={snapshots} siteId={siteId!} onChange={() => { refreshState(); refreshDebug() }} />}
             {tab === 'blocks'    && <BlocksList    rows={pageBlocks} apply={apply} busy={busy} />}
+            {tab === 'elementor' && <ElementorList rows={elementorEls} info={elementorInfo} />}
             {tab === 'state'     && <StateDump state={state} lastApply={lastApply} />}
           </div>
         </div>
@@ -850,6 +856,57 @@ function BlockStyleControls({ blockPath, blockType, apply, busy }: { blockPath: 
           <button onClick={() => clearStyle('typography', 'fontSize')} disabled={busy} style={btnSmG}>Clear</button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Phase 6B: Elementor element tree (read-only) ──────────────────────────
+function ElementorList({ rows, info }: { rows: any[]; info: { built: boolean; version: string | null; hint: string | null } }) {
+  if (!info.built) {
+    return (
+      <div style={{ fontSize: 12, color: C.mute }}>
+        <div style={{ marginBottom: 6 }}>This page isn't built with Elementor.</div>
+        {info.hint && <div style={{ color: C.faint }}>{info.hint}</div>}
+        <div style={{ marginTop: 8, color: C.faint }}>If it should be, click Refresh after loading the page once in WP.</div>
+      </div>
+    )
+  }
+  if (!rows.length) {
+    return <div style={{ fontSize: 12, color: C.mute }}>Elementor page, but no elements parsed. Click Refresh.</div>
+  }
+
+  const isWidget = (r: any) => r.elType === 'widget'
+  return (
+    <div style={{ fontSize: 12 }}>
+      <div style={{ color: C.mute, marginBottom: 6 }}>
+        {rows.length} Elementor elements{info.version ? ` · v${info.version}` : ''}
+        <span style={{ color: C.faint }}> · read-only (editing in 6C/6D)</span>
+      </div>
+      {rows.map(r => {
+        const indent = (r.depth || 0) * 12
+        const structural = !isWidget(r)
+        return (
+          <div key={r.path + (r.id || '')} style={{
+            paddingLeft: indent + 4,
+            padding: '5px 4px 5px ' + (indent + 4) + 'px',
+            borderBottom: `1px solid ${C.border}`,
+            background: structural ? '#FAFAF8' : 'transparent',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, color: C.faint, minWidth: 34 }}>{r.path}</span>
+              <span style={{
+                fontSize: 10, padding: '1px 5px', borderRadius: 3,
+                background: structural ? C.border : C.warnBg, color: structural ? C.mute : C.accent,
+                minWidth: 64, textAlign: 'center',
+              }}>{r.label}</span>
+              <span style={{ flex: 1, color: r.text ? C.text : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.text || (structural ? '' : <em style={{ color: C.faint }}>(no text)</em>)}
+              </span>
+              {r.id && <span style={{ fontSize: 9, color: C.faint }}>#{r.id}</span>}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
