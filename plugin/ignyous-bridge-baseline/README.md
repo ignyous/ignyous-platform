@@ -1,6 +1,6 @@
-# Ignyous Bridge — Baseline (v3.5.0-phase5)
+# Ignyous Bridge — Baseline (v3.6.0-phase6a)
 
-Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media) + Phase 2 (per-block content) + Phase 3 (per-block styles) + Phase 5 (theme adapters).
+Minimal, well-debugged WordPress connector. Phase 0 (text/colors/fonts) + Phase 1 (media) + Phase 2 (per-block content) + Phase 3 (per-block styles) + Phase 5 (theme adapters: Astra/Kadence/block) + Phase 6A (Elementor kit).
 
 ## What it does
 
@@ -11,7 +11,7 @@ Capability controllers, all writing per-change snapshots and a structured action
 | Site       | `GET /wp-json/ignyous/v1/site`            | Read site title, tagline, theme info                |
 | Options    | `GET/PATCH /wp-json/ignyous/v1/options`   | Whitelisted: `site_title`, `tagline`                |
 | Pages      | `GET/PATCH /wp-json/ignyous/v1/pages…`    | Page title, page content (block markup or HTML)     |
-| Theme      | `GET/PATCH /wp-json/ignyous/v1/theme/styles`, `GET /wp-json/ignyous/v1/theme/info` | `primary_color`, `text_color`, `background_color`, `link_color`, `heading_font`, `body_font` — dispatched through adapters: TwentyTwentyFive/block, **Astra** (writes `astra-settings`), **Kadence** (writes `kadence_global_palette` + `kadence_settings`), or Unsupported (clear 409 with hint) |
+| Theme      | `GET/PATCH /wp-json/ignyous/v1/theme/styles`, `GET /wp-json/ignyous/v1/theme/info` | `primary_color`, `text_color`, `background_color`, `link_color`, `heading_font`, `body_font` — dispatched through adapters (first-match-wins): **Elementor** (active kit's system_colors / system_typography / body_background + theme-style h1..h6), TwentyTwentyFive/block, **Astra** (writes `astra-settings`), **Kadence** (writes `kadence_global_palette` + `kadence_settings`), or Unsupported (clear 409 with hint) |
 | Media      | `POST /media/upload`, `GET /media`, `DELETE /media/{id}` | Upload (base64), list, delete attachments |
 | Featured image | `PATCH /pages/{id}/featured-image`    | Sets `_thumbnail_id` on a page                    |
 | Site logo  | `PATCH /options/site_logo`                | Sets/clears Customizer site logo                    |

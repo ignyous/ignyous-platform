@@ -1,21 +1,21 @@
 <?php
 /**
  * Plugin Name: Ignyous Bridge (Baseline)
- * Description: Minimal, debuggable connector. Edits flow through theme-specific adapters (Twenty Twenty-Five, Astra, Kadence) when available, with per-block edits via Gutenberg's parser, per-change snapshots and full action log.
- * Version:     3.5.0-phase5
+ * Description: Minimal, debuggable connector. Edits flow through theme-specific adapters (Elementor, Astra, Kadence, Twenty Twenty-Five), with per-block edits via Gutenberg's parser, per-change snapshots and full action log.
+ * Version:     3.6.0-phase6a
  * Author:      Ignyous AI
  * Author URI:  https://ignyous.ai
  * License:     GPL v2 or later
  * Text Domain: ignyous-bridge
  *
- * Phase 5 — theme dispatcher with adapters for Twenty Twenty-Five (and any
- * block theme via theme.json), Astra (classic, astra-settings option),
- * and Kadence (block theme, kadence_global_palette + kadence_settings).
+ * Phase 6A — Elementor adapter. When Elementor is active, theme.patch routes
+ * to the active Kit's settings (system_colors, system_typography,
+ * body_background, h1..h6 + body theme styles). CSS cache cleared after writes.
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('IGNYOUS_BL_VERSION', '3.5.0-phase5');
+define('IGNYOUS_BL_VERSION', '3.6.0-phase6a');
 define('IGNYOUS_BL_FILE',    __FILE__);
 define('IGNYOUS_BL_DIR',     plugin_dir_path(__FILE__));
 define('IGNYOUS_BL_URL',     plugin_dir_url(__FILE__));

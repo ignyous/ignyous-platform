@@ -18,8 +18,12 @@ class ThemeDispatcher {
     private array $adapters;
 
     public function __construct() {
-        // Order matters — first match wins
+        // Order matters — first match wins.
+        // Elementor is a plugin, not a theme, but its kit overrides what the
+        // theme would render for Elementor-built pages — so it goes first.
+        // Theme adapters still run on non-Elementor sites.
         $this->adapters = [
+            new ElementorAdapter(),
             new AstraAdapter(),
             new KadenceAdapter(),
             new BlockThemeAdapter(),
