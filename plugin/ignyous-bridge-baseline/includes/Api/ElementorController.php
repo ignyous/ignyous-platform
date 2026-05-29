@@ -83,6 +83,44 @@ class ElementorController {
         'call-to-action' => ['title' => false, 'description' => true],
     ];
 
+    /**
+     * Phase 6F — Elementor V4 "atomic" widgets (forward-compat).
+     *
+     * Atomic elements use an elType prefixed with "e-" (e-heading, e-paragraph,
+     * e-button, e-div-block, e-flexbox, e-grid, e-image, …) and a typed-prop
+     * settings shape: every value is { "$$type": <kind>, "value": <payload> }.
+     * Local styles live in a separate `styles` map (class-based, with
+     * breakpoint/state variants whose props are keyed by CSS property names),
+     * and the element links to them via a `classes` settings prop.
+     *
+     * Classic (V3) widgets are unaffected — they keep elType 'widget' + flat
+     * settings and flow through the existing code paths untouched.
+     */
+
+    /** Atomic text-bearing widgets → their primary text settings prop. */
+    const ATOMIC_TEXT = [
+        'e-heading'   => 'title',
+        'e-paragraph' => 'paragraph',
+        'e-button'    => 'text',
+    ];
+
+    /** category.name → CSS property name written into an atomic local style. */
+    const ATOMIC_STYLE_CSS = [
+        'color.text'          => 'color',
+        'color.background'    => 'background',
+        'spacing.padding'     => 'padding',
+        'spacing.margin'      => 'margin',
+        'typography.fontSize' => 'font-size',
+    ];
+
+    /** True for Elementor V4 atomic elements (elType prefixed with "e-"). */
+    private function isAtomic($el): bool {
+        return is_array($el)
+            && isset($el['elType'])
+            && is_string($el['elType'])
+            && strpos($el['elType'], 'e-') === 0;
+    }
+
     public function register(): void {
         register_rest_route('ignyous/v1', '/pages/(?P<id>\d+)/elementor', [
             [
@@ -238,16 +276,42 @@ class ElementorController {
             return $this->fail($changeId, 'elementor.patch', $started, 'element_not_found', ['target' => $target]);
         }
         // $found is a reference into $tree
+        $elType     = isset($found['elType']) ? (string) $found['elType'] : '';
+        $atomic     = $this->isAtomic($found);
         $widgetType = isset($found['widgetType']) ? (string) $found['widgetType'] : '';
-        if ($found['elType'] !== 'widget' || $widgetType === '') {
-            return $this->fail($changeId, 'elementor.patch', $started, 'not_a_widget', ['elType' => $found['elType'] ?? null]);
+
+        if (!$atomic && ($elType !== 'widget' || $widgetType === '')) {
+            return $this->fail($changeId, 'elementor.patch', $started, 'not_a_widget', ['elType' => $elType ?: null]);
         }
 
         if (!isset($found['settings']) || !is_array($found['settings'])) $found['settings'] = [];
 
         $writeKey = null; $isHtml = false; $label = '';
 
-        if ($op['type'] === 'set_text') {
+        if ($atomic) {
+            // -------- Phase 6F: atomic (V4) write path --------
+            if ($op['type'] === 'set_text') {
+                $newText = (string) ($op['value'] ?? '');
+                $field   = isset($op['field']) ? (string) $op['field'] : null;
+                $res = $this->applyAtomicText($found, $elType, $newText, $field);
+                if (is_string($res) && strpos($res, 'e:') === 0) {
+                    return $this->fail($changeId, 'elementor.patch', $started, substr($res, 2), ['elType' => $elType, 'field' => $field]);
+                }
+                $writeKey = $res; $isHtml = true;
+                $label = 'Elementor atomic text (' . $elType . ')';
+            } else {
+                $category = isset($op['category']) ? (string) $op['category'] : '';
+                $name     = isset($op['name'])     ? (string) $op['name']     : '';
+                $value    = ($op['type'] === 'clear_style') ? null : ($op['value'] ?? null);
+                $res = $this->applyAtomicStyle($found, $category, $name, $value);
+                if (is_string($res) && strpos($res, 'e:') === 0) {
+                    return $this->fail($changeId, 'elementor.patch', $started, substr($res, 2), ['elType' => $elType, 'category' => $category, 'name' => $name]);
+                }
+                $writeKey = $category . '.' . $name . '→' . $res;
+                $label = 'Elementor atomic style ' . $category . '.' . $name . ' (' . $elType . ')';
+            }
+            $widgetType = $elType; // for logging/response parity
+        } elseif ($op['type'] === 'set_text') {
             // Determine which settings field to write
             $newText = (string) ($op['value'] ?? '');
             $field   = isset($op['field']) ? (string) $op['field'] : null;
@@ -374,6 +438,170 @@ class ElementorController {
         }
 
         return 'unknown_style_category';
+    }
+
+    // ---------------------------------------------------------------- atomic (6F)
+
+    /**
+     * Write text into an atomic widget's primary text prop, preserving the
+     * existing typed-prop shape where present. Returns the settings key written,
+     * or an 'e:<error>' string.
+     */
+    private function applyAtomicText(array &$el, string $elType, string $text, ?string $field): string {
+        $key = self::ATOMIC_TEXT[$elType] ?? null;
+        if ($key === null) return 'e:atomic_widget_text_not_supported';
+        if ($field !== null && $field !== '' && $field !== $key) return 'e:field_not_allowed_for_widget';
+        if (!isset($el['settings']) || !is_array($el['settings'])) $el['settings'] = [];
+
+        $clean = wp_kses_post($text);
+        $existing = $el['settings'][$key] ?? null;
+        $el['settings'][$key] = $this->buildAtomicText($existing, $clean);
+        return $key;
+    }
+
+    /**
+     * Build an atomic text prop, keeping the original $$type when recognised:
+     * html-v3 nests {content:{$$type:'string'}}, while string/html/html-v2 hold
+     * the string directly. Defaults to html-v3 (the current shape) for new props.
+     */
+    private function buildAtomicText($existing, string $clean): array {
+        $type = (is_array($existing) && isset($existing['$$type'])) ? (string) $existing['$$type'] : 'html-v3';
+        if (in_array($type, ['string', 'html', 'html-v2'], true)) {
+            return ['$$type' => $type, 'value' => $clean];
+        }
+        return [
+            '$$type' => 'html-v3',
+            'value'  => ['content' => ['$$type' => 'string', 'value' => $clean]],
+        ];
+    }
+
+    /**
+     * Apply (or clear) a style on an atomic element by writing a CSS-property
+     * prop into the element's local style class (base variant). Creates the
+     * local style + classes binding on first write. Returns the CSS prop name
+     * written/cleared, or an 'e:<error>' string.
+     */
+    private function applyAtomicStyle(array &$el, string $category, string $name, $value): string {
+        $css = self::ATOMIC_STYLE_CSS[$category . '.' . $name] ?? null;
+        if ($css === null) return 'e:atomic_style_not_supported';
+        $clear = ($value === null || $value === '');
+
+        $prop = null;
+        if (!$clear) {
+            if ($css === 'color') {
+                $hex = $this->sanitizeColor($value);
+                if (!$hex) return 'e:invalid_color';
+                $prop = ['$$type' => 'color', 'value' => $hex];
+            } elseif ($css === 'background') {
+                $hex = $this->sanitizeColor($value);
+                if (!$hex) return 'e:invalid_color';
+                $prop = ['$$type' => 'background', 'value' => ['color' => ['$$type' => 'color', 'value' => $hex]]];
+            } elseif ($css === 'font-size') {
+                $size = $this->atomicSize($value);
+                if ($size === null) return 'e:invalid_font_size';
+                $prop = $size;
+            } else { // padding | margin
+                $dim = $this->atomicDimensions($value);
+                if ($dim === null) return 'e:invalid_spacing_value';
+                $prop = $dim;
+            }
+        }
+
+        [$styleId, $vIdx] = $this->ensureAtomicLocalStyle($el);
+        if ($clear) {
+            unset($el['styles'][$styleId]['variants'][$vIdx]['props'][$css]);
+        } else {
+            $el['styles'][$styleId]['variants'][$vIdx]['props'][$css] = $prop;
+        }
+        return $css;
+    }
+
+    /** "18px" → atomic SIZE prop {$$type:'size', value:{size,unit}}. */
+    private function atomicSize($value): ?array {
+        if (!is_string($value) && !is_numeric($value)) return null;
+        $p = $this->parseLength((string) $value);
+        if ($p === null) return null;
+        return ['$$type' => 'size', 'value' => ['size' => is_numeric($p[0]) ? (float) $p[0] : $p[0], 'unit' => $p[1]]];
+    }
+
+    /** "24px" or {top,right,bottom,left} → atomic DIMENSIONS prop (logical sides). */
+    private function atomicDimensions($value): ?array {
+        $mk = function ($v) {
+            $p = $this->parseLength((string) $v);
+            if ($p === null) return null;
+            return ['$$type' => 'size', 'value' => ['size' => is_numeric($p[0]) ? (float) $p[0] : $p[0], 'unit' => $p[1]]];
+        };
+        $sides = ['block-start' => null, 'inline-end' => null, 'block-end' => null, 'inline-start' => null];
+        if (is_string($value) || is_numeric($value)) {
+            $s = $mk($value);
+            if ($s === null) return null;
+            foreach ($sides as $k => $_) $sides[$k] = $s;
+        } elseif (is_array($value)) {
+            $map = ['top' => 'block-start', 'right' => 'inline-end', 'bottom' => 'block-end', 'left' => 'inline-start'];
+            foreach ($map as $cssSide => $logical) {
+                if (isset($value[$cssSide]) && $value[$cssSide] !== '') {
+                    $s = $mk((string) $value[$cssSide]);
+                    if ($s === null) return null;
+                    $sides[$logical] = $s;
+                }
+            }
+        } else {
+            return null;
+        }
+        $out = [];
+        foreach ($sides as $k => $v) if ($v !== null) $out[$k] = $v;
+        if (!$out) return null;
+        return ['$$type' => 'dimensions', 'value' => $out];
+    }
+
+    /**
+     * Find (or create) the element's local style class and its base variant
+     * (breakpoint null + state null). Returns [styleId, variantIndex]. Creates
+     * the `styles` map entry and the `classes` settings binding if missing.
+     */
+    private function ensureAtomicLocalStyle(array &$el): array {
+        if (!isset($el['styles']) || !is_array($el['styles'])) $el['styles'] = [];
+        if (!isset($el['settings']) || !is_array($el['settings'])) $el['settings'] = [];
+
+        $styleId = null;
+        $cls = $el['settings']['classes'] ?? null;
+        if (is_array($cls) && isset($cls['value']) && is_array($cls['value'])) {
+            foreach ($cls['value'] as $cid) {
+                if (is_string($cid) && isset($el['styles'][$cid])) { $styleId = $cid; break; }
+            }
+        }
+        if ($styleId === null && !empty($el['styles'])) {
+            $styleId = (string) array_key_first($el['styles']);
+        }
+        if ($styleId === null) {
+            $base    = isset($el['id']) ? (string) $el['id'] : substr(md5(uniqid('', true)), 0, 7);
+            $styleId = 'e-' . $base . '-ignyous';
+            $el['styles'][$styleId] = ['id' => $styleId, 'type' => 'class', 'label' => 'local', 'variants' => []];
+            $vals = (is_array($cls) && isset($cls['value']) && is_array($cls['value'])) ? $cls['value'] : [];
+            $vals[] = $styleId;
+            $el['settings']['classes'] = ['$$type' => 'classes', 'value' => array_values(array_unique($vals))];
+        }
+
+        if (!isset($el['styles'][$styleId]) || !is_array($el['styles'][$styleId])) {
+            $el['styles'][$styleId] = ['id' => $styleId, 'type' => 'class', 'label' => 'local', 'variants' => []];
+        }
+        if (!isset($el['styles'][$styleId]['variants']) || !is_array($el['styles'][$styleId]['variants'])) {
+            $el['styles'][$styleId]['variants'] = [];
+        }
+
+        $vIdx = null;
+        foreach ($el['styles'][$styleId]['variants'] as $i => $v) {
+            $meta = (is_array($v) && isset($v['meta']) && is_array($v['meta'])) ? $v['meta'] : [];
+            if (($meta['breakpoint'] ?? null) === null && ($meta['state'] ?? null) === null) { $vIdx = $i; break; }
+        }
+        if ($vIdx === null) {
+            $el['styles'][$styleId]['variants'][] = ['meta' => ['breakpoint' => null, 'state' => null], 'props' => []];
+            $vIdx = count($el['styles'][$styleId]['variants']) - 1;
+        }
+        if (!isset($el['styles'][$styleId]['variants'][$vIdx]['props']) || !is_array($el['styles'][$styleId]['variants'][$vIdx]['props'])) {
+            $el['styles'][$styleId]['variants'][$vIdx]['props'] = [];
+        }
+        return [$styleId, $vIdx];
     }
 
     /** Per-widget text color settings key. */
@@ -562,19 +790,22 @@ class ElementorController {
 
             $path       = $prefix === '' ? (string) $i : $prefix . '.' . $i;
             $elType     = (string) $el['elType'];
-            $widgetType = isset($el['widgetType']) ? (string) $el['widgetType'] : null;
+            $atomic     = $this->isAtomic($el);
+            $widgetType = isset($el['widgetType']) ? (string) $el['widgetType'] : ($atomic ? $elType : null);
             $settings   = isset($el['settings']) && is_array($el['settings']) ? $el['settings'] : [];
 
             $out[] = [
-                'path'         => $path,
-                'id'           => isset($el['id']) ? (string) $el['id'] : null,
-                'elType'       => $elType,
-                'widgetType'   => $widgetType,
-                'label'        => $this->humanLabel($elType, $widgetType),
-                'text'         => $this->extractText($settings),
-                'depth'        => $depth,
-                'has_inner'    => !empty($el['elements']),
-                'setting_keys' => array_slice(array_keys($settings), 0, 40),
+                'path'           => $path,
+                'id'             => isset($el['id']) ? (string) $el['id'] : null,
+                'elType'         => $elType,
+                'widgetType'     => $widgetType,
+                'is_atomic'      => $atomic,
+                'schema_version' => $atomic && isset($el['version']) ? (string) $el['version'] : null,
+                'label'          => $atomic ? $this->atomicLabel($el, $elType) : $this->humanLabel($elType, $widgetType),
+                'text'           => $atomic ? $this->extractAtomicText($settings, $elType) : $this->extractText($settings),
+                'depth'          => $depth,
+                'has_inner'      => !empty($el['elements']),
+                'setting_keys'   => array_slice(array_keys($settings), 0, 40),
             ];
 
             if (!empty($el['elements']) && is_array($el['elements'])) {
@@ -589,6 +820,43 @@ class ElementorController {
             return ucwords(str_replace(['-', '_'], ' ', $widgetType));
         }
         return ucfirst($elType);
+    }
+
+    /** Friendly label for an atomic element, preferring its editor label. */
+    private function atomicLabel(array $el, string $elType): string {
+        $es = isset($el['editor_settings']) && is_array($el['editor_settings']) ? $el['editor_settings'] : [];
+        if (!empty($es['title']) && is_string($es['title'])) return mb_substr($es['title'], 0, 60);
+        $name = preg_replace('/^e-/', '', $elType);
+        return ucwords(str_replace(['-', '_'], ' ', $name));
+    }
+
+    /** Best-effort visible text for an atomic element (unwraps typed props). */
+    private function extractAtomicText(array $settings, string $elType): string {
+        $key = self::ATOMIC_TEXT[$elType] ?? null;
+        if ($key !== null && isset($settings[$key])) {
+            $t = trim(wp_strip_all_tags($this->unwrapProp($settings[$key])));
+            if ($t !== '') return mb_substr($t, 0, 200);
+        }
+        foreach ($settings as $k => $v) {
+            if ($k === 'classes') continue;
+            $t = trim(wp_strip_all_tags($this->unwrapProp($v)));
+            if ($t !== '') return mb_substr($t, 0, 200);
+        }
+        return '';
+    }
+
+    /** Recursively unwrap a typed atomic prop down to a scalar string. */
+    private function unwrapProp($prop): string {
+        if (is_string($prop)) return $prop;
+        if (is_numeric($prop)) return (string) $prop;
+        if (!is_array($prop)) return '';
+        if (array_key_exists('$$type', $prop) && array_key_exists('value', $prop)) {
+            return $this->unwrapProp($prop['value']);
+        }
+        if (array_key_exists('content', $prop)) {
+            return $this->unwrapProp($prop['content']);
+        }
+        return '';
     }
 
     /** Best-effort visible text for an element, capped at 200 chars. */

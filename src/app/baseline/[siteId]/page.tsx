@@ -919,7 +919,9 @@ function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTarge
   }
 
   const TEXT_EDITABLE = new Set(['heading', 'text-editor', 'button', 'icon-box', 'image-box', 'testimonial', 'alert', 'call-to-action'])
-  const isWidget = (r: any) => r.elType === 'widget'
+  const ATOMIC_TEXT = new Set(['e-heading', 'e-paragraph', 'e-button'])
+  const ATOMIC_LAYOUT = new Set(['e-div-block', 'e-flexbox', 'e-grid'])
+  const isWidget = (r: any) => r.elType === 'widget' || (typeof r.elType === 'string' && r.elType.startsWith('e-'))
 
   return (
     <div style={{ fontSize: 12 }}>
@@ -932,7 +934,9 @@ function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTarge
       {rows.map(r => {
         const indent = (r.depth || 0) * 12
         const structural = !isWidget(r)
-        const canEdit = isWidget(r) && TEXT_EDITABLE.has(r.widgetType) && r.id
+        const canText = !!r.id && ((r.elType === 'widget' && TEXT_EDITABLE.has(r.widgetType)) || ATOMIC_TEXT.has(r.elType))
+        const canStyleOnly = !!r.id && ATOMIC_LAYOUT.has(r.elType)
+        const canEdit = canText || canStyleOnly
         const key = r.path + (r.id || '')
         const isEditing = editing === key
         return (
@@ -955,6 +959,10 @@ function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTarge
                 background: structural ? C.border : C.warnBg, color: structural ? C.mute : C.accent,
                 minWidth: 64, textAlign: 'center',
               }}>{r.label}</span>
+              {r.is_atomic && <span style={{
+                fontSize: 9, padding: '1px 4px', borderRadius: 3,
+                background: '#EAF3FF', color: '#2B6CB0', fontWeight: 600,
+              }} title={`Elementor V4 atomic element${r.schema_version ? ` · schema ${r.schema_version}` : ''}`}>V4</span>}
               <span style={{ flex: 1, color: r.text ? C.text : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.text || (structural ? '' : <em style={{ color: C.faint }}>(no text)</em>)}
               </span>
@@ -962,25 +970,27 @@ function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTarge
             </div>
             {isEditing && (
               <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
-                <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} style={{ ...input, fontSize: 13 }} autoFocus />
-                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  <button
-                    onClick={() => {
-                      apply({
-                        capability: 'elementor.patch',
-                        pageRef,
-                        target: { kind: 'id', id: r.id },
-                        op: { type: 'set_text', value: draft },
-                        label: `${r.widgetType} #${r.id} → "${draft.slice(0, 40)}${draft.length > 40 ? '…' : ''}"`,
-                      })
-                      setEditing(null)
-                    }}
-                    disabled={busy || draft === r.text}
-                    style={{ ...btn, fontSize: 12 }}
-                  >Save text</button>
-                  <button onClick={() => { setEditing(null); setDraft('') }} style={{ ...btnGhost, fontSize: 12 }}>Cancel</button>
-                </div>
-                <ElementorStyleControls elId={r.id} widgetType={r.widgetType} apply={apply} busy={busy} pageRef={pageRef} />
+                {canText && <>
+                  <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} style={{ ...input, fontSize: 13 }} autoFocus />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <button
+                      onClick={() => {
+                        apply({
+                          capability: 'elementor.patch',
+                          pageRef,
+                          target: { kind: 'id', id: r.id },
+                          op: { type: 'set_text', value: draft },
+                          label: `${r.widgetType} #${r.id} → "${draft.slice(0, 40)}${draft.length > 40 ? '…' : ''}"`,
+                        })
+                        setEditing(null)
+                      }}
+                      disabled={busy || draft === r.text}
+                      style={{ ...btn, fontSize: 12 }}
+                    >Save text</button>
+                    <button onClick={() => { setEditing(null); setDraft('') }} style={{ ...btnGhost, fontSize: 12 }}>Cancel</button>
+                  </div>
+                </>}
+                <ElementorStyleControls elId={r.id} widgetType={r.widgetType} isAtomic={!!r.is_atomic} apply={apply} busy={busy} pageRef={pageRef} />
               </div>
             )}
           </div>
@@ -990,14 +1000,16 @@ function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTarge
   )
 }
 
-// ─── Phase 6D: per-Elementor-widget style controls ────────────────────────
-function ElementorStyleControls({ elId, widgetType, apply, busy, pageRef }: { elId: string; widgetType: string; apply: (a: Action) => void; busy: boolean; pageRef: 'home' | number }) {
+// ─── Phase 6D/6F: per-Elementor-widget style controls ─────────────────────
+function ElementorStyleControls({ elId, widgetType, isAtomic, apply, busy, pageRef }: { elId: string; widgetType: string; isAtomic?: boolean; apply: (a: Action) => void; busy: boolean; pageRef: 'home' | number }) {
   const [textColor, setTextColor] = useState('#000000')
   const [bgColor,   setBgColor]   = useState('#ffffff')
   const [padding,   setPadding]   = useState('')
+  const [margin,    setMargin]    = useState('')
   const [fontSize,  setFontSize]  = useState('')
 
-  const hasType = ['heading','text-editor','button','icon-box','image-box','testimonial','alert','call-to-action'].includes(widgetType)
+  const atomicText = ['e-heading', 'e-paragraph', 'e-button'].includes(widgetType)
+  const hasType = atomicText || ['heading','text-editor','button','icon-box','image-box','testimonial','alert','call-to-action'].includes(widgetType)
   const isButton = widgetType === 'button'
 
   const setStyle = (category: 'color'|'spacing'|'typography', name: string, value: any) =>
@@ -1022,7 +1034,7 @@ function ElementorStyleControls({ elId, widgetType, apply, busy, pageRef }: { el
 
   return (
     <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${C.border}` }}>
-      <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Widget styles</div>
+      <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>{isAtomic ? 'V4 styles (local class)' : 'Widget styles'}</div>
       {hasType && (
         <div style={row}>
           <span style={lbl}>Text color</span>
@@ -1045,6 +1057,14 @@ function ElementorStyleControls({ elId, widgetType, apply, busy, pageRef }: { el
         <button onClick={() => setStyle('spacing', 'padding', padding)} disabled={busy || !padding} style={btnSm}>Apply</button>
         <button onClick={() => clearStyle('spacing', 'padding')} disabled={busy} style={btnSmG}>Clear</button>
       </div>
+      {isAtomic && (
+        <div style={row}>
+          <span style={lbl}>Margin</span>
+          <input value={margin} onChange={e => setMargin(e.target.value)} placeholder="16px" disabled={busy} style={{ ...input, fontSize: 12, padding: '3px 6px', width: 70 }} />
+          <button onClick={() => setStyle('spacing', 'margin', margin)} disabled={busy || !margin} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('spacing', 'margin')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
       {hasType && (
         <div style={row}>
           <span style={lbl}>Font size</span>

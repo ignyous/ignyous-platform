@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
         }
         const els = (el.data?.elements as any[]) || []
         const res = resolveElementorTarget(els, target)
-        if (res.kind === 'none') return NextResponse.json({ success: false, changeId, error: 'No matching Elementor widget found.', tiers, candidates: els.filter(e => e.elType === 'widget').map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })) }, { status: 404 })
+        if (res.kind === 'none') return NextResponse.json({ success: false, changeId, error: 'No matching Elementor widget found.', tiers, candidates: els.filter(e => e.elType === 'widget' || e.is_atomic).map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })) }, { status: 404 })
         if (res.kind === 'ambiguous') return NextResponse.json({ success: false, changeId, error: 'Ambiguous Elementor target — pick one in the Elementor pane.', tiers, candidates: res.matches.map(e => ({ path: e.path, id: e.id, type: e.widgetType, text: e.text })) }, { status: 409 })
         target = { kind: 'id', id: res.el.id }
       }
@@ -365,7 +365,14 @@ function resolveElementorTarget(els: any[], target: ElementorTarget): ElResolveR
     const hit = els.find(e => e.path === target.path)
     return hit ? { kind: 'one', el: hit } : { kind: 'none' }
   }
-  const widgets = els.filter(e => e.elType === 'widget' && (!target.widgetType || e.widgetType === target.widgetType))
+  // Classic widget type → atomic (V4) equivalent, for NL targeting parity.
+  const ATOMIC_OF: Record<string, string> = { heading: 'e-heading', button: 'e-button', 'text-editor': 'e-paragraph' }
+  const matchesType = (e: any) => {
+    if (!target.widgetType) return true
+    if (e.elType === 'widget') return e.widgetType === target.widgetType
+    return e.widgetType === ATOMIC_OF[target.widgetType] // atomic row: widgetType === elType (e-…)
+  }
+  const widgets = els.filter(e => (e.elType === 'widget' || e.is_atomic) && matchesType(e))
   if (widgets.length === 0) return { kind: 'none' }
 
   if (target.kind === 'first') {
