@@ -154,7 +154,7 @@ class ElementorController {
         if (!$target || !$op || empty($op['type'])) {
             return $this->fail($changeId, 'elementor.patch', $started, 'missing_fields', ['have' => array_keys($body)]);
         }
-        if ($op['type'] !== 'set_text') {
+        if (!in_array($op['type'], ['set_text', 'set_style', 'clear_style'], true)) {
             return $this->fail($changeId, 'elementor.patch', $started, 'unsupported_op', ['op' => $op['type']]);
         }
 
@@ -178,25 +178,40 @@ class ElementorController {
             return $this->fail($changeId, 'elementor.patch', $started, 'not_a_widget', ['elType' => $found['elType'] ?? null]);
         }
 
-        // Determine which settings field to write
-        $newText = (string) ($op['value'] ?? '');
-        $field   = isset($op['field']) ? (string) $op['field'] : null;
-        [$writeKey, $isHtml, $fieldErr] = $this->resolveField($widgetType, $field);
-        if ($fieldErr) {
-            return $this->fail($changeId, 'elementor.patch', $started, $fieldErr, ['widgetType' => $widgetType, 'field' => $field]);
-        }
-
-        // Sanitize value: HTML fields get wp_kses_post, plain fields get sanitize_text_field
-        $clean = $isHtml ? wp_kses_post($newText) : sanitize_text_field($newText);
-
         if (!isset($found['settings']) || !is_array($found['settings'])) $found['settings'] = [];
-        $found['settings'][$writeKey] = $clean;
+
+        $writeKey = null; $isHtml = false; $label = '';
+
+        if ($op['type'] === 'set_text') {
+            // Determine which settings field to write
+            $newText = (string) ($op['value'] ?? '');
+            $field   = isset($op['field']) ? (string) $op['field'] : null;
+            [$writeKey, $isHtml, $fieldErr] = $this->resolveField($widgetType, $field);
+            if ($fieldErr) {
+                return $this->fail($changeId, 'elementor.patch', $started, $fieldErr, ['widgetType' => $widgetType, 'field' => $field]);
+            }
+            // Sanitize: HTML fields get wp_kses_post, plain fields get sanitize_text_field
+            $clean = $isHtml ? wp_kses_post($newText) : sanitize_text_field($newText);
+            $found['settings'][$writeKey] = $clean;
+            $label = 'Elementor text (' . $widgetType . ')';
+        } else {
+            // set_style / clear_style
+            $category = isset($op['category']) ? (string) $op['category'] : '';
+            $name     = isset($op['name'])     ? (string) $op['name']     : '';
+            $value    = ($op['type'] === 'clear_style') ? null : ($op['value'] ?? null);
+            $styleErr = $this->applyStyle($found['settings'], $widgetType, $category, $name, $value);
+            if ($styleErr) {
+                return $this->fail($changeId, 'elementor.patch', $started, $styleErr, ['widgetType' => $widgetType, 'category' => $category, 'name' => $name]);
+            }
+            $writeKey = $category . '.' . $name;
+            $label = 'Elementor style ' . $writeKey . ' (' . $widgetType . ')';
+        }
 
         // Re-encode the whole tree (must be JSON string, slashed)
         $jsonAfter = wp_json_encode($tree);
 
         // Snapshot before/after via dedicated elementor_data restore type
-        $snapId = Snapshots::open($changeId, 'elementor_data', (string) $postId, is_string($rawBefore) ? $rawBefore : wp_json_encode($rawBefore), 'Elementor element text (' . $widgetType . ')');
+        $snapId = Snapshots::open($changeId, 'elementor_data', (string) $postId, is_string($rawBefore) ? $rawBefore : wp_json_encode($rawBefore), $label);
         update_metadata('post', $postId, self::DATA_META_KEY, wp_slash($jsonAfter));
         Snapshots::close($snapId, $jsonAfter);
 
@@ -221,8 +236,149 @@ class ElementorController {
             'widget_type' => $widgetType,
             'write_key'   => $writeKey,
             'snapshot_id' => $snapId,
-            'preview'     => mb_substr(trim(wp_strip_all_tags($clean)), 0, 120),
+            'op_type'     => $op['type'],
         ]);
+    }
+
+    /**
+     * Apply a style change to a widget's settings array (by reference).
+     * Returns null on success or an error string.
+     *
+     * category.name supported:
+     *   color.text        → per-widget text color key (title_color / text_color / button_text_color)
+     *   color.background  → button: background_color; everything else: _background_background+_background_color
+     *   spacing.padding   → _padding   (DIMENSIONS shape)
+     *   spacing.margin    → _margin    (DIMENSIONS shape)
+     *   typography.fontSize → typography_font_size (SLIDER) + typography_typography='custom'
+     *
+     * $value null = clear.
+     */
+    private function applyStyle(array &$settings, string $widgetType, string $category, string $name, $value): ?string {
+        $clear = ($value === null || $value === '');
+
+        if ($category === 'color') {
+            if ($name === 'text') {
+                $key = $this->textColorKey($widgetType);
+                if (!$key) return 'text_color_not_supported_for_widget';
+                if ($clear) { unset($settings[$key]); return null; }
+                $hex = $this->sanitizeColor($value);
+                if (!$hex) return 'invalid_color';
+                $settings[$key] = $hex;
+                return null;
+            }
+            if ($name === 'background') {
+                if ($widgetType === 'button') {
+                    if ($clear) { unset($settings['background_color']); return null; }
+                    $hex = $this->sanitizeColor($value);
+                    if (!$hex) return 'invalid_color';
+                    // Button bg in newer Elementor is a background group: background_background='classic'
+                    $settings['background_background'] = 'classic';
+                    $settings['background_color']      = $hex;
+                    return null;
+                }
+                // Universal wrapper background
+                if ($clear) { unset($settings['_background_background'], $settings['_background_color']); return null; }
+                $hex = $this->sanitizeColor($value);
+                if (!$hex) return 'invalid_color';
+                $settings['_background_background'] = 'classic';
+                $settings['_background_color']      = $hex;
+                return null;
+            }
+            return 'unknown_color_name';
+        }
+
+        if ($category === 'spacing') {
+            if (!in_array($name, ['padding', 'margin'], true)) return 'unknown_spacing_name';
+            $key = '_' . $name; // _padding / _margin (universal common controls)
+            if ($clear) { unset($settings[$key]); return null; }
+            $dim = $this->toDimensions($value);
+            if ($dim === null) return 'invalid_spacing_value';
+            $settings[$key] = $dim;
+            return null;
+        }
+
+        if ($category === 'typography') {
+            if ($name !== 'fontSize') return 'unknown_typography_name';
+            if (!$this->widgetHasTypography($widgetType)) return 'font_size_not_supported_for_widget';
+            if ($clear) { unset($settings['typography_font_size']); return null; }
+            $slider = $this->toSlider($value);
+            if ($slider === null) return 'invalid_font_size';
+            $settings['typography_typography'] = 'custom';
+            $settings['typography_font_size']  = $slider;
+            return null;
+        }
+
+        return 'unknown_style_category';
+    }
+
+    /** Per-widget text color settings key. */
+    private function textColorKey(string $widgetType): ?string {
+        switch ($widgetType) {
+            case 'heading':     return 'title_color';
+            case 'text-editor': return 'text_color';
+            case 'button':      return 'button_text_color';
+            case 'icon-box':
+            case 'image-box':   return 'title_color';
+            case 'testimonial': return 'testimonial_content_color';
+            case 'alert':       return 'title_color';
+            case 'call-to-action': return 'title_color';
+            default:            return null;
+        }
+    }
+
+    private function widgetHasTypography(string $widgetType): bool {
+        return in_array($widgetType, ['heading', 'text-editor', 'button', 'icon-box', 'image-box', 'testimonial', 'alert', 'call-to-action'], true);
+    }
+
+    /** Parse "24px" / "1.5rem" into Elementor DIMENSIONS shape (all sides linked). */
+    private function toDimensions($value): ?array {
+        // Accept a string single value, or an object with sides
+        if (is_string($value)) {
+            $p = $this->parseLength($value);
+            if ($p === null) return null;
+            [$num, $unit] = $p;
+            return ['unit' => $unit, 'top' => $num, 'right' => $num, 'bottom' => $num, 'left' => $num, 'isLinked' => true];
+        }
+        if (is_array($value)) {
+            $unit = 'px'; $sides = ['top' => '', 'right' => '', 'bottom' => '', 'left' => ''];
+            foreach (['top', 'right', 'bottom', 'left'] as $s) {
+                if (isset($value[$s]) && $value[$s] !== '') {
+                    $p = $this->parseLength((string) $value[$s]);
+                    if ($p === null) return null;
+                    $sides[$s] = $p[0];
+                    $unit = $p[1];
+                }
+            }
+            return array_merge(['unit' => $unit], $sides, ['isLinked' => false]);
+        }
+        return null;
+    }
+
+    /** Parse "18px" into Elementor SLIDER shape {unit, size}. */
+    private function toSlider($value): ?array {
+        if (!is_string($value) && !is_numeric($value)) return null;
+        $p = $this->parseLength((string) $value);
+        if ($p === null) return null;
+        [$num, $unit] = $p;
+        return ['unit' => $unit, 'size' => is_numeric($num) ? (float) $num : $num];
+    }
+
+    /** "24px" → ['24','px']; "1.5rem" → ['1.5','rem']; bare "24" → ['24','px']. Null if invalid. */
+    private function parseLength(string $v): ?array {
+        $v = trim($v);
+        if (!preg_match('/^(-?\d+(?:\.\d+)?)\s*(px|em|rem|%|vw|vh)?$/i', $v, $m)) return null;
+        $num  = $m[1];
+        $unit = isset($m[2]) && $m[2] !== '' ? strtolower($m[2]) : 'px';
+        return [$num, $unit];
+    }
+
+    /** Hex / rgb(a) / hsl(a) sanitizer (shared shape with ThemeAdapter). */
+    private function sanitizeColor($v): ?string {
+        if (!is_string($v)) return null;
+        $v = trim($v);
+        if (preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $v)) return strtolower($v);
+        if (preg_match('/^(rgb|rgba|hsl|hsla)\(\s*[\d.,%\s\/]+\s*\)$/i', $v)) return $v;
+        return null;
     }
 
     /**

@@ -26,7 +26,9 @@ export type Action =
                                     label: string }
   | { capability: 'elementor.patch'; pageRef: string | number;
                                     target: ElementorTarget;
-                                    op: { type: 'set_text'; value: string; field?: string };
+                                    op: { type: 'set_text'; value: string; field?: string }
+                                      | { type: 'set_style'; category: 'color' | 'spacing' | 'typography'; name: string; value: any }
+                                      | { type: 'clear_style'; category: 'color' | 'spacing' | 'typography'; name: string };
                                     label: string }
   | { capability: 'undo';           changeId?: string; label: string }
 

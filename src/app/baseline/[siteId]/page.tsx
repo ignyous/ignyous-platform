@@ -939,11 +939,79 @@ function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built
                   >Save text</button>
                   <button onClick={() => { setEditing(null); setDraft('') }} style={{ ...btnGhost, fontSize: 12 }}>Cancel</button>
                 </div>
+                <ElementorStyleControls elId={r.id} widgetType={r.widgetType} apply={apply} busy={busy} />
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Phase 6D: per-Elementor-widget style controls ────────────────────────
+function ElementorStyleControls({ elId, widgetType, apply, busy }: { elId: string; widgetType: string; apply: (a: Action) => void; busy: boolean }) {
+  const [textColor, setTextColor] = useState('#000000')
+  const [bgColor,   setBgColor]   = useState('#ffffff')
+  const [padding,   setPadding]   = useState('')
+  const [fontSize,  setFontSize]  = useState('')
+
+  const hasType = ['heading','text-editor','button','icon-box','image-box','testimonial','alert','call-to-action'].includes(widgetType)
+  const isButton = widgetType === 'button'
+
+  const setStyle = (category: 'color'|'spacing'|'typography', name: string, value: any) =>
+    apply({
+      capability: 'elementor.patch', pageRef: 'home',
+      target: { kind: 'id', id: elId },
+      op: { type: 'set_style', category, name, value },
+      label: `${widgetType} #${elId} ${category}.${name} → ${typeof value === 'string' ? value : JSON.stringify(value)}`,
+    })
+  const clearStyle = (category: 'color'|'spacing'|'typography', name: string) =>
+    apply({
+      capability: 'elementor.patch', pageRef: 'home',
+      target: { kind: 'id', id: elId },
+      op: { type: 'clear_style', category, name },
+      label: `clear ${widgetType} #${elId} ${category}.${name}`,
+    })
+
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, marginTop: 4 }
+  const lbl: React.CSSProperties = { color: C.mute, minWidth: 56 }
+  const btnSm: React.CSSProperties = { ...btn, fontSize: 11, padding: '3px 8px' }
+  const btnSmG: React.CSSProperties = { ...btnGhost, fontSize: 11, padding: '3px 8px' }
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${C.border}` }}>
+      <div style={{ fontSize: 11, color: C.mute, marginBottom: 4 }}>Widget styles</div>
+      {hasType && (
+        <div style={row}>
+          <span style={lbl}>Text color</span>
+          <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} disabled={busy}
+                 style={{ width: 32, height: 22, border: `1px solid ${C.border}`, borderRadius: 4, padding: 0 }} />
+          <button onClick={() => setStyle('color', 'text', textColor)} disabled={busy} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('color', 'text')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
+      <div style={row}>
+        <span style={lbl}>{isButton ? 'Button bg' : 'Background'}</span>
+        <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} disabled={busy}
+               style={{ width: 32, height: 22, border: `1px solid ${C.border}`, borderRadius: 4, padding: 0 }} />
+        <button onClick={() => setStyle('color', 'background', bgColor)} disabled={busy} style={btnSm}>Apply</button>
+        <button onClick={() => clearStyle('color', 'background')} disabled={busy} style={btnSmG}>Clear</button>
+      </div>
+      <div style={row}>
+        <span style={lbl}>Padding</span>
+        <input value={padding} onChange={e => setPadding(e.target.value)} placeholder="24px" disabled={busy} style={{ ...input, fontSize: 12, padding: '3px 6px', width: 70 }} />
+        <button onClick={() => setStyle('spacing', 'padding', padding)} disabled={busy || !padding} style={btnSm}>Apply</button>
+        <button onClick={() => clearStyle('spacing', 'padding')} disabled={busy} style={btnSmG}>Clear</button>
+      </div>
+      {hasType && (
+        <div style={row}>
+          <span style={lbl}>Font size</span>
+          <input value={fontSize} onChange={e => setFontSize(e.target.value)} placeholder="18px" disabled={busy} style={{ ...input, fontSize: 12, padding: '3px 6px', width: 70 }} />
+          <button onClick={() => setStyle('typography', 'fontSize', fontSize)} disabled={busy || !fontSize} style={btnSm}>Apply</button>
+          <button onClick={() => clearStyle('typography', 'fontSize')} disabled={busy} style={btnSmG}>Clear</button>
+        </div>
+      )}
     </div>
   )
 }

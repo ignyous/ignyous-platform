@@ -118,10 +118,9 @@ export async function POST(req: NextRequest) {
       if (!pageId) return NextResponse.json({ success: false, changeId, error: 'Could not resolve page.', tiers }, { status: 400 })
 
       // ── Elementor detection ──
-      // If this page is built with Elementor and the op is a text edit, route to
-      // the Elementor element tree instead of Gutenberg blocks. (set_style on
-      // Elementor arrives in 6D; for now only set_text is translated.)
-      if (blocksAction.op.type === 'set_text') {
+      // If this page is built with Elementor, route text AND style edits to the
+      // Elementor element tree instead of Gutenberg blocks.
+      if (blocksAction.op.type === 'set_text' || blocksAction.op.type === 'set_style' || blocksAction.op.type === 'clear_style') {
         const el = await bridgeCall(site, `pages/${pageId}/elementor`)
         if (el.ok && el.data?.built_with_elementor) {
           tiers.push({ tier: 0, capability: 'elementor.list', ok: true, status: el.status, durationMs: el.durationMs, data: { count: el.data?.count } })
@@ -145,9 +144,11 @@ export async function POST(req: NextRequest) {
             }, { status: 409 })
           }
 
+          // Translate the op: Gutenberg set_style category/name carries over directly
+          const elOp = blocksAction.op
           const r = await bridgeCall(site, `pages/${pageId}/elementor`, {
             method: 'PATCH',
-            body: { target: { by: 'id', id: res.el.id }, op: { type: 'set_text', value: (blocksAction.op as any).value } },
+            body: { target: { by: 'id', id: res.el.id }, op: elOp },
             ...opts,
           })
           tiers.push({ tier: 1, capability: 'elementor.patch', ok: r.ok, status: r.status, error: r.error, durationMs: r.durationMs, data: r.data })
