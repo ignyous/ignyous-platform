@@ -270,8 +270,9 @@ class ElementorController {
             return $this->fail($changeId, 'elementor.patch', $started, 'elementor_data_unparseable');
         }
 
-        // Locate the element (by id preferred, else by path)
-        $found = $this->locate($tree, $target);
+        // Locate the element (by id preferred, else by path). Bind by reference
+        // so settings/styles mutations propagate back into $tree before re-encode.
+        $found = &$this->locate($tree, $target);
         if ($found === null) {
             return $this->fail($changeId, 'elementor.patch', $started, 'element_not_found', ['target' => $target]);
         }
