@@ -5,8 +5,8 @@ namespace Ignyous\Baseline\Themes;
  * Picks the right adapter for the active WordPress theme.
  *
  * Order of priority:
- *   1. Theme-specific adapters (Astra, Kadence) — they detect by template/stylesheet slug
- *      or by their well-known constants.
+ *   1. Theme-specific adapters (Astra, Kadence, GeneratePress) — they detect by
+ *      template/stylesheet slug or by their well-known constants.
  *   2. BlockThemeAdapter — any theme that wp_is_block_theme() returns true for
  *      (Twenty Twenty-Five, custom block themes, etc).
  *   3. UnsupportedThemeAdapter — returns 409 with a clear "we can't edit this theme
@@ -26,6 +26,7 @@ class ThemeDispatcher {
             new ElementorAdapter(),
             new AstraAdapter(),
             new KadenceAdapter(),
+            new GeneratePressAdapter(),
             new BlockThemeAdapter(),
         ];
     }

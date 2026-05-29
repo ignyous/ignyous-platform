@@ -6,30 +6,40 @@ use Ignyous\Baseline\Snapshots;
 /**
  * Kadence theme adapter.
  *
- * Storage in Kadence:
- *   - 'kadence_global_palette'  option, JSON-encoded.
- *       Shape: { "active": "base", "palette": [ {"color","slug","name"}, ... ] }
- *       Slugs are typically palette1..palette9, plus base white/black.
- *       palette1 = primary brand color in default setups.
- *   - 'kadence_settings'        option, serialized array.
- *       'text_color', 'header_site_text_color', 'body_background',
- *       'heading_font_family', 'base_font_family' (each an array with
- *       { family, variant, subset, weight, ... })
+ * Storage model (verified against Kadence 1.5.x source):
  *
- * For Phase 5 we handle:
+ *  - Brand palette: option 'kadence_global_palette' (JSON).
+ *      { "active": "...", "palette": [ {"color","slug","name"}, ... ] }
+ *      palette1 = primary brand color.
+ *
+ *  - Everything else (colors, fonts) is read through Kadence's option() helper,
+ *    whose backend depends on get_option_type():
+ *      apply_filters('kadence_theme_option_type', 'theme_mod')  → DEFAULT 'theme_mod'
+ *    So on a standard install Kadence reads settings via get_theme_mod($key),
+ *    NOT from the 'kadence_settings' option. We honor the same backend on write,
+ *    falling back to the 'kadence_settings' option only when a site opts into
+ *    'option' mode. (An earlier version wrote only the option and was ignored.)
+ *
+ *  - Setting value shapes (verified):
+ *      base_font          => [ 'family','google','weight','variant','color', ... ]
+ *                            body TEXT color lives in base_font['color'].
+ *      heading_font       => [ 'family' => ... ]
+ *      content_background => [ 'desktop' => [ 'color' => <hex|slug> ], ... ]   (responsive)
+ *      link_color         => [ 'highlight' => <hex|slug>, 'style' => 'standard', ... ]
+ *
+ * Generic capability mapping:
  *   primary_color    → kadence_global_palette[palette1]
- *   text_color       → kadence_settings['text_color']
- *   background_color → kadence_settings['body_background']
- *   heading_font     → kadence_settings['heading_font'] family
- *   body_font        → kadence_settings['base_font']    family
- *
- * Kadence clears its own CSS cache when these options change via update_option hooks.
+ *   text_color       → base_font['color']
+ *   background_color → content_background['desktop']['color']
+ *   link_color       → link_color['highlight']
+ *   heading_font     → heading_font['family']
+ *   body_font        → base_font['family']
  */
 class KadenceAdapter extends ThemeAdapter {
 
-    const PALETTE_OPTION = 'kadence_global_palette';
+    const PALETTE_OPTION  = 'kadence_global_palette';
     const SETTINGS_OPTION = 'kadence_settings';
-    const PRIMARY_SLUG = 'palette1';
+    const PRIMARY_SLUG    = 'palette1';
 
     public function slug(): string { return 'kadence'; }
     public function name(): string { return 'Kadence'; }
@@ -45,27 +55,28 @@ class KadenceAdapter extends ThemeAdapter {
             'primary_color'    => true,
             'text_color'       => true,
             'background_color' => true,
-            'link_color'       => false,    // Kadence uses per-element link colors — defer
+            'link_color'       => true,
             'heading_font'     => true,
             'body_font'        => true,
         ];
     }
 
     public function read(): array {
-        $palette  = $this->readPalette();
-        $settings = $this->readSettings();
+        $palette = $this->readPalette();
         return [
             'current' => [
                 'primary_color'    => $this->paletteColor($palette, self::PRIMARY_SLUG),
-                'text_color'       => $this->settingsColor($settings, 'text_color'),
-                'background_color' => $this->settingsColor($settings, 'body_background'),
-                'heading_font'     => $this->settingsFontFamily($settings, 'heading_font'),
-                'body_font'        => $this->settingsFontFamily($settings, 'base_font'),
+                'text_color'       => $this->subColor($this->getSetting('base_font'), 'color'),
+                'background_color' => $this->bgColor($this->getSetting('content_background')),
+                'link_color'       => $this->subColor($this->getSetting('link_color'), 'highlight'),
+                'heading_font'     => $this->familyOf($this->getSetting('heading_font')),
+                'body_font'        => $this->familyOf($this->getSetting('base_font')),
             ],
             'raw' => [
-                'palette_active' => $palette['active'] ?? null,
-                'palette_slugs'  => array_map(fn($c) => $c['slug'] ?? null, $palette['palette'] ?? []),
-                'settings_keys'  => array_keys($settings),
+                'option_type'     => $this->optionType(),
+                'option_name'     => $this->optionName(),
+                'palette_active'  => $palette['active'] ?? null,
+                'palette_slugs'   => array_map(fn($c) => $c['slug'] ?? null, $palette['palette'] ?? []),
                 'kadence_version' => defined('KADENCE_VERSION') ? KADENCE_VERSION : null,
             ],
         ];
@@ -76,7 +87,7 @@ class KadenceAdapter extends ThemeAdapter {
         $errors  = [];
         $snapIds = [];
 
-        // ─ Palette write (primary_color) ─
+        // ── Palette write (primary_color) — always a real option ──
         if (array_key_exists('primary_color', $body)) {
             $v = $this->sanitizeColor($body['primary_color']);
             if ($v) {
@@ -90,77 +101,141 @@ class KadenceAdapter extends ThemeAdapter {
             } else $errors['primary_color'] = 'invalid_color';
         }
 
-        // ─ Settings writes (everything else) ─
-        $touchesSettings = array_intersect_key($body, array_flip([
-            'text_color', 'background_color', 'heading_font', 'body_font',
-        ]));
-        if (!empty($touchesSettings)) {
-            $beforeSettings = $this->readSettings();
-            $nextSettings   = $beforeSettings;
+        // ── Build the set of changed settings (each a full value) ──
+        $changes = [];
 
+        // base_font carries BOTH body text color and body font family.
+        if (array_key_exists('text_color', $body) || array_key_exists('body_font', $body)) {
+            $bf = $this->getSettingArray('base_font');
             if (array_key_exists('text_color', $body)) {
                 $v = $this->sanitizeColor($body['text_color']);
-                if ($v) {
-                    $nextSettings['text_color'] = $this->wrapColor($v);
-                    $applied['text_color'] = $v;
-                } else $errors['text_color'] = 'invalid_color';
-            }
-            if (array_key_exists('background_color', $body)) {
-                $v = $this->sanitizeColor($body['background_color']);
-                if ($v) {
-                    $nextSettings['body_background'] = $this->wrapColor($v);
-                    $applied['background_color'] = $v;
-                } else $errors['background_color'] = 'invalid_color';
-            }
-            if (array_key_exists('heading_font', $body)) {
-                $v = trim((string) $body['heading_font']);
-                $existing = isset($nextSettings['heading_font']) && is_array($nextSettings['heading_font']) ? $nextSettings['heading_font'] : [];
-                $existing['family'] = $v;
-                if (empty($existing['variant'])) $existing['variant'] = 'regular';
-                if (empty($existing['subset']))  $existing['subset']  = 'latin';
-                $nextSettings['heading_font'] = $existing;
-                $applied['heading_font'] = $v;
+                if ($v) { $bf['color'] = $v; $applied['text_color'] = $v; }
+                else    $errors['text_color'] = 'invalid_color';
             }
             if (array_key_exists('body_font', $body)) {
                 $v = trim((string) $body['body_font']);
-                $existing = isset($nextSettings['base_font']) && is_array($nextSettings['base_font']) ? $nextSettings['base_font'] : [];
-                $existing['family'] = $v;
-                if (empty($existing['variant'])) $existing['variant'] = 'regular';
-                if (empty($existing['subset']))  $existing['subset']  = 'latin';
-                $nextSettings['base_font'] = $existing;
+                $bf['family'] = $v;
+                if (!array_key_exists('google', $bf))  $bf['google']  = false; // don't force webfont load
+                if (empty($bf['weight']))  $bf['weight']  = '400';
+                if (empty($bf['variant'])) $bf['variant'] = 'regular';
                 $applied['body_font'] = $v;
             }
-
-            $snap = Snapshots::open($changeId, 'option', self::SETTINGS_OPTION, wp_json_encode($beforeSettings ?: new \stdClass()), 'Kadence settings');
-            update_option(self::SETTINGS_OPTION, $nextSettings);
-            Snapshots::close($snap, wp_json_encode($nextSettings));
-            $snapIds[] = $snap;
+            $changes['base_font'] = $bf;
         }
 
-        // Cache busts — Kadence stores rendered CSS under transient/option keys; clear safe ones
+        if (array_key_exists('background_color', $body)) {
+            $v = $this->sanitizeColor($body['background_color']);
+            if ($v) {
+                $cb = $this->getSettingArray('content_background');
+                if (!isset($cb['desktop']) || !is_array($cb['desktop'])) $cb['desktop'] = [];
+                $cb['desktop']['color'] = $v;
+                $changes['content_background'] = $cb;
+                $applied['background_color'] = $v;
+            } else $errors['background_color'] = 'invalid_color';
+        }
+
+        if (array_key_exists('link_color', $body)) {
+            $v = $this->sanitizeColor($body['link_color']);
+            if ($v) {
+                $lc = $this->getSettingArray('link_color');
+                $lc['highlight'] = $v;
+                if (empty($lc['style'])) $lc['style'] = 'standard';
+                $changes['link_color'] = $lc;
+                $applied['link_color'] = $v;
+            } else $errors['link_color'] = 'invalid_color';
+        }
+
+        if (array_key_exists('heading_font', $body)) {
+            $v = trim((string) $body['heading_font']);
+            $hf = $this->getSettingArray('heading_font');
+            $hf['family'] = $v;
+            $changes['heading_font'] = $hf;
+            $applied['heading_font'] = $v;
+        }
+
+        // ── Persist changed settings honoring Kadence's storage backend ──
+        if (!empty($changes)) {
+            $snapIds = array_merge($snapIds, $this->writeChanges($changes, $changeId));
+        }
+
+        // Cache busts — Kadence regenerates CSS on option/theme_mod change, but clear safe keys.
         delete_transient('kadence_dynamic_css');
         delete_option('kadence_dynamic_css');
 
-        // Re-read so 'current' reflects what's actually stored
-        $palette  = $this->readPalette();
-        $settings = $this->readSettings();
-
+        $palette = $this->readPalette();
         return [
             'applied'      => $applied,
             'errors'       => $errors,
             'snapshot_ids' => $snapIds,
             'current'      => [
                 'primary_color'    => $this->paletteColor($palette, self::PRIMARY_SLUG),
-                'text_color'       => $this->settingsColor($settings, 'text_color'),
-                'background_color' => $this->settingsColor($settings, 'body_background'),
-                'heading_font'     => $this->settingsFontFamily($settings, 'heading_font'),
-                'body_font'        => $this->settingsFontFamily($settings, 'base_font'),
+                'text_color'       => $this->subColor($this->getSetting('base_font'), 'color'),
+                'background_color' => $this->bgColor($this->getSetting('content_background')),
+                'link_color'       => $this->subColor($this->getSetting('link_color'), 'highlight'),
+                'heading_font'     => $this->familyOf($this->getSetting('heading_font')),
+                'body_font'        => $this->familyOf($this->getSetting('base_font')),
             ],
             'success' => empty($errors),
         ];
     }
 
-    // --------------------------------------------------------------- helpers
+    // ----------------------------------------------------------- storage backend
+
+    /** 'theme_mod' (Kadence default) or 'option'. */
+    private function optionType(): string {
+        $t = function_exists('apply_filters') ? apply_filters('kadence_theme_option_type', 'theme_mod') : 'theme_mod';
+        return $t === 'option' ? 'option' : 'theme_mod';
+    }
+
+    private function optionName(): string {
+        return function_exists('apply_filters')
+            ? (string) apply_filters('kadence_theme_option_name', self::SETTINGS_OPTION)
+            : self::SETTINGS_OPTION;
+    }
+
+    /** Read one Kadence setting from whichever backend is active. Null if unset. */
+    private function getSetting(string $key) {
+        if ($this->optionType() === 'option') {
+            $opts = get_option($this->optionName(), []);
+            $opts = is_array($opts) ? $opts : [];
+            return array_key_exists($key, $opts) ? $opts[$key] : null;
+        }
+        return get_theme_mod($key, null);
+    }
+
+    private function getSettingArray(string $key): array {
+        $v = $this->getSetting($key);
+        return is_array($v) ? $v : [];
+    }
+
+    /**
+     * Write a batch of settings to the active backend with ONE snapshot.
+     *  - option mode: snapshot + update the kadence_settings option (merged).
+     *  - theme_mod mode: snapshot the whole theme_mods_{stylesheet} option, then set_theme_mod each.
+     */
+    private function writeChanges(array $changes, string $changeId): array {
+        if ($this->optionType() === 'option') {
+            $name   = $this->optionName();
+            $before = get_option($name, []);
+            $before = is_array($before) ? $before : [];
+            $next   = array_merge($before, $changes);
+            $snap = Snapshots::open($changeId, 'option', $name, wp_json_encode($before ?: new \stdClass()), 'Kadence settings');
+            update_option($name, $next);
+            Snapshots::close($snap, wp_json_encode($next));
+            return [$snap];
+        }
+        // theme_mod backend: theme mods are stored in the option theme_mods_{stylesheet}.
+        $modsKey = 'theme_mods_' . (function_exists('get_stylesheet') ? get_stylesheet() : 'kadence');
+        $before  = get_option($modsKey, []);
+        $snap = Snapshots::open($changeId, 'option', $modsKey, wp_json_encode($before ?: new \stdClass()), 'Kadence theme mods');
+        foreach ($changes as $key => $val) {
+            set_theme_mod($key, $val);
+        }
+        Snapshots::close($snap, wp_json_encode(get_option($modsKey, [])));
+        return [$snap];
+    }
+
+    // ----------------------------------------------------------- palette helpers
 
     private function readPalette(): array {
         $raw = get_option(self::PALETTE_OPTION, '');
@@ -169,7 +244,6 @@ class KadenceAdapter extends ThemeAdapter {
             if (is_array($decoded)) return $decoded;
         }
         if (is_array($raw)) return $raw;
-        // Default skeleton matching Kadence's first install state
         return [
             'active'  => 'base',
             'palette' => [
@@ -200,26 +274,25 @@ class KadenceAdapter extends ThemeAdapter {
         return $palette;
     }
 
-    private function readSettings(): array {
-        $v = get_option(self::SETTINGS_OPTION, []);
-        return is_array($v) ? $v : [];
+    // ----------------------------------------------------------- value extractors
+
+    /** Pull a string color from a sub-key of a setting array (or palette slug string). */
+    private function subColor($setting, string $sub): ?string {
+        if (!is_array($setting)) return is_string($setting) ? $setting : null;
+        $v = $setting[$sub] ?? null;
+        return is_string($v) ? $v : null;
     }
 
-    private function settingsColor(array $s, string $key): ?string {
-        if (!isset($s[$key])) return null;
-        $v = $s[$key];
-        if (is_string($v)) return $v;
-        if (is_array($v) && isset($v['color'])) return is_string($v['color']) ? $v['color'] : null;
+    /** content_background is responsive: prefer desktop.color. */
+    private function bgColor($setting): ?string {
+        if (!is_array($setting)) return is_string($setting) ? $setting : null;
+        if (isset($setting['desktop']['color']) && is_string($setting['desktop']['color'])) return $setting['desktop']['color'];
+        if (isset($setting['color']) && is_string($setting['color'])) return $setting['color'];
         return null;
     }
 
-    private function settingsFontFamily(array $s, string $key): ?string {
-        if (!isset($s[$key]) || !is_array($s[$key])) return null;
-        return isset($s[$key]['family']) && is_string($s[$key]['family']) ? $s[$key]['family'] : null;
-    }
-
-    /** Kadence often stores color values as { color: '#xxx' }. Use the wrapped shape for consistency. */
-    private function wrapColor(string $hex): array {
-        return ['color' => $hex];
+    private function familyOf($setting): ?string {
+        if (!is_array($setting)) return null;
+        return isset($setting['family']) && is_string($setting['family']) ? $setting['family'] : null;
     }
 }
