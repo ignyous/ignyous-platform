@@ -94,6 +94,32 @@ function typeMapStyles(s: string): string {
 }
 
 export function parseIntent(text: string): ParseResult {
+  const raw = text.trim()
+  if (!raw) return { source: 'none', hint: 'empty input' }
+
+  // ─── Location suffix (Phase 6E) ──
+  // "... in the header" / "... on the footer" → edit that theme-builder template
+  // instead of the home page. Strip the suffix and remember the location.
+  let pageRefOverride: string | null = null
+  let working = raw
+  const locMatch = working.match(/\s+(?:in|on|of)\s+the\s+(header|footer|single(?:\s+template)?|archive(?:\s+template)?|404(?:\s+page)?)\.?$/i)
+  if (locMatch) {
+    const loc = locMatch[1].toLowerCase().replace(/\s+template$/, '').replace(/\s+page$/, '')
+    pageRefOverride = loc === '404' ? 'error-404' : loc
+    working = working.slice(0, locMatch.index).trim()
+  }
+
+  const result = parseIntentInner(working)
+
+  // Apply the location override to any action that carries a pageRef
+  if (pageRefOverride && result.action && 'pageRef' in result.action) {
+    (result.action as any).pageRef = pageRefOverride
+    result.action.label += ` (in ${pageRefOverride})`
+  }
+  return result
+}
+
+function parseIntentInner(text: string): ParseResult {
   const t = text.trim()
   if (!t) return { source: 'none', hint: 'empty input' }
 

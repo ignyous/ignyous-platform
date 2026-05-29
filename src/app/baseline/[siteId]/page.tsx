@@ -66,6 +66,8 @@ export default function BaselineEditor() {
   const [pageBlocks, setPageBlocks] = useState<any[]>([])
   const [elementorEls, setElementorEls] = useState<any[]>([])
   const [elementorInfo, setElementorInfo] = useState<{ built: boolean; version: string | null; hint: string | null }>({ built: false, version: null, hint: null })
+  const [templates, setTemplates] = useState<Record<string, any[]>>({})
+  const [targetDoc, setTargetDoc] = useState<{ ref: 'home' | number; label: string }>({ ref: 'home', label: 'Home page' })
   const [lastApply, setLastApply] = useState<ApplyResp | null>(null)
 
   const refreshState = useCallback(async () => {
@@ -77,18 +79,23 @@ export default function BaselineEditor() {
 
   const refreshDebug = useCallback(async () => {
     if (!siteId) return
-    const [aRes, sRes, bRes, eRes] = await Promise.all([
+    const elUrl = targetDoc.ref === 'home'
+      ? `/api/baseline/elementor-elements?siteId=${siteId}`
+      : `/api/baseline/elementor-elements?siteId=${siteId}&pageId=${targetDoc.ref}`
+    const [aRes, sRes, bRes, eRes, tRes] = await Promise.all([
       fetch(`/api/baseline/actions?siteId=${siteId}&limit=30`).then(r => r.json()),
       fetch(`/api/baseline/snapshots?siteId=${siteId}&limit=30`).then(r => r.json()),
       fetch(`/api/baseline/blocks?siteId=${siteId}`).then(r => r.json()).catch(() => ({ blocks: [] })),
-      fetch(`/api/baseline/elementor-elements?siteId=${siteId}`).then(r => r.json()).catch(() => ({ elements: [] })),
+      fetch(elUrl).then(r => r.json()).catch(() => ({ elements: [] })),
+      fetch(`/api/baseline/elementor-templates?siteId=${siteId}`).then(r => r.json()).catch(() => ({ byType: {} })),
     ])
     setActions(aRes.actions || [])
     setSnapshots(sRes.snapshots || [])
     setPageBlocks(bRes.blocks || [])
     setElementorEls(eRes.elements || [])
     setElementorInfo({ built: !!eRes.builtWithElementor, version: eRes.elementorVersion || null, hint: eRes.hint || null })
-  }, [siteId])
+    setTemplates(tRes.byType || {})
+  }, [siteId, targetDoc])
 
   useEffect(() => { refreshState(); refreshDebug() }, [refreshState, refreshDebug])
 
@@ -241,7 +248,7 @@ export default function BaselineEditor() {
             {tab === 'actions'   && <ActionsList   rows={actions} />}
             {tab === 'snapshots' && <SnapshotsList rows={snapshots} siteId={siteId!} onChange={() => { refreshState(); refreshDebug() }} />}
             {tab === 'blocks'    && <BlocksList    rows={pageBlocks} apply={apply} busy={busy} />}
-            {tab === 'elementor' && <ElementorList rows={elementorEls} info={elementorInfo} apply={apply} busy={busy} />}
+            {tab === 'elementor' && <ElementorList rows={elementorEls} info={elementorInfo} apply={apply} busy={busy} templates={templates} targetDoc={targetDoc} setTargetDoc={setTargetDoc} />}
             {tab === 'state'     && <StateDump state={state} lastApply={lastApply} />}
           </div>
         </div>
@@ -860,33 +867,67 @@ function BlockStyleControls({ blockPath, blockType, apply, busy }: { blockPath: 
   )
 }
 
-// ─── Phase 6B/6C: Elementor element tree (read + click-to-edit text) ───────
-function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built: boolean; version: string | null; hint: string | null }; apply: (a: Action) => void; busy: boolean }) {
+// ─── Phase 6B/6C/6D/6E: Elementor element tree + doc picker ────────────────
+function ElementorList({ rows, info, apply, busy, templates, targetDoc, setTargetDoc }: {
+  rows: any[]; info: { built: boolean; version: string | null; hint: string | null };
+  apply: (a: Action) => void; busy: boolean;
+  templates: Record<string, any[]>;
+  targetDoc: { ref: 'home' | number; label: string };
+  setTargetDoc: (d: { ref: 'home' | number; label: string }) => void;
+}) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft]     = useState('')
+
+  // pageRef the edits should target: 'home' or the selected template's numeric id
+  const pageRef: 'home' | number = targetDoc.ref
+
+  // Build doc options: Home + every template grouped by type
+  const docOptions: { ref: 'home' | number; label: string }[] = [{ ref: 'home', label: 'Home page' }]
+  for (const [type, list] of Object.entries(templates)) {
+    for (const tpl of (list as any[])) {
+      docOptions.push({ ref: tpl.id as number, label: `${type}: ${tpl.title}` })
+    }
+  }
+
+  const Picker = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+      <span style={{ fontSize: 11, color: C.mute }}>Editing</span>
+      <select
+        value={String(targetDoc.ref)}
+        onChange={e => {
+          const v = e.target.value
+          const opt = docOptions.find(o => String(o.ref) === v) || docOptions[0]
+          setTargetDoc(opt)
+        }}
+        style={{ ...input, fontSize: 12, padding: '3px 6px', flex: 1 }}
+        disabled={busy}
+      >
+        {docOptions.map(o => <option key={String(o.ref)} value={String(o.ref)}>{o.label}</option>)}
+      </select>
+    </div>
+  )
 
   if (!info.built) {
     return (
       <div style={{ fontSize: 12, color: C.mute }}>
-        <div style={{ marginBottom: 6 }}>This page isn't built with Elementor.</div>
+        {docOptions.length > 1 && Picker}
+        <div style={{ marginBottom: 6 }}>This document isn't built with Elementor.</div>
         {info.hint && <div style={{ color: C.faint }}>{info.hint}</div>}
         <div style={{ marginTop: 8, color: C.faint }}>If it should be, click Refresh after loading the page once in WP.</div>
       </div>
     )
   }
-  if (!rows.length) {
-    return <div style={{ fontSize: 12, color: C.mute }}>Elementor page, but no elements parsed. Click Refresh.</div>
-  }
 
-  // widgets whose primary text we can edit (6C)
   const TEXT_EDITABLE = new Set(['heading', 'text-editor', 'button', 'icon-box', 'image-box', 'testimonial', 'alert', 'call-to-action'])
   const isWidget = (r: any) => r.elType === 'widget'
 
   return (
     <div style={{ fontSize: 12 }}>
+      {Picker}
+      {!rows.length && <div style={{ color: C.mute }}>No elements parsed. Click Refresh.</div>}
       <div style={{ color: C.mute, marginBottom: 6 }}>
         {rows.length} Elementor elements{info.version ? ` · v${info.version}` : ''}
-        <span style={{ color: C.faint }}> · click a widget to edit its text</span>
+        <span style={{ color: C.faint }}> · click a widget to edit</span>
       </div>
       {rows.map(r => {
         const indent = (r.depth || 0) * 12
@@ -927,7 +968,7 @@ function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built
                     onClick={() => {
                       apply({
                         capability: 'elementor.patch',
-                        pageRef: 'home',
+                        pageRef,
                         target: { kind: 'id', id: r.id },
                         op: { type: 'set_text', value: draft },
                         label: `${r.widgetType} #${r.id} → "${draft.slice(0, 40)}${draft.length > 40 ? '…' : ''}"`,
@@ -939,7 +980,7 @@ function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built
                   >Save text</button>
                   <button onClick={() => { setEditing(null); setDraft('') }} style={{ ...btnGhost, fontSize: 12 }}>Cancel</button>
                 </div>
-                <ElementorStyleControls elId={r.id} widgetType={r.widgetType} apply={apply} busy={busy} />
+                <ElementorStyleControls elId={r.id} widgetType={r.widgetType} apply={apply} busy={busy} pageRef={pageRef} />
               </div>
             )}
           </div>
@@ -950,7 +991,7 @@ function ElementorList({ rows, info, apply, busy }: { rows: any[]; info: { built
 }
 
 // ─── Phase 6D: per-Elementor-widget style controls ────────────────────────
-function ElementorStyleControls({ elId, widgetType, apply, busy }: { elId: string; widgetType: string; apply: (a: Action) => void; busy: boolean }) {
+function ElementorStyleControls({ elId, widgetType, apply, busy, pageRef }: { elId: string; widgetType: string; apply: (a: Action) => void; busy: boolean; pageRef: 'home' | number }) {
   const [textColor, setTextColor] = useState('#000000')
   const [bgColor,   setBgColor]   = useState('#ffffff')
   const [padding,   setPadding]   = useState('')
@@ -961,14 +1002,14 @@ function ElementorStyleControls({ elId, widgetType, apply, busy }: { elId: strin
 
   const setStyle = (category: 'color'|'spacing'|'typography', name: string, value: any) =>
     apply({
-      capability: 'elementor.patch', pageRef: 'home',
+      capability: 'elementor.patch', pageRef,
       target: { kind: 'id', id: elId },
       op: { type: 'set_style', category, name, value },
       label: `${widgetType} #${elId} ${category}.${name} → ${typeof value === 'string' ? value : JSON.stringify(value)}`,
     })
   const clearStyle = (category: 'color'|'spacing'|'typography', name: string) =>
     apply({
-      capability: 'elementor.patch', pageRef: 'home',
+      capability: 'elementor.patch', pageRef,
       target: { kind: 'id', id: elId },
       op: { type: 'clear_style', category, name },
       label: `clear ${widgetType} #${elId} ${category}.${name}`,

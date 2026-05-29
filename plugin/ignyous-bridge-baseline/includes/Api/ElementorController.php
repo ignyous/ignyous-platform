@@ -26,6 +26,7 @@ class ElementorController {
 
     const DATA_META_KEY = '_elementor_data';
     const MODE_META_KEY = '_elementor_edit_mode';
+    const TYPE_META_KEY = '_elementor_template_type';
 
     /**
      * Widget text-content settings keys, in priority order. The first present
@@ -94,6 +95,70 @@ class ElementorController {
                 'permission_callback' => [Auth::class, 'check'],
                 'callback'            => [$this, 'patchElement'],
             ],
+        ]);
+
+        // Phase 6E — theme-builder template discovery (header/footer/single/archive/etc.)
+        register_rest_route('ignyous/v1', '/elementor/templates', [
+            'methods'             => 'GET',
+            'permission_callback' => [Auth::class, 'check'],
+            'callback'            => [$this, 'listTemplates'],
+            'args'                => [
+                'location' => ['type' => 'string', 'required' => false],
+            ],
+        ]);
+    }
+
+    /**
+     * List Elementor theme-builder documents (elementor_library posts), grouped
+     * by their _elementor_template_type. Optional ?location= filters to one type.
+     *
+     * These template post IDs can be passed straight to GET/PATCH /pages/{id}/elementor
+     * — a template is just another post with _elementor_data.
+     */
+    public function listTemplates(\WP_REST_Request $req): \WP_REST_Response {
+        $location = $req->get_param('location');
+        $available = post_type_exists('elementor_library');
+        if (!$available) {
+            return new \WP_REST_Response([
+                'has_theme_builder' => false,
+                'templates'         => [],
+                'hint'              => 'elementor_library post type not found — Elementor (or Pro for header/footer) may be inactive.',
+            ]);
+        }
+
+        $metaQuery = [];
+        if ($location) {
+            $metaQuery[] = ['key' => self::TYPE_META_KEY, 'value' => sanitize_text_field($location)];
+        }
+
+        $posts = get_posts([
+            'post_type'      => 'elementor_library',
+            'post_status'    => ['publish', 'draft', 'private'],
+            'posts_per_page' => 100,
+            'orderby'        => 'modified',
+            'order'          => 'DESC',
+            'meta_query'     => $metaQuery ?: '',
+        ]);
+
+        $byType = [];
+        foreach ($posts as $p) {
+            $type = get_post_meta($p->ID, self::TYPE_META_KEY, true) ?: 'unknown';
+            $editMode = get_post_meta($p->ID, self::MODE_META_KEY, true);
+            $byType[$type][] = [
+                'id'         => $p->ID,
+                'title'      => $p->post_title ?: ('(untitled ' . $type . ' #' . $p->ID . ')'),
+                'type'       => $type,
+                'status'     => $p->post_status,
+                'is_builder' => $editMode === 'builder',
+                'modified'   => $p->post_modified_gmt,
+            ];
+        }
+
+        return new \WP_REST_Response([
+            'has_theme_builder' => defined('ELEMENTOR_PRO_VERSION'),
+            'pro_version'       => defined('ELEMENTOR_PRO_VERSION') ? ELEMENTOR_PRO_VERSION : null,
+            'count'             => count($posts),
+            'by_type'           => $byType,
         ]);
     }
 

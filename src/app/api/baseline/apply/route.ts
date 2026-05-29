@@ -255,6 +255,14 @@ async function resolvePageId(site: any, ref: string | number, tiers: any[]): Pro
     tiers.push({ tier: 0, capability: 'resolve.home', ok: s.ok && !!id, status: s.status, durationMs: s.durationMs, data: { home_page_id: id } })
     return id
   }
+  // Theme-builder location refs: header / footer / single / archive → newest template of that type
+  if (['header', 'footer', 'single', 'archive', 'error-404', 'search-results'].includes(ref)) {
+    const t = await bridgeCall(site, `elementor/templates?location=${encodeURIComponent(ref)}`)
+    const list = ((t.data?.by_type as any)?.[ref] as any[]) || []
+    const id = list[0]?.id || null   // newest-modified first (bridge orders desc)
+    tiers.push({ tier: 0, capability: `resolve.${ref}`, ok: t.ok && !!id, status: t.status, durationMs: t.durationMs, data: { template_id: id, candidates: list.length } })
+    return id
+  }
   // Could expand to slug lookup later
   return null
 }
